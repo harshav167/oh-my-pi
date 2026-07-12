@@ -9,6 +9,7 @@ import {
 	parseModelPattern,
 	parseModelString,
 	pickDefaultAvailableModel,
+	resolveAdvisorRoleSelectionForAgentKind,
 	resolveAgentModelPatterns,
 	resolveAgentPrewalkPattern,
 	resolveAllowedModels,
@@ -1828,5 +1829,52 @@ describe("effort-tier variant aliases", () => {
 	test("consumed X-thinking twins resolve via the grammar fallback", () => {
 		expect(parseModelPattern("venice/kimi-k2-thinking", variantModels).model?.id).toBe("kimi-k2");
 		expect(parseModelPattern("kimi-k2-thinking", variantModels).model?.id).toBe("kimi-k2");
+	});
+});
+
+describe("resolveAdvisorRoleSelectionForAgentKind", () => {
+	const models = mockModels as Model<Api>[];
+
+	test("main always uses the advisor role, not advisorSubagent", () => {
+		const settings = Settings.isolated({
+			modelRoles: {
+				advisor: "anthropic/claude-sonnet-4-5",
+				advisorSubagent: "openai/gpt-4o",
+			},
+		});
+		const sel = resolveAdvisorRoleSelectionForAgentKind("main", settings, models);
+		expect(sel?.model.id).toBe("claude-sonnet-4-5");
+	});
+
+	test("sub uses advisorSubagent when that role is configured", () => {
+		const settings = Settings.isolated({
+			modelRoles: {
+				advisor: "anthropic/claude-sonnet-4-5",
+				advisorSubagent: "openai/gpt-4o",
+			},
+		});
+		const sel = resolveAdvisorRoleSelectionForAgentKind("sub", settings, models);
+		expect(sel?.model.id).toBe("gpt-4o");
+	});
+
+	test("sub falls back to advisor when advisorSubagent is unset", () => {
+		const settings = Settings.isolated({
+			modelRoles: {
+				advisor: "anthropic/claude-sonnet-4-5",
+			},
+		});
+		const sel = resolveAdvisorRoleSelectionForAgentKind("sub", settings, models);
+		expect(sel?.model.id).toBe("claude-sonnet-4-5");
+	});
+
+	test("sub returns undefined when advisorSubagent is set but unresolvable", () => {
+		const settings = Settings.isolated({
+			modelRoles: {
+				advisor: "anthropic/claude-sonnet-4-5",
+				advisorSubagent: "not-a-real/provider-model-zzzz",
+			},
+		});
+		const sel = resolveAdvisorRoleSelectionForAgentKind("sub", settings, models);
+		expect(sel).toBeUndefined();
 	});
 });

@@ -1406,6 +1406,32 @@ export function resolveAdvisorRoleSelection(
 }
 
 /**
+ * Resolve the default advisor model for a session kind when a roster entry omits
+ * `model`. Main always uses {@link resolveAdvisorRoleSelection}. Subagents use
+ * `modelRoles.advisorSubagent` only when that role is **configured**; if the
+ * role is unset they fall back to the main advisor role. An explicitly set but
+ * unresolvable `advisorSubagent` value returns `undefined` (no silent fallthrough).
+ */
+export function resolveAdvisorRoleSelectionForAgentKind(
+	agentKind: "main" | "sub",
+	settings: Settings,
+	availableModels: Model<Api>[],
+): { model: Model<Api>; thinkingLevel?: ConfiguredThinkingLevel } | undefined {
+	if (agentKind === "main") {
+		return resolveAdvisorRoleSelection(settings, availableModels);
+	}
+	const configured = settings.getModelRole("advisorSubagent")?.trim();
+	if (!configured) {
+		return resolveAdvisorRoleSelection(settings, availableModels);
+	}
+	const resolved = resolveModelRoleValue(configured, availableModels, {
+		settings,
+		matchPreferences: getModelMatchPreferences(settings),
+	});
+	return resolved.model ? { model: resolved.model, thinkingLevel: resolved.thinkingLevel } : undefined;
+}
+
+/**
  * Resolve model patterns to actual Model objects with optional thinking levels
  * Format: "pattern:level" where :level is optional
  * For each pattern, finds all matching models and picks the best version:

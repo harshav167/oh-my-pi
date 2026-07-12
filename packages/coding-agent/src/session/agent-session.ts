@@ -159,6 +159,7 @@ import {
 	AdvisorRuntime,
 	type AdvisorSeverity,
 	AdvisorTranscriptRecorder,
+	advisorConfigAppliesToAgentKind,
 	advisorTranscriptFilename,
 	annotateForStaleness,
 	buildAdvisorQuarantineSourceText,
@@ -185,7 +186,7 @@ import {
 	getModelMatchPreferences,
 	parseModelString,
 	type ResolvedModelRoleValue,
-	resolveAdvisorRoleSelection,
+	resolveAdvisorRoleSelectionForAgentKind,
 	resolveModelOverride,
 	resolveModelRoleValue,
 } from "../config/model-resolver";
@@ -2796,7 +2797,8 @@ export class AgentSession {
 
 	#resolveAdvisorRuntimeDescriptors(emitWarnings: boolean): AdvisorRuntimeDescriptor[] {
 		const legacy = !this.#advisorConfigs?.length;
-		const roster: AdvisorConfig[] = legacy ? [{ name: "default" }] : this.#advisorConfigs!;
+		const fullRoster: AdvisorConfig[] = legacy ? [{ name: "default" }] : this.#advisorConfigs!;
+		const roster = fullRoster.filter(c => advisorConfigAppliesToAgentKind(c.apply, this.#agentKind));
 		const descriptors: AdvisorRuntimeDescriptor[] = [];
 		const usedSlugs = new Set<string>();
 		for (const config of roster) {
@@ -2824,7 +2826,11 @@ export class AgentSession {
 					continue;
 				}
 			} else {
-				const sel = resolveAdvisorRoleSelection(this.settings, this.#modelRegistry.getAvailable());
+				const sel = resolveAdvisorRoleSelectionForAgentKind(
+					this.#agentKind,
+					this.settings,
+					this.#modelRegistry.getAvailable(),
+				);
 				if (!sel) {
 					if (emitWarnings) {
 						logger.debug("advisor enabled but no model assigned to the 'advisor' role; advisor inactive", {
@@ -2864,7 +2870,8 @@ export class AgentSession {
 	#advisorRuntimeSignature(config: AdvisorConfig, slug: string, model: Model, thinkingLevel: ThinkingLevel): string {
 		const tools = config.tools?.length ? config.tools.join("\u001e") : "";
 		const instructions = config.instructions?.trim() ?? "";
-		return [config.name, slug, formatModelStringWithRouting(model), thinkingLevel, tools, instructions].join(
+		const apply = config.apply ?? "all";
+		return [config.name, slug, formatModelStringWithRouting(model), thinkingLevel, tools, instructions, apply].join(
 			"\u001f",
 		);
 	}

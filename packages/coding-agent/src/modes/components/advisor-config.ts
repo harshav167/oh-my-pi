@@ -103,13 +103,24 @@ function formatAdvisorTools(tools: readonly string[] | undefined, emptyLabel: st
 	return tools.length > 0 ? tools.join(", ") : emptyLabel;
 }
 
+function formatAdvisorApply(apply: AdvisorConfig["apply"]): string {
+	switch (apply) {
+		case "main":
+			return "Main only";
+		case "sub":
+			return "Subagents only";
+		default:
+			return "Main and subagents";
+	}
+}
+
 /** Soft-wrap plain text to `width`, returning at least one (possibly empty) line. */
 function wrap(text: string, width: number): string[] {
 	if (!text) return [""];
 	return Bun.wrapAnsi(text, Math.max(1, width), { trim: false }).split("\n");
 }
 
-type Screen = "list" | "detail" | "name" | "model" | "tools" | "thinking" | "instructions";
+type Screen = "list" | "detail" | "name" | "model" | "tools" | "thinking" | "instructions" | "apply";
 
 /**
  * Fullscreen advisor-configuration overlay. Implements {@link Component} directly
@@ -277,6 +288,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			"",
 			`${theme.fg("dim", "Model:")} ${model}`,
 			`${theme.fg("dim", "Tools:")} ${tools}`,
+			`${theme.fg("dim", "Runs on:")} ${formatAdvisorApply(advisor.apply)}`,
 			"",
 			theme.fg("dim", "Instructions:"),
 		];
@@ -311,14 +323,16 @@ export class AdvisorConfigOverlayComponent implements Component {
 			advisor.name === "default" &&
 			!advisor.model?.trim() &&
 			advisor.tools === undefined &&
-			!advisor.instructions?.trim()
+			!advisor.instructions?.trim() &&
+			(advisor.apply === undefined || advisor.apply === "all")
 		);
 	}
 
 	#advisorSummary(advisor: AdvisorConfig): string {
 		const model = advisor.model?.trim() || this.#defaultModelLabel || "advisor role default";
 		const tools = formatAdvisorTools(advisor.tools, "no tools");
-		return `${model} · ${tools}`;
+		const apply = advisor.apply && advisor.apply !== "all" ? ` · ${formatAdvisorApply(advisor.apply)}` : "";
+		return `${model} · ${tools}${apply}`;
 	}
 
 	#showList(): void {
@@ -402,6 +416,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 		}
 		items.push(
 			{ value: "tools", label: "Tools", description: toolsDescription },
+			{ value: "apply", label: "Runs on", description: formatAdvisorApply(advisor.apply) },
 			{ value: "instructions", label: "Instructions", description: previewLine(advisor.instructions) },
 			{ value: "delete", label: "Delete this advisor" },
 			{ value: "back", label: "Back" },
@@ -426,6 +441,9 @@ export class AdvisorConfigOverlayComponent implements Component {
 					new Set(this.#doc.advisors[index].tools ?? [...ADVISOR_DEFAULT_TOOL_NAMES]),
 					0,
 				);
+				return;
+			case "apply":
+				this.#showApplyPicker(index);
 				return;
 			case "resetModel":
 				this.#doc.advisors[index].model = undefined;
@@ -458,6 +476,25 @@ export class AdvisorConfigOverlayComponent implements Component {
 		};
 		input.onEscape = () => this.#showDetail(index);
 		this.#setScreen("name", input, "Type a name · Enter save · Esc cancel");
+	}
+
+	#showApplyPicker(index: number): void {
+		const items: SelectItem[] = [
+			{ value: "all", label: "Main and subagents" },
+			{ value: "main", label: "Main only" },
+			{ value: "sub", label: "Subagents only" },
+		];
+		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
+		const current = this.#doc.advisors[index].apply ?? "all";
+		list.setSelectedIndex(current === "main" ? 1 : current === "sub" ? 2 : 0);
+		list.onSelect = item => {
+			// Persist default as omitted so serialize/bare-default stay compact.
+			this.#doc.advisors[index].apply = item.value === "all" ? undefined : (item.value as "main" | "sub");
+			this.#dirty = true;
+			this.#showDetail(index);
+		};
+		list.onCancel = () => this.#showDetail(index);
+		this.#setScreen("apply", list, "Choose which agent kinds run this advisor · Esc back");
 	}
 
 	#showModelPicker(index: number): void {

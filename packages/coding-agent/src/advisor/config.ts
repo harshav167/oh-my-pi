@@ -17,11 +17,18 @@ import { collectConfigCandidates } from "./watchdog";
  * tools. `instructions` is the advisor's specialization, appended to the shared
  * baseline.
  */
+export type AdvisorApplyScope = "all" | "main" | "sub";
+
 export interface AdvisorConfig {
 	name: string;
 	model?: string;
 	tools?: string[];
 	instructions?: string;
+	/**
+	 * Which agent kinds run this entry. Omitted means both main and subagents
+	 * (`"all"`). Invalid values fail YAML schema validation for the whole file.
+	 */
+	apply?: AdvisorApplyScope;
 }
 
 /**
@@ -39,6 +46,7 @@ const advisorEntrySchema = type({
 	"model?": "string",
 	"tools?": "string[]",
 	"instructions?": "string",
+	"apply?": "'all'|'main'|'sub'",
 });
 
 const watchdogYamlSchema = type({
@@ -58,6 +66,18 @@ export function slugifyAdvisorName(name: string): string {
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "");
 	return slug || "advisor";
+}
+
+/**
+ * Whether a roster entry should run for this session kind. Omitted `apply`
+ * means all kinds; only an explicit `main` or `sub` restricts the entry.
+ */
+export function advisorConfigAppliesToAgentKind(
+	apply: AdvisorApplyScope | undefined,
+	agentKind: "main" | "sub",
+): boolean {
+	const scope = apply ?? "all";
+	return scope === "all" || scope === agentKind;
 }
 
 const UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -156,6 +176,7 @@ export async function discoverAdvisorConfigs(cwd: string, agentDir?: string): Pr
 				model: entry.model?.trim() || undefined,
 				tools: filterAdvisorTools(entry.tools, item.path),
 				instructions,
+				apply: entry.apply,
 			});
 		}
 	}
@@ -243,6 +264,7 @@ export async function loadWatchdogConfigFile(filePath: string): Promise<Watchdog
 			model: a.model?.trim() || undefined,
 			tools: a.tools === undefined ? undefined : [...a.tools],
 			instructions: a.instructions?.trim() ? a.instructions : undefined,
+			apply: a.apply,
 		})),
 	};
 }
@@ -262,6 +284,7 @@ export function serializeWatchdogConfig(doc: WatchdogConfigDoc): string {
 			if (a.model?.trim()) entry.model = a.model;
 			if (a.tools !== undefined) entry.tools = [...a.tools];
 			if (a.instructions?.trim()) entry.instructions = a.instructions;
+			if (a.apply && a.apply !== "all") entry.apply = a.apply;
 			return entry;
 		});
 	}

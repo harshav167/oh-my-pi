@@ -3,6 +3,7 @@ import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+	advisorConfigAppliesToAgentKind,
 	advisorConfigFilePath,
 	discoverAdvisorConfigs,
 	getOrCreateAdvisorProviderSessionId,
@@ -242,6 +243,40 @@ describe("WATCHDOG.yml file round-trip", () => {
 		expect(advisors.find(a => a.name === "Default Tools")?.tools).toBeUndefined();
 	});
 
+	it("round-trips apply main/sub and omits apply all from YAML", async () => {
+		const file = path.join(tmp, "WATCHDOG.yml");
+		const scopedDoc: WatchdogConfigDoc = {
+			advisors: [
+				{ name: "MainOnly", apply: "main" },
+				{ name: "SubOnly", apply: "sub" },
+				{ name: "Both", apply: "all" },
+			],
+		};
+		await saveWatchdogConfigFile(file, scopedDoc);
+		const text = await Bun.file(file).text();
+		expect(text).toContain("apply: main");
+		expect(text).toContain("apply: sub");
+		expect(text).not.toContain("apply: all");
+
+		const loaded = await loadWatchdogConfigFile(file);
+		expect(loaded.advisors.find(a => a.name === "MainOnly")?.apply).toBe("main");
+		expect(loaded.advisors.find(a => a.name === "SubOnly")?.apply).toBe("sub");
+		// serialize omits all → load leaves apply undefined (same as all)
+		expect(loaded.advisors.find(a => a.name === "Both")?.apply).toBeUndefined();
+
+		const { advisors } = await discoverAdvisorConfigs(tmp, tmp);
+		expect(advisors.find(a => a.name === "MainOnly")?.apply).toBe("main");
+		expect(advisors.find(a => a.name === "SubOnly")?.apply).toBe("sub");
+		expect(advisors.find(a => a.name === "Both")?.apply).toBeUndefined();
+	});
+
+	it("rejects invalid apply values for the whole file", async () => {
+		const yaml = ["advisors:", "  - name: Bad", "    apply: nowhere"].join("\n");
+		await Bun.write(path.join(tmp, "WATCHDOG.yml"), yaml);
+		const { advisors } = await discoverAdvisorConfigs(tmp, tmp);
+		expect(advisors).toEqual([]);
+	});
+
 	it("removes the file when the doc is empty so legacy discovery resumes", async () => {
 		const file = path.join(tmp, "WATCHDOG.yml");
 		await saveWatchdogConfigFile(file, doc);
@@ -262,6 +297,28 @@ describe("WATCHDOG.yml file round-trip", () => {
 		expect(advisorConfigFilePath("user", { projectDir: "/repo", agentDir: "/home/.omp" })).toBe(
 			path.join("/home/.omp", "WATCHDOG.yml"),
 		);
+	});
+});
+
+describe("advisorConfigAppliesToAgentKind", () => {
+	it("omitted apply runs on both main and sub", () => {
+		expect(advisorConfigAppliesToAgentKind(undefined, "main")).toBe(true);
+		expect(advisorConfigAppliesToAgentKind(undefined, "sub")).toBe(true);
+	});
+
+	it("all runs on both kinds", () => {
+		expect(advisorConfigAppliesToAgentKind("all", "main")).toBe(true);
+		expect(advisorConfigAppliesToAgentKind("all", "sub")).toBe(true);
+	});
+
+	it("main is main-only", () => {
+		expect(advisorConfigAppliesToAgentKind("main", "main")).toBe(true);
+		expect(advisorConfigAppliesToAgentKind("main", "sub")).toBe(false);
+	});
+
+	it("sub is sub-only", () => {
+		expect(advisorConfigAppliesToAgentKind("sub", "main")).toBe(false);
+		expect(advisorConfigAppliesToAgentKind("sub", "sub")).toBe(true);
 	});
 });
 
