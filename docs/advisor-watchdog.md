@@ -31,12 +31,14 @@ Example:
 ```yaml
 modelRoles:
   advisor: anthropic/claude-sonnet-4-5:medium
+  # optional: default model for subagent advisors when a roster entry omits `model`
+  # advisorSubagent: anthropic/claude-haiku-4-5:low
 
 advisor:
   enabled: true
 ```
 
-The advisor role uses normal model-role resolution, including provider-prefixed ids, canonical ids, and optional thinking suffixes.
+The `advisor` role uses normal model-role resolution, including provider-prefixed ids, canonical ids, and optional thinking suffixes. Subagent sessions that have advisors enabled use `modelRoles.advisorSubagent` when that role is configured; if it is unset they fall back to `modelRoles.advisor`. An explicitly set but unresolvable `advisorSubagent` value does not silently fall back.
 
 ### Headless runs
 
@@ -262,6 +264,7 @@ advisors:
   - name: Architecture
     model: anthropic/claude-sonnet-4-5:medium
     tools: [read, grep, glob]
+    apply: main
     instructions: |
       Watch cross-module coupling and public-API growth.
 
@@ -276,7 +279,8 @@ Fields:
 
 - `instructions` (top level): shared prompt prepended to every advisor's system prompt alongside `WATCHDOG.md`. Concatenated across all discovered `WATCHDOG.yml` files.
 - `advisors[].name`: human label; slugified for the session id and the `<session>/__advisor.jsonl` filename. Duplicate slugs across files are resolved by the same specificity rule as `WATCHDOG.md` discovery (project leaf > project ancestor > user).
-- `advisors[].model`: optional model selector with optional `:level` thinking suffix (e.g. `x-ai/grok-code-fast:high`). Omitted → the advisor uses `modelRoles.advisor`.
+- `advisors[].model`: optional model selector with optional `:level` thinking suffix (e.g. `x-ai/grok-code-fast:high`). Omitted → main sessions use `modelRoles.advisor`; subagent sessions use `modelRoles.advisorSubagent` when set, else `modelRoles.advisor`.
+- `advisors[].apply`: optional `all` (default), `main`, or `sub`. Restricts which agent kinds build this entry. Omitted means both main and subagents. Invalid values fail schema validation for the whole file.
 - `advisors[].tools`: optional list of built-in tool names to grant. Omitted or empty → the default `read`/`grep`/`glob` subset. Any name in [`BUILTIN_TOOL_NAMES`](../packages/coding-agent/src/tools/builtin-names.ts) is accepted, including mutating tools (`edit`, `write`, `bash`, `eval`, `browser`, `debug`, `ast_edit`, `task`, `job`, and the memory tools). Legacy aliases (`search`→`grep`, `find`→`glob`) are normalized. Unknown names are dropped with a warning. See [Tools and isolation](#tools-and-isolation) for the safety implications of granting mutating tools.
 - `advisors[].instructions`: this advisor's specialization, appended after the shared baseline. Both instruction fields expand `@path` imports like `WATCHDOG.md`.
 
@@ -289,7 +293,7 @@ Fields:
 `advisor.subagents` controls whether spawned task/eval subagents also get an advisor runtime.
 
 - `false` (default): only the main session can run an advisor.
-- `true`: eligible subagent sessions build their own advisor with the same settings/model-role resolution, then rerun `WATCHDOG.md` discovery for that subagent session's `cwd` and agent directory.
+- `true`: eligible subagent sessions build their own advisor runtime. Default model for entries without `model` is `modelRoles.advisorSubagent` if configured, otherwise `modelRoles.advisor`. The same `WATCHDOG.yml` roster is used, filtered by each entry's `apply` field (`all` / `main` / `sub`). Shared top-level `instructions` still apply to every advisor that is built. `WATCHDOG.md` discovery still runs for that subagent session's `cwd` and agent directory.
 
 Subagent advisors remain isolated from the subagent's primary tool session in the same way the main advisor is isolated from the main agent.
 

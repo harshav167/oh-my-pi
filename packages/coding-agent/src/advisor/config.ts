@@ -17,6 +17,8 @@ import { collectConfigCandidates } from "./watchdog";
  * tools. `instructions` is the advisor's specialization, appended to the shared
  * baseline.
  */
+export type AdvisorApplyScope = "all" | "main" | "sub";
+
 export interface AdvisorConfig {
 	name: string;
 	model?: string;
@@ -26,6 +28,11 @@ export interface AdvisorConfig {
 	 *  stays in the roster but its runtime is never built — it shows `○` in
 	 *  the status line and `/advisor status` rather than disappearing. */
 	enabled?: boolean;
+	/**
+	 * Which agent kinds run this entry. Omitted means both main and subagents
+	 * (`"all"`). Invalid values fail YAML schema validation for the whole file.
+	 */
+	apply?: AdvisorApplyScope;
 }
 
 /**
@@ -55,6 +62,7 @@ const advisorEntrySchema = type({
 	"tools?": "string[]",
 	"instructions?": "string",
 	"enabled?": "boolean",
+	"apply?": "'all'|'main'|'sub'",
 });
 
 const watchdogYamlSchema = type({
@@ -74,6 +82,18 @@ export function slugifyAdvisorName(name: string): string {
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "");
 	return slug || "advisor";
+}
+
+/**
+ * Whether a roster entry should run for this session kind. Omitted `apply`
+ * means all kinds; only an explicit `main` or `sub` restricts the entry.
+ */
+export function advisorConfigAppliesToAgentKind(
+	apply: AdvisorApplyScope | undefined,
+	agentKind: "main" | "sub",
+): boolean {
+	const scope = apply ?? "all";
+	return scope === "all" || scope === agentKind;
 }
 
 const UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -173,6 +193,7 @@ export async function discoverAdvisorConfigs(cwd: string, agentDir?: string): Pr
 				tools: filterAdvisorTools(entry.tools, item.path),
 				instructions,
 				enabled: entry.enabled,
+				apply: entry.apply,
 			});
 		}
 	}
@@ -259,19 +280,13 @@ export async function loadWatchdogConfigFile(filePath: string): Promise<Watchdog
 		if (a.tools !== undefined) advisor.tools = [...a.tools];
 		if (a.instructions?.trim()) advisor.instructions = a.instructions;
 		if (a.enabled !== undefined) advisor.enabled = a.enabled;
+		if (a.apply !== undefined) advisor.apply = a.apply;
 		return advisor;
 	});
 	const doc: WatchdogConfigDoc = { advisors };
 	if (result.instructions?.trim()) doc.instructions = result.instructions;
 	return doc;
 }
-
-/**
- * Serialize an editable doc back to canonical, hand-editable `WATCHDOG.yml`.
- * Multiline instruction fields use literal block scalars while scalar quoting
- * delegates to Bun's YAML encoder. Round-trips through {@link loadWatchdogConfigFile}.
- * Returns `""` for an empty doc.
- */
 
 function appendYamlString(lines: string[], indent: string, key: string, value: string): void {
 	const hasSignificantLeadingWhitespace = value.split("\n").some(line => /^[ \t]/.test(line));
@@ -295,6 +310,12 @@ function appendYamlString(lines: string[], indent: string, key: string, value: s
 	}
 }
 
+/**
+ * Serialize an editable doc back to canonical, hand-editable `WATCHDOG.yml`.
+ * Multiline instruction fields use literal block scalars while scalar quoting
+ * delegates to Bun's YAML encoder. Round-trips through {@link loadWatchdogConfigFile}.
+ * Returns `""` for an empty doc.
+ */
 export function serializeWatchdogConfig(doc: WatchdogConfigDoc): string {
 	const lines: string[] = [];
 	if (doc.instructions?.trim()) appendYamlString(lines, "", "instructions", doc.instructions);
@@ -317,6 +338,7 @@ export function serializeWatchdogConfig(doc: WatchdogConfigDoc): string {
 				appendYamlString(lines, "    ", "instructions", advisor.instructions);
 			}
 			if (advisor.enabled !== undefined) lines.push(`    enabled: ${advisor.enabled}`);
+			if (advisor.apply && advisor.apply !== "all") lines.push(`    apply: ${advisor.apply}`);
 		}
 	}
 	return lines.length === 0 ? "" : `${lines.join("\n")}\n`;

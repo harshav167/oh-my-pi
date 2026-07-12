@@ -803,4 +803,85 @@ describe("AgentSession advisor toggle", () => {
 			vi.restoreAllMocks();
 		}
 	});
+
+	it("filters WATCHDOG apply scope by agentKind and uses advisorSubagent model on sub", async () => {
+		const roster = [
+			{ name: "MainOnly", apply: "main" as const },
+			{ name: "SubOnly", apply: "sub" as const },
+			{ name: "Both", apply: "all" as const },
+		];
+
+		session.settings.setModelRole("advisor", `${model.provider}/${model.id}`);
+		session.settings.setModelRole("advisorSubagent", `${replacementModel.provider}/${replacementModel.id}`);
+		session.settings.override("advisor.subagents", true);
+		session.applyAdvisorConfigs(roster, undefined);
+		expect(session.setAdvisorEnabled(true)).toBe(true);
+
+		const mainNames = session
+			.getAdvisorStats()
+			.advisors.map(a => a.name)
+			.sort();
+		expect(mainNames).toEqual(["Both", "MainOnly"]);
+		// Main entries without model use modelRoles.advisor
+		for (const a of session.getAdvisorStats().advisors) {
+			expect(a.model?.id).toBe(model.id);
+		}
+
+		const subAgent = new Agent({
+			initialState: {
+				model,
+				systemPrompt: ["Sub"],
+				tools: [],
+				messages: [],
+			},
+		});
+		const subSession = new AgentSession({
+			agent: subAgent,
+			sessionManager,
+			settings: session.settings,
+			modelRegistry,
+			advisorTools: [],
+			agentKind: "sub",
+			advisorConfigs: roster,
+		});
+		try {
+			expect(subSession.setAdvisorEnabled(true)).toBe(true);
+			const stats = subSession.getAdvisorStats();
+			const subNames = stats.advisors.map(a => a.name).sort();
+			expect(subNames).toEqual(["Both", "SubOnly"]);
+			for (const a of stats.advisors) {
+				expect(a.model?.id).toBe(replacementModel.id);
+			}
+		} finally {
+			await subSession.dispose();
+		}
+	});
+
+	it("does not build subagent advisors when advisor.subagents is false", async () => {
+		session.settings.setModelRole("advisor", `${model.provider}/${model.id}`);
+		session.settings.override("advisor.subagents", false);
+		const subAgent = new Agent({
+			initialState: {
+				model,
+				systemPrompt: ["Sub"],
+				tools: [],
+				messages: [],
+			},
+		});
+		const subSession = new AgentSession({
+			agent: subAgent,
+			sessionManager,
+			settings: session.settings,
+			modelRegistry,
+			advisorTools: [],
+			agentKind: "sub",
+		});
+		try {
+			expect(subSession.setAdvisorEnabled(true)).toBe(false);
+			expect(subSession.isAdvisorActive()).toBe(false);
+			expect(subSession.getAdvisorStats().advisors).toEqual([]);
+		} finally {
+			await subSession.dispose();
+		}
+	});
 });

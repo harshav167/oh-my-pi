@@ -52,6 +52,7 @@ import {
 	type AdvisorRuntimeStatus,
 	type AdvisorSeverity,
 	AdvisorTranscriptRecorder,
+	advisorConfigAppliesToAgentKind,
 	advisorTranscriptFilename,
 	buildAdvisorQuarantineSourceText,
 	formatAdvisorBatchContent,
@@ -66,7 +67,7 @@ import type { ModelRegistry } from "../config/model-registry";
 import {
 	formatModelString,
 	formatModelStringWithRouting,
-	resolveAdvisorRoleSelection,
+	resolveAdvisorRoleSelectionForAgentKind,
 	resolveModelOverride,
 } from "../config/model-resolver";
 import { MODEL_ROLES } from "../config/model-roles";
@@ -593,7 +594,8 @@ export class SessionAdvisors {
 
 	#resolveAdvisorRuntimeDescriptors(emitWarnings: boolean): AdvisorRuntimeDescriptor[] {
 		const legacy = !this.#advisorConfigs?.length;
-		const roster: AdvisorConfig[] = legacy ? [{ name: "default" }] : this.#advisorConfigs!;
+		const fullRoster: AdvisorConfig[] = legacy ? [{ name: "default" }] : this.#advisorConfigs!;
+		const roster = fullRoster.filter(c => advisorConfigAppliesToAgentKind(c.apply, this.#host.agentKind()));
 		const descriptors: AdvisorRuntimeDescriptor[] = [];
 		const usedSlugs = new Set<string>();
 		for (const config of roster) {
@@ -632,7 +634,11 @@ export class SessionAdvisors {
 					continue;
 				}
 			} else {
-				const sel = resolveAdvisorRoleSelection(this.#host.settings, this.#host.modelRegistry.getAvailable());
+				const sel = resolveAdvisorRoleSelectionForAgentKind(
+					this.#host.agentKind(),
+					this.#host.settings,
+					this.#host.modelRegistry.getAvailable(),
+				);
 				if (!sel) {
 					this.#advisorStatuses.set(slug, { name: config.name, status: "no_model" });
 					if (emitWarnings) {
@@ -678,7 +684,8 @@ export class SessionAdvisors {
 	#advisorRuntimeSignature(config: AdvisorConfig, slug: string, model: Model, thinkingLevel: ThinkingLevel): string {
 		const tools = config.tools?.length ? config.tools.join("\u001e") : "";
 		const instructions = config.instructions?.trim() ?? "";
-		return [config.name, slug, formatModelStringWithRouting(model), thinkingLevel, tools, instructions].join(
+		const apply = config.apply ?? "all";
+		return [config.name, slug, formatModelStringWithRouting(model), thinkingLevel, tools, instructions, apply].join(
 			"\u001f",
 		);
 	}
