@@ -25,6 +25,8 @@ import {
 	googleGeminiCliModelManagerOptions,
 	openaiCodexModelManagerOptions,
 	PROVIDER_DESCRIPTORS,
+	providerAuthRequiresOAuth,
+	resolveProviderAuthId,
 } from "@oh-my-pi/pi-catalog/provider-models";
 import {
 	collapseBuiltModelVariants,
@@ -1927,9 +1929,11 @@ export class ModelRegistry {
 		return model => {
 			let available = byProvider.get(model.provider);
 			if (available === undefined) {
-				available =
-					!disabledProviders.has(model.provider) &&
-					(this.#keylessProviders.has(model.provider) || this.authStorage.hasAuth(model.provider));
+				const authProvider = resolveProviderAuthId(model.provider);
+				const authOk = providerAuthRequiresOAuth(model.provider)
+					? this.authStorage.hasOAuth(authProvider)
+					: this.#keylessProviders.has(model.provider) || this.authStorage.hasAuth(authProvider);
+				available = !disabledProviders.has(model.provider) && authOk;
 				byProvider.set(model.provider, available);
 			}
 			return available;
@@ -1962,10 +1966,14 @@ export class ModelRegistry {
 	 */
 	hasConfiguredAuth(model: Model<Api>): boolean {
 		const keyConfig = this.#customProviderApiKeys.get(model.provider);
+		const authProvider = resolveProviderAuthId(model.provider);
+		if (providerAuthRequiresOAuth(model.provider)) {
+			return this.authStorage.hasOAuth(authProvider);
+		}
 		return (
 			isCommandConfigValue(keyConfig) ||
 			this.#keylessProviders.has(model.provider) ||
-			this.authStorage.hasAuth(model.provider)
+			this.authStorage.hasAuth(authProvider)
 		);
 	}
 
@@ -2007,12 +2015,21 @@ export class ModelRegistry {
 	 * Get API key for a model.
 	 */
 	async getApiKey(model: Model<Api>, sessionId?: string): Promise<string | undefined> {
+		const authProvider = resolveProviderAuthId(model.provider);
+		if (providerAuthRequiresOAuth(model.provider)) {
+			if (!this.authStorage.hasOAuth(authProvider)) return undefined;
+			const access = await this.authStorage.getOAuthAccess(authProvider, sessionId, {
+				baseUrl: model.baseUrl,
+				modelId: model.id,
+			});
+			return access?.accessToken;
+		}
 		const commandKey = this.#resolveCommandBackedApiKey(model.provider);
 		if (commandKey.configured) return commandKey.value;
-		if (this.#keylessProviders.has(model.provider) && !this.authStorage.hasAuth(model.provider)) {
+		if (this.#keylessProviders.has(model.provider) && !this.authStorage.hasAuth(authProvider)) {
 			return kNoAuth;
 		}
-		return this.authStorage.getApiKey(model.provider, sessionId, { baseUrl: model.baseUrl, modelId: model.id });
+		return this.authStorage.getApiKey(authProvider, sessionId, { baseUrl: model.baseUrl, modelId: model.id });
 	}
 
 	/**
@@ -2027,12 +2044,23 @@ export class ModelRegistry {
 		sessionId?: string,
 		options?: { baseUrl?: string; modelId?: string; forceRefresh?: boolean; signal?: AbortSignal },
 	): Promise<string | undefined> {
+		const authProvider = resolveProviderAuthId(provider);
+		if (providerAuthRequiresOAuth(provider)) {
+			if (!this.authStorage.hasOAuth(authProvider)) return undefined;
+			const access = await this.authStorage.getOAuthAccess(authProvider, sessionId, {
+				baseUrl: options?.baseUrl,
+				modelId: options?.modelId,
+				forceRefresh: options?.forceRefresh,
+				signal: options?.signal,
+			});
+			return access?.accessToken;
+		}
 		const commandKey = this.#resolveCommandBackedApiKey(provider);
 		if (commandKey.configured) return commandKey.value;
-		if (this.#keylessProviders.has(provider) && !this.authStorage.hasAuth(provider)) {
+		if (this.#keylessProviders.has(provider) && !this.authStorage.hasAuth(authProvider)) {
 			return kNoAuth;
 		}
-		return this.authStorage.getApiKey(provider, sessionId, {
+		return this.authStorage.getApiKey(authProvider, sessionId, {
 			baseUrl: options?.baseUrl,
 			modelId: options?.modelId,
 			forceRefresh: options?.forceRefresh,
@@ -2052,29 +2080,44 @@ export class ModelRegistry {
 	resolver(target: string | ApiKeyResolverModel, optionsOrSessionId?: ApiKeyResolverOptions | string): ApiKeyResolver {
 		const options = typeof optionsOrSessionId === "string" ? { sessionId: optionsOrSessionId } : optionsOrSessionId;
 		if (typeof target === "string") {
-			return createApiKeyResolver(this, target, options);
+			// Keep picker id for getApiKeyForProvider (OAuth-only gate); rotate on authProvider.
+			return createApiKeyResolver(this, target, {
+				...options,
+				rotationProvider: resolveProviderAuthId(target),
+			});
 		}
 		return createApiKeyResolver(this, target.provider, {
 			...options,
+			rotationProvider: resolveProviderAuthId(target.provider),
 			baseUrl: target.baseUrl,
 			modelId: target.id,
 		});
 	}
 
 	async #peekApiKeyForProvider(provider: string): Promise<string | undefined> {
+		const authProvider = resolveProviderAuthId(provider);
+		if (providerAuthRequiresOAuth(provider)) {
+			if (!this.authStorage.hasOAuth(authProvider)) return undefined;
+			// OAuth-only: AuthStorage.getOAuthAccess refreshes when the stored access
+			// token is past the refresh skew (or forceRefresh is set). That is intentional
+			// so discovery/availability never hand out a known-expired SuperGrok token.
+			// It still refuses API keys / env keys for this picker id.
+			const access = await this.authStorage.getOAuthAccess(authProvider);
+			return access?.accessToken;
+		}
 		const commandKey = this.#resolveCommandBackedApiKey(provider);
 		if (commandKey.configured) return commandKey.value;
-		if (this.#keylessProviders.has(provider) && !this.authStorage.hasAuth(provider)) {
+		if (this.#keylessProviders.has(provider) && !this.authStorage.hasAuth(authProvider)) {
 			return kNoAuth;
 		}
-		return this.authStorage.peekApiKey(provider);
+		return this.authStorage.peekApiKey(authProvider);
 	}
 
 	/**
 	 * Check if a model is using OAuth credentials (subscription).
 	 */
 	isUsingOAuth(model: Model<Api>): boolean {
-		return this.authStorage.hasOAuth(model.provider);
+		return this.authStorage.hasOAuth(resolveProviderAuthId(model.provider));
 	}
 
 	#clearRuntimeProviderState(providerName: string): void {

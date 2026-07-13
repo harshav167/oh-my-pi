@@ -19,6 +19,7 @@
  */
 
 import { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { providerAuthRequiresOAuth, resolveProviderAuthId } from "@oh-my-pi/pi-catalog/provider-models";
 import { extractHttpStatusFromError, extractRetryHint, logger } from "@oh-my-pi/pi-utils";
 import type { ApiKeyResolver } from "../auth-retry";
 import type { AuthStorage } from "../auth-storage";
@@ -236,10 +237,11 @@ async function refreshGatewayApiKeyAfterAuthError(
 	peer: string,
 ): Promise<string | undefined> {
 	const message = error instanceof Error ? error.message : String(error);
+	const authProvider = resolveProviderAuthId(provider);
 	const status = extractHttpStatusFromError(error);
 	if (AIError.isUsageLimit(error) || isUsageLimitOutcome(status, message)) {
 		const retryAfterMs = extractRetryHint(undefined, message);
-		const { switched, retryAtMs } = await storage.markUsageLimitReached(provider, sessionId, {
+		const { switched, retryAtMs } = await storage.markUsageLimitReached(authProvider, sessionId, {
 			retryAfterMs,
 			baseUrl: model.baseUrl,
 			modelId: model.id,
@@ -256,18 +258,41 @@ async function refreshGatewayApiKeyAfterAuthError(
 			error: message,
 		});
 		if (!switched) return undefined;
-		return storage.getApiKey(provider, sessionId, { modelId: model.id, signal });
+		return resolveGatewayApiKey(storage, model, sessionId, { signal });
 	}
-	await storage.invalidateCredentialMatching(provider, oldKey, { sessionId, signal });
+	await storage.invalidateCredentialMatching(authProvider, oldKey, { sessionId, signal });
 	logger.debug("auth-gateway retrying provider request after credential invalidation", {
 		format,
 		provider,
 		peer,
 		error: message,
 	});
-	return storage.getApiKey(provider, sessionId, { modelId: model.id, signal });
+	return resolveGatewayApiKey(storage, model, sessionId, { signal });
 }
 
+/** Resolve a gateway API key, honoring catalog authProvider + OAuth-only aliases. */
+async function resolveGatewayApiKey(
+	storage: AuthStorage,
+	model: Model<Api>,
+	sessionId: string,
+	options?: { signal?: AbortSignal; forceRefresh?: boolean },
+): Promise<string | undefined> {
+	const authProvider = resolveProviderAuthId(model.provider);
+	if (providerAuthRequiresOAuth(model.provider)) {
+		if (!storage.hasOAuth(authProvider)) return undefined;
+		const access = await storage.getOAuthAccess(authProvider, sessionId, {
+			modelId: model.id,
+			signal: options?.signal,
+			forceRefresh: options?.forceRefresh,
+		});
+		return access?.accessToken;
+	}
+	return storage.getApiKey(authProvider, sessionId, {
+		modelId: model.id,
+		signal: options?.signal,
+		forceRefresh: options?.forceRefresh,
+	});
+}
 /**
  * Build the {@link ApiKeyResolver} handed to `streamSimple` for a gateway
  * request. Drives the central a/b/c auth-retry policy server-side:
@@ -298,8 +323,7 @@ function buildGatewayApiKeyResolver(
 			return initialKey;
 		}
 		if (!lastChance) {
-			const refreshed = await storage.getApiKey(model.provider, sessionId, {
-				modelId: model.id,
+			const refreshed = await resolveGatewayApiKey(storage, model, sessionId, {
 				signal: sig,
 				forceRefresh: true,
 			});
@@ -411,8 +435,7 @@ async function handleFormatEndpoint(
 	// broker override on AuthStorage when needed).
 	let apiKey: string | undefined;
 	try {
-		apiKey = await bootOpts.storage.getApiKey(model.provider, sessionId, {
-			modelId: model.id,
+		apiKey = await resolveGatewayApiKey(bootOpts.storage, model, sessionId, {
 			signal: controller.signal,
 		});
 	} catch (error) {
@@ -575,8 +598,7 @@ async function handlePiNative(bootOpts: AuthGatewayBootOptions, req: Request, pe
 
 	let apiKey: string | undefined;
 	try {
-		apiKey = await bootOpts.storage.getApiKey(model.provider, sessionId, {
-			modelId: model.id,
+		apiKey = await resolveGatewayApiKey(bootOpts.storage, model, sessionId, {
 			signal: controller.signal,
 		});
 	} catch (error) {

@@ -57,6 +57,7 @@ import {
 	listCodexResetCredits,
 } from "./usage/openai-codex-reset";
 import { opencodeGoUsageProvider } from "./usage/opencode-go";
+import { xaiOauthRankingStrategy } from "./usage/xai-oauth";
 import { zaiRankingStrategy, zaiUsageProvider } from "./usage/zai";
 
 const USAGE_RANKING_METRIC_EPSILON = 1e-9;
@@ -964,6 +965,7 @@ const DEFAULT_RANKING_STRATEGIES = new Map<Provider, CredentialRankingStrategy>(
 	["openai-codex", codexRankingStrategy],
 	["anthropic", claudeRankingStrategy],
 	["google-antigravity", antigravityRankingStrategy],
+	["xai-oauth", xaiOauthRankingStrategy],
 	["zai", zaiRankingStrategy],
 ]);
 
@@ -3817,7 +3819,10 @@ export class AuthStorage {
 
 		const providerKey = this.#getProviderTypeKey(provider, credentialType);
 		const strategy = this.#rankingStrategyResolver?.(provider);
-		const rankingContext: CredentialRankingContext = { modelId: options?.modelId };
+		const rankingContext: CredentialRankingContext = {
+			modelId: options?.modelId,
+			baseUrl: options?.baseUrl,
+		};
 		const blockScope = strategy?.blockScope?.(rankingContext);
 		const now = Date.now();
 		let blockedUntil = now + (options?.retryAfterMs ?? AuthStorage.#defaultBackoffMs);
@@ -4120,7 +4125,10 @@ export class AuthStorage {
 		const providerKey = this.#getProviderTypeKey(provider, "oauth");
 		const order = this.#getCredentialOrder(providerKey, sessionId, credentials.length);
 		const strategy = this.#rankingStrategyResolver?.(provider);
-		const rankingContext: CredentialRankingContext = { modelId: options?.modelId };
+		const rankingContext: CredentialRankingContext = {
+			modelId: options?.modelId,
+			baseUrl: options?.baseUrl,
+		};
 		const blockScope = strategy?.blockScope?.(rankingContext);
 		const planRequirement = resolveOpenAICodexPlanRequirement(provider, options?.modelId);
 		const hasPlanRequirement = planRequirement !== "none";
@@ -5339,7 +5347,14 @@ export class AuthStorage {
 	async rotateSessionCredential(
 		provider: string,
 		sessionId: string | undefined,
-		options?: { error?: unknown; modelId?: string; apiKey?: string; credentialId?: number; signal?: AbortSignal },
+		options?: {
+			error?: unknown;
+			modelId?: string;
+			baseUrl?: string;
+			apiKey?: string;
+			credentialId?: number;
+			signal?: AbortSignal;
+		},
 	): Promise<boolean> {
 		const error = options?.error;
 		const status = AIError.status(error);
@@ -5348,6 +5363,7 @@ export class AuthStorage {
 			return (
 				await this.markUsageLimitReached(provider, sessionId, {
 					modelId: options?.modelId,
+					baseUrl: options?.baseUrl,
 					apiKey: options?.apiKey,
 					credentialId: options?.credentialId,
 					signal: options?.signal,

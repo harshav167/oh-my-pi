@@ -303,6 +303,8 @@ export interface UsageProvider {
 export interface CredentialRankingContext {
 	/** Provider model id, when the caller is selecting a credential for one model. */
 	modelId?: string;
+	/** Request base URL, used to scope product-local quotas (e.g. Build vs api.x.ai). */
+	baseUrl?: string;
 }
 
 /** Strategy for usage-based credential ranking. Providers implement this to opt into smart credential selection. */

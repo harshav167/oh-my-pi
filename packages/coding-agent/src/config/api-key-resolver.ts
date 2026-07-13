@@ -11,6 +11,12 @@ export interface ApiKeyResolverOptions {
 	baseUrl?: string;
 	/** Provider model id forwarded to model-scoped usage ranking/backoff. */
 	modelId?: string;
+	/**
+	 * Provider id used for rotateSessionCredential when it differs from the
+	 * lookup provider (credential-delegation aliases, e.g. xai-grok-cli → xai-oauth).
+	 * Defaults to the lookup provider.
+	 */
+	rotationProvider?: string;
 }
 
 /**
@@ -49,7 +55,7 @@ export function createApiKeyResolver(
 	provider: string,
 	options: ApiKeyResolverOptions = {},
 ): ApiKeyResolver {
-	const { sessionId, baseUrl, modelId } = options;
+	const { sessionId, baseUrl, modelId, rotationProvider = provider } = options;
 	return async ({ lastChance, error, signal, previousKey }) => {
 		if (error === undefined) {
 			return registry.getApiKeyForProvider(provider, sessionId, { baseUrl, modelId });
@@ -60,9 +66,10 @@ export function createApiKeyResolver(
 			// sibling exists we switch immediately; the precise no-sibling backoff
 			// is owned by `markUsageLimitReached` (default + server usage-report
 			// reset) and the outer whole-turn retry layer.
-			const switched = await registry.authStorage.rotateSessionCredential(provider, sessionId, {
+			const switched = await registry.authStorage.rotateSessionCredential(rotationProvider, sessionId, {
 				error,
 				modelId,
+				baseUrl,
 				signal,
 				apiKey: previousKey,
 			});

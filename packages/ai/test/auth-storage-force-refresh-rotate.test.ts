@@ -553,6 +553,51 @@ describe("AuthStorage forceRefresh + rotateSessionCredential", () => {
 		expect(await authStorage.getApiKey(PROVIDER, "xai-credits")).not.toBe(first);
 	});
 
+	test("rotateSessionCredential(Grok Build 402 balance exhausted) blocks and rotates under xai-oauth", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+		// Real SuperGrok credential pool: Build and api.x.ai share xai-oauth rows.
+		await authStorage.set("xai-oauth", [
+			{ type: "oauth", access: "build-exhausted", refresh: "ref-A", expires: farExpiry() },
+			{ type: "oauth", access: "build-healthy", refresh: "ref-B", expires: farExpiry() },
+		]);
+
+		const buildBaseUrl = "https://cli-chat-proxy.grok.com/v1";
+		const apiBaseUrl = "https://api.x.ai/v1";
+		const sessionId = "xai-grok-cli-build-402";
+		const first = await authStorage.getApiKey("xai-oauth", sessionId, {
+			baseUrl: buildBaseUrl,
+			modelId: "grok-4.5",
+		});
+		expect(first).toBeTruthy();
+		const usageLimitSpy = vi.spyOn(authStorage, "markUsageLimitReached");
+		const buildBalanceError = Object.assign(new Error('402 {"error":"Grok Build usage balance exhausted"}'), {
+			status: 402,
+		});
+
+		const rotated = await authStorage.rotateSessionCredential("xai-oauth", sessionId, {
+			error: buildBalanceError,
+			modelId: "grok-4.5",
+			baseUrl: buildBaseUrl,
+		});
+
+		expect(rotated).toBe(true);
+		expect(usageLimitSpy).toHaveBeenCalledTimes(1);
+
+		// Before any Build re-resolve re-sticks the session, prove the Build-scoped
+		// block does not suppress this credential for api.x.ai.
+		const apiStillOk = await authStorage.getApiKey("xai-oauth", sessionId, {
+			baseUrl: apiBaseUrl,
+			modelId: "grok-4.5",
+		});
+		expect(apiStillOk).toBe(first);
+
+		const nextBuild = await authStorage.getApiKey("xai-oauth", sessionId, {
+			baseUrl: buildBaseUrl,
+			modelId: "grok-4.5",
+		});
+		expect(nextBuild).not.toBe(first);
+	});
+
 	test("rotateSessionCredential treats quota payloads as temporary usage blocks", async () => {
 		if (!authStorage) throw new Error("test setup failed");
 		registerProvider();

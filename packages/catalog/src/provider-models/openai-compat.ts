@@ -1366,6 +1366,99 @@ export function xaiOAuthModelManagerOptions(
 }
 
 // ---------------------------------------------------------------------------
+// xai-grok-cli — Grok CLI / Build host (cli-chat-proxy.grok.com)
+// ---------------------------------------------------------------------------
+//
+// Separate picker provider from SuperGrok (xai-oauth). Models come only from
+// live GET /v1/models on the Build host (no static seed, no catalogDiscovery).
+// Credentials are stored under xai-oauth and resolved via catalog authProvider.
+
+const XAI_GROK_CLI_BASE_URL = "https://cli-chat-proxy.grok.com/v1";
+
+const XAI_GROK_CLI_STATIC_HEADERS: Record<string, string> = {
+	"x-xai-token-auth": "xai-grok-cli",
+	"x-authenticateresponse": "authenticate-response",
+	"x-grok-client-mode": "interactive",
+	"x-compaction-at": "400000",
+	"x-grok-client-version": "0.2.99",
+	"x-grok-client-identifier": "grok-pager",
+	"user-agent": "grok-pager/0.2.99 grok-shell/0.2.99 (macos; aarch64)",
+};
+
+export interface XaiGrokCliModelManagerConfig {
+	apiKey?: string;
+	fetch?: FetchImpl;
+}
+
+function applyXaiGrokCliRuntimeOverlay(model: ModelSpec<"openai-responses">): ModelSpec<"openai-responses"> {
+	// Reuse SuperGrok curated metadata (context, name, reasoning, input, effort
+	// flags) when Build returns a known id — same table as xai-oauth, no second
+	// hardcoded 500k/200k map. Membership stays dynamic-only (no inject).
+	const curated = XAI_OAUTH_CURATED_MODELS.find(entry => entry.id === model.id);
+	const base = curated ? mergeCuratedIntoModel(model, curated) : model;
+	const effortCapable = curated?.supportsReasoningEffort ?? isGrokReasoningEffortCapable(model.id);
+	const fallbackInput: ("text" | "image")[] =
+		model.id === "grok-composer-2.5-fast"
+			? ["text"]
+			: base.input?.includes("image")
+				? (base.input as ("text" | "image")[])
+				: ["text", "image"];
+	return {
+		...base,
+		provider: "xai-grok-cli",
+		baseUrl: XAI_GROK_CLI_BASE_URL,
+		// Unknown Build ids: keep discovery input when present, else text+image.
+		input: curated ? base.input : fallbackInput,
+		reasoning: curated ? base.reasoning : model.id !== "grok-composer-2.5-fast",
+		headers: { ...(base.headers ?? {}), ...XAI_GROK_CLI_STATIC_HEADERS },
+		// Build profile must win over mergeCuratedIntoModel's api.x.ai defaults.
+		compat: {
+			...(base.compat ?? {}),
+			includeEncryptedReasoning: true,
+			filterReasoningHistory: false,
+			omitReasoningEffort: !effortCapable,
+			supportsReasoningEffort: effortCapable,
+			reasoningEffortMap: {
+				...XAI_REASONING_EFFORT_MAP,
+				...(base.compat?.reasoningEffortMap ?? {}),
+			},
+		},
+	};
+}
+
+/**
+ * Runtime model manager for the Grok CLI Build host. Dynamic-only: no
+ * staticModels seed. Requires apiKey (SuperGrok OAuth access) for discovery.
+ */
+export function xaiGrokCliModelManagerOptions(
+	config?: XaiGrokCliModelManagerConfig,
+): ModelManagerOptions<"openai-responses"> {
+	const base = createSimpleOpenAIResponsesOptions(
+		"xai-grok-cli" as Parameters<typeof getBundledModels>[0],
+		XAI_GROK_CLI_BASE_URL,
+		{
+			apiKey: config?.apiKey,
+			fetch: config?.fetch,
+			baseUrl: XAI_GROK_CLI_BASE_URL,
+			headers: XAI_GROK_CLI_STATIC_HEADERS,
+		},
+	);
+	if (!base.fetchDynamicModels) {
+		return { ...base, staticModels: [] };
+	}
+	const inner = base.fetchDynamicModels;
+	return {
+		...base,
+		staticModels: [],
+		fetchDynamicModels: async () => {
+			const dynamic = await inner();
+			if (dynamic == null) return dynamic;
+			return dynamic.map(applyXaiGrokCliRuntimeOverlay);
+		},
+	};
+}
+
+// ---------------------------------------------------------------------------
 // 6.4 AIML API
 // ---------------------------------------------------------------------------
 

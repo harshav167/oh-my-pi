@@ -92,6 +92,7 @@ import {
 	resolveOpenAIRequestSetup,
 	shouldRetryWithoutStrictTools,
 } from "./openai-shared";
+import { buildXaiGrokCliLifecycleHeaders, countAssistantTurns, isXaiGrokCliProvider } from "./xai-grok-cli-headers";
 
 // OpenAI Responses-specific options
 export interface OpenAIResponsesOptions extends StreamOptions {
@@ -392,9 +393,16 @@ const streamOpenAIResponsesOnce = (
 			const routingSessionId = getOpenAIResponsesRoutingSessionId(options);
 			const promptCacheSessionId = getOpenAIPromptCacheKey(options);
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
+			const lifecycleHeaders = isXaiGrokCliProvider(model.provider)
+				? buildXaiGrokCliLifecycleHeaders({
+						sessionKey: promptCacheSessionId ?? routingSessionId,
+						modelId: model.requestModelId ?? model.id,
+						turnIndex: countAssistantTurns(context.messages),
+					})
+				: undefined;
 			const { headers, copilotPremiumRequests, baseUrl } = resolveOpenAIRequestSetup(model, {
 				apiKey,
-				extraHeaders: options?.headers,
+				extraHeaders: lifecycleHeaders ? { ...lifecycleHeaders, ...(options?.headers ?? {}) } : options?.headers,
 				initiatorOverride: options?.initiatorOverride,
 				messages: context.messages,
 				openAISessionId: routingSessionId,
@@ -902,7 +910,11 @@ export function buildParams(
 			? options?.reasoning === undefined
 				? undefined
 				: null
-			: options?.reasoningSummary;
+			: isXaiGrokCliProvider(model.provider)
+				? options?.reasoning === undefined
+					? undefined
+					: (options?.reasoningSummary ?? "concise")
+				: options?.reasoningSummary;
 	applyResponsesCompatPolicy(params, reasoningPolicy, {
 		reasoningSummary,
 		mapEffort: effort =>

@@ -31,6 +31,12 @@ export interface ProviderDescriptor {
 	dynamicModelsAuthoritative?: boolean;
 	/** Catalog discovery configuration. Only providers with this field participate in generate-models.ts. */
 	catalogDiscovery?: CatalogDiscoveryConfig;
+	/**
+	 * AuthStorage provider id that holds credentials for this picker provider.
+	 * When set, runtime auth lookups/rotation/usage-limit marking must use this
+	 * id instead of `providerId` (e.g. xai-grok-cli → xai-oauth).
+	 */
+	authProvider?: string;
 }
 
 /** A provider descriptor that has catalog discovery configured. */
@@ -76,4 +82,15 @@ export interface ProviderCatalogEntry {
 	 * excluded from `PROVIDER_DESCRIPTORS` even though models are discoverable.
 	 */
 	readonly specialModelManager?: boolean;
+	/**
+	 * AuthStorage provider id that holds credentials for this picker provider.
+	 * Omit when credentials are stored under `id`. Used for credential
+	 * delegation (e.g. xai-grok-cli models authenticate via xai-oauth OAuth).
+	 */
+	readonly authProvider?: string;
+	/**
+	 * When true with `authProvider`, only OAuth credentials on the auth
+	 * provider count — API keys / env keys must not unlock this picker provider.
+	 */
+	readonly authRequiresOAuth?: boolean;
 }

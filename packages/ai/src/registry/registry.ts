@@ -59,6 +59,7 @@ import { vercelAiGatewayProvider } from "./vercel-ai-gateway";
 import { vllmProvider } from "./vllm";
 import { waferServerlessProvider } from "./wafer-serverless";
 import { xaiProvider } from "./xai";
+import { xaiGrokCliProvider } from "./xai-grok-cli";
 import { xaiOauthProvider } from "./xai-oauth";
 import { xiaomiProvider } from "./xiaomi";
 import { xiaomiTokenPlanAmsProvider } from "./xiaomi-token-plan-ams";
@@ -89,6 +90,7 @@ const ALL = [
 	googleGeminiCliProvider,
 	openaiCodexDeviceProvider,
 	xaiOauthProvider,
+	xaiGrokCliProvider,
 	gitlabDuoProvider,
 	gitLabDuoWorkflowProvider,
 	alibabaCodingPlanProvider,

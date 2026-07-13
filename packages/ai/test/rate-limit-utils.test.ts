@@ -5,6 +5,7 @@ import {
 	calculateRateLimitBackoffMs,
 	isUsageLimitOutcome,
 	isUsageLimitStatus,
+	matchesUsageLimitText,
 	parseRateLimitReason,
 } from "@oh-my-pi/pi-ai/error/rate-limit";
 
@@ -162,6 +163,18 @@ describe("isUsageLimit", () => {
 		expect(isUsageLimit(message)).toBe(true);
 		expect(isUsageLimit(Object.assign(new Error(message), { status: 403 }))).toBe(true);
 		expect(parseRateLimitReason(message)).toBe("QUOTA_EXHAUSTED");
+	});
+
+	it("detects Grok Build 402 usage balance exhausted as credential-rotatable", () => {
+		// cli-chat-proxy returns HTTP 402 {"error":"Grok Build usage balance exhausted"}.
+		// Multi-account SuperGrok pools (same xai-oauth provider for xai-grok-cli) must
+		// rotate off the Build-exhausted credential instead of sticking until the user
+		// manually switches models.
+		const message = '402 {"error":"Grok Build usage balance exhausted"}';
+		expect(isUsageLimit(message)).toBe(true);
+		expect(isUsageLimit(Object.assign(new Error("Grok Build usage balance exhausted"), { status: 402 }))).toBe(true);
+		expect(isUsageLimitOutcome(402, "Grok Build usage balance exhausted")).toBe(true);
+		expect(matchesUsageLimitText("Grok Build usage balance exhausted")).toBe(true);
 	});
 
 	it("detects OpenAI quota payload codes as credential-rotatable usage limits", () => {

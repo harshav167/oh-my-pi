@@ -43,6 +43,9 @@
 - Fixed reasoning effort mapping for Z.ai GLM-5.2 on the Anthropic messages endpoint to correctly use the two-tier scale (high, max) and emit output_config.effort.
 - Fixed an issue where stale cached model limits would override updated static catalog limits after a catalog fingerprint mismatch.
 - Fixed Cursor discovery to correctly preserve GetUsableModels max-mode metadata for premium models and invalidate stale cache entries.
+### Added
+
+- Added `xai-grok-cli` provider descriptor for the Grok CLI Build host (`cli-chat-proxy.grok.com`): dynamic `/v1/models` only (no static seed / no `catalogDiscovery`), `authProvider: "xai-oauth"` + `authRequiresOAuth` so SuperGrok OAuth unlocks the picker without a second login, and Build wire compat (encrypted reasoning include, keep reasoning history).
 
 ## [16.4.3] - 2026-07-11
 

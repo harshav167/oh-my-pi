@@ -663,6 +663,59 @@ describe("streamSimple resolver auth retry", () => {
 		expect((retryContexts[0]!.error as Error).message).toContain("Resource exhausted");
 	});
 
+	it("rotates on Grok Build 402 usage balance exhausted before content", async () => {
+		// cli-chat-proxy 402 must take the usage-limit rotate path (lastChance),
+		// not stick on credential A until the user manually switches models.
+		const keys: unknown[] = [];
+		const eventTypes: string[] = [];
+		const retryContexts: ApiKeyResolveContext[] = [];
+		registerCustomApi(
+			API,
+			(_model: Model<Api>, _context: Context, options?: SimpleStreamOptions) => {
+				pushKey(keys, options);
+				const stream = new AssistantMessageEventStream();
+				queueMicrotask(() => {
+					if (options?.apiKey === "credential-B") {
+						ok(stream);
+						return;
+					}
+					stream.push({ type: "start", partial: assistant() });
+					stream.push({
+						type: "error",
+						reason: "error",
+						error: assistantError('402 {"error":"Grok Build usage balance exhausted"}', 402),
+					});
+				});
+				return stream;
+			},
+			SOURCE_ID,
+		);
+
+		const stream = streamSimple(model(), context, {
+			apiKey: async ctx => {
+				if (ctx.error !== undefined) retryContexts.push(ctx);
+				// Initial + force-refresh stay on A (Build-exhausted); lastChance → B.
+				return ctx.error === undefined ? "credential-A" : ctx.lastChance ? "credential-B" : "credential-A";
+			},
+		});
+		for await (const event of stream) {
+			eventTypes.push(event.type);
+		}
+
+		const result = await stream.result();
+		expect(result.stopReason).toBe("stop");
+		expect(result.content).toEqual([{ type: "text", text: "ok" }]);
+		expect(keys).toEqual(["credential-A", "credential-B"]);
+		expect(eventTypes).toEqual(["start", "text_start", "text_delta", "text_end", "done"]);
+		expect(retryContexts.map(ctx => ctx.lastChance)).toEqual([true]);
+		expect(retryContexts[0]).toBeDefined();
+		const retryError = retryContexts[0]!.error;
+		expect(retryError instanceof Error).toBe(true);
+		if (retryError instanceof Error) {
+			expect(retryError.message).toContain("Grok Build usage balance exhausted");
+		}
+	});
+
 	it("surfaces the original error when the resolver declines every retry", async () => {
 		const keys: unknown[] = [];
 		const original = usageLimitError();

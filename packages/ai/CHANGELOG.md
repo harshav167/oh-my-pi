@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added non-login registry provider `xai-grok-cli` (xAI Grok CLI Build) and openai-responses lifecycle/fingerprint headers plus `reasoning.summary: "concise"` when reasoning is requested on that provider.
+
 ### Fixed
 
 - Automatically invalidate and rotate OAuth credentials when an "invalidated oauth token" error occurs
@@ -87,6 +91,8 @@
 ### Removed
 
 - Removed automatic /interactions chaining for follow-up turns in Google provider calls, along with the useInteractionsApi, storeInteraction, and previousInteractionId stream options.
+- Fixed Grok Build `402 Grok Build usage balance exhausted` not rotating SuperGrok OAuth siblings: the phrase is now a usage-limit signal, and `xai-oauth` usage blocks are scoped by product host (Build vs api.x.ai) so a Build-empty account still works for `xai-oauth/grok-4.5`.
+- Fixed empty provider responses (e.g. "Cloud Code Assist API returned an empty response") being classified as non-retryable: `ProviderResponseError` with kind `empty-body` now carries the transient flag, so session retry and configured model-fallback chains engage instead of hard-failing the turn
 
 ## [16.4.6] - 2026-07-12
 

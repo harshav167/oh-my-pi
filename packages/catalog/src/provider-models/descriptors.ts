@@ -46,6 +46,7 @@ import {
 	vercelAiGatewayModelManagerOptions,
 	vllmModelManagerOptions,
 	waferServerlessModelManagerOptions,
+	xaiGrokCliModelManagerOptions,
 	xaiModelManagerOptions,
 	xaiOAuthModelManagerOptions,
 	xiaomiModelManagerOptions,
@@ -434,6 +435,16 @@ export const CATALOG_PROVIDERS = [
 		},
 	},
 	{
+		id: "xai-grok-cli",
+		defaultModel: "grok-4.5",
+		envVars: [],
+		createModelManagerOptions: (config: ModelManagerConfig) => xaiGrokCliModelManagerOptions(config),
+		dynamicModelsAuthoritative: true,
+		authProvider: "xai-oauth",
+		authRequiresOAuth: true,
+		// No catalogDiscovery: runtime-only dynamic list from Build /v1/models.
+	},
+	{
 		id: "xiaomi",
 		defaultModel: "mimo-v2.5",
 		envVars: ["XIAOMI_API_KEY"],
@@ -508,12 +519,28 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = CATALOG_ENTRY
 			createModelManagerOptions: provider.createModelManagerOptions,
 			allowUnauthenticated: provider.allowUnauthenticated,
 			dynamicModelsAuthoritative: provider.dynamicModelsAuthoritative,
+			authProvider: provider.authProvider,
 			catalogDiscovery: provider.catalogDiscovery
 				? { ...provider.catalogDiscovery, envVars: provider.catalogDiscovery.envVars ?? provider.envVars ?? [] }
 				: undefined,
 		},
 	];
 });
+
+/**
+ * Resolve the AuthStorage provider id that holds credentials for a picker
+ * provider. Most providers store credentials under their own id; delegated
+ * providers (e.g. xai-grok-cli → xai-oauth) declare `authProvider` on the
+ * catalog entry.
+ */
+export function resolveProviderAuthId(provider: string): string {
+	return getCatalogProviderEntry(provider)?.authProvider ?? provider;
+}
+
+/** True when only OAuth credentials on the auth provider unlock this picker id. */
+export function providerAuthRequiresOAuth(provider: string): boolean {
+	return getCatalogProviderEntry(provider)?.authRequiresOAuth === true;
+}
 
 /** Default model IDs for all known providers, derived from the catalog table. */
 export const DEFAULT_MODEL_PER_PROVIDER: Record<KnownProvider, string> = Object.fromEntries(

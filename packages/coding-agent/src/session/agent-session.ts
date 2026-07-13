@@ -127,6 +127,7 @@ import { type RepeatedToolCallDetection, ToolCallLoopGuard } from "@oh-my-pi/pi-
 import { isFireworksFastModelId, toFireworksBaseModelId } from "@oh-my-pi/pi-catalog/fireworks-model-id";
 import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
 import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
+import { resolveProviderAuthId } from "@oh-my-pi/pi-catalog/provider-models";
 import { MacOSPowerAssertion } from "@oh-my-pi/pi-natives";
 import {
 	escapeXmlText,
@@ -3066,7 +3067,7 @@ export class AgentSession {
 					const message = error instanceof Error ? error.message : String(error);
 					if (!isUsageLimitOutcome(extractHttpStatusFromError(error), message)) return;
 					await this.#modelRegistry.authStorage.markUsageLimitReached(
-						advisorModel.provider,
+						resolveProviderAuthId(advisorModel.provider),
 						advisorProviderSessionId,
 						{
 							retryAfterMs: extractRetryHint(undefined, message),
@@ -14434,7 +14435,7 @@ export class AgentSession {
 		) {
 			const retryAfterMs = parsedRetryAfterMs ?? calculateRateLimitBackoffMs(parseRateLimitReason(errorMessage));
 			const outcome = await this.#modelRegistry.authStorage.markUsageLimitReached(
-				this.model.provider,
+				resolveProviderAuthId(this.model.provider),
 				this.sessionId,
 				{
 					retryAfterMs,
