@@ -4,7 +4,8 @@ import type { AssistantMessage, ImageContent, TextContent } from "@oh-my-pi/pi-a
 import * as AIError from "@oh-my-pi/pi-ai/error";
 import { raceWithSignal } from "@oh-my-pi/pi-ai/utils/abort";
 import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
+import consultPromptTemplate from "../prompts/advisor/consult.md" with { type: "text" };
 import { obfuscateToolArguments, type SecretObfuscator } from "../secrets/obfuscator";
 import {
 	formatExecutionSourcePreview,
@@ -12,6 +13,8 @@ import {
 	formatToolResultErrorPreview,
 	PRIMARY_CONTEXT_CUSTOM_TYPES,
 } from "../session/session-history-format";
+import type { AdvisorConsultRequest } from "./consultation";
+import { AdvisorConsultationQueue } from "./consultation-queue";
 
 /**
  * Minimal slice of `Agent` the runtime drives — satisfied by pi-agent-core
@@ -20,7 +23,7 @@ import {
  * this field after every prompt to detect a failed turn.
  */
 export interface AdvisorAgent {
-	prompt(input: string): Promise<void>;
+	prompt(input: string, options?: { toolChoice?: "none" | "auto" | "required" }): Promise<void>;
 	abort(reason?: unknown): void;
 	reset(): void;
 	/**
@@ -236,6 +239,7 @@ const ADVISOR_RENDER_OPTIONS = {
 	watchedRoles: true,
 	expandPrimaryContext: true,
 	expandEditDiffs: true,
+	expandConsultResults: true,
 } as const;
 
 interface PendingDelta {
@@ -269,6 +273,8 @@ function fingerprintMessage(message: AgentMessage): bigint | undefined {
 	}
 }
 
+const CONSULT_TOOL_NAME = "consult_advisor";
+
 export class AdvisorRuntime {
 	#lastCount = 0;
 	/**
@@ -286,11 +292,18 @@ export class AdvisorRuntime {
 	#renderRevision = 0;
 	/** Regex secret values observed in primary deltas and retained until advisor context resets. */
 	#advisorRegexSecretValues = new Set<string>();
+	/** Primary consult_advisor tool-call ids already delivered into advisor context. */
+	#seenConsultToolCallIds = new Set<string>();
+	#queue: AdvisorConsultationQueue;
 	#pending: PendingDelta[] = [];
 	#busy = false;
 	#sessionTransitionPaused = false;
 	#promptInFlight: Promise<void> | undefined;
 	#iterationAbort: AbortController | undefined;
+	/** True while a main-agent consult is running (serializes with #drain). */
+	#consultBusy = false;
+	/** Resolved each time #drain goes idle so a queued consult can start without polling a busy loop. */
+	#drainIdle: (() => void) | undefined;
 	#backlog = 0;
 	#consecutiveFailures = 0;
 	#failureNotified = false;
@@ -333,7 +346,41 @@ export class AdvisorRuntime {
 		private readonly agent: AdvisorAgent,
 		private readonly host: AdvisorRuntimeHost,
 		private readonly retryDelayMs = 1000,
-	) {}
+	) {
+		this.#queue = new AdvisorConsultationQueue({
+			// Reviews use #pending/#drain directly; the queue is consult-only FIFO.
+			runReviews: async () => {},
+			runConsult: async request => {
+				// Capture the epoch before parking: a reset/dispose rejects the queued
+				// job but this callback stays parked; on wake the epoch has moved and
+				// the consult must not run as a ghost against the post-reset context.
+				const consultEpoch = this.#epoch;
+				// Wait for the passive review drain to go idle before consulting. We
+				// must not start a second agent.prompt() while #busy is true, so park
+				// on a waiter resolved in #drain's finally instead of polling a bound.
+				for (;;) {
+					if (this.disposed) throw new Error("Advisor disposed");
+					if (this.#epoch !== consultEpoch) throw new Error("Advisor was reset during consultation");
+					if (this.#pending.length > 0) void this.#drain();
+					if (!this.#busy) break;
+					const idle = Promise.withResolvers<void>();
+					this.#drainIdle = idle.resolve;
+					await idle.promise;
+				}
+				if (this.#epoch !== consultEpoch) throw new Error("Advisor was reset during consultation");
+				this.#consultBusy = true;
+				try {
+					return await this.#runConsult(request);
+				} finally {
+					this.#consultBusy = false;
+					if (!this.disposed && this.#pending.length > 0) void this.#drain();
+				}
+			},
+			abortConsult: reason => this.agent.abort(reason),
+			markToolCallSeen: toolCallId => this.#seenConsultToolCallIds.add(toolCallId),
+			unmarkToolCallSeen: toolCallId => this.#seenConsultToolCallIds.delete(toolCallId),
+		});
+	}
 
 	get backlog(): number {
 		return this.#backlog;
@@ -347,6 +394,36 @@ export class AdvisorRuntime {
 	/** True after the runtime hard-stopped on repeated or permanent failures. */
 	get halted(): boolean {
 		return this.#halted;
+	}
+
+	/**
+	 * True when `#pending` is non-empty while the drain loop is busy — i.e., newer
+	 * primary turns arrived after the current batch's transcript window was fixed
+	 * but before the advisor model finished processing it. The delivery path uses
+	 * this to annotate advice that was generated without seeing those newer turns.
+	 * Can be true during `agent.prompt()`, a `maintainContext` await, or a retry
+	 * sleep — any time `#drain` is busy and a concurrent `onTurnEnd` pushed.
+	 */
+	get hasFreshBacklog(): boolean {
+		return this.#pending.length > 0;
+	}
+
+	/**
+	 * Ask the advisor a question on the persistent thread. Serializes with passive
+	 * reviews: waits for an idle drain, folds unread primary into one text-only
+	 * consult prompt, then returns assistant text.
+	 */
+	consult(opts: AdvisorConsultRequest): Promise<{ readonly reply: string }> {
+		if (this.disposed) return Promise.reject(new Error("Advisor disposed"));
+		return this.#queue.consult(opts);
+	}
+
+	markConsultToolCallSeen(toolCallId: string): void {
+		if (toolCallId) this.#seenConsultToolCallIds.add(toolCallId);
+	}
+
+	unmarkConsultToolCallSeen(toolCallId: string): void {
+		this.#seenConsultToolCallIds.delete(toolCallId);
 	}
 
 	/**
@@ -440,12 +517,16 @@ export class AdvisorRuntime {
 		this.#iterationAbort?.abort("advisor disposed");
 		this.disposed = true;
 		this.#epoch++;
+		this.#queue.dispose(new Error("Advisor disposed"));
 		this.#pending = [];
 		this.#backlog = 0;
 		this.#consecutiveFailures = 0;
 		this.#failureNotified = false;
 		this.#advisorRegexSecretValues.clear();
+		this.#seenConsultToolCallIds.clear();
 		this.#wakeAllWaiters();
+		this.#drainIdle?.();
+		this.#drainIdle = undefined;
 		try {
 			this.agent.abort("advisor disposed");
 		} catch {}
@@ -460,6 +541,7 @@ export class AdvisorRuntime {
 	#clearAdvisorContextAtCurrentCursor(): void {
 		this.#consecutiveFailures = 0;
 		this.#clearSeenContext();
+		this.#seenConsultToolCallIds.clear();
 		try {
 			this.agent.reset();
 		} catch {}
@@ -542,7 +624,10 @@ export class AdvisorRuntime {
 		this.#droppedBacklogs = 0;
 		this.#consecutiveQuarantines = 0;
 		this.#failureNotified = false;
+		this.#queue.rejectConsults(new Error("Advisor was reset during consultation"));
 		this.#resetAdvisorContext(true, true);
+		this.#drainIdle?.();
+		this.#drainIdle = undefined;
 	}
 
 	/**
@@ -557,6 +642,7 @@ export class AdvisorRuntime {
 			message,
 			fingerprint: fingerprintMessage(message),
 		}));
+		this.#queue.clearReviews();
 		this.#pending = [];
 		this.#backlog = 0;
 		this.#consecutiveFailures = 0;
@@ -575,9 +661,7 @@ export class AdvisorRuntime {
 	}
 
 	#formatRawDelta(rawMessages: AgentMessage[], wip = false): string | null {
-		const delta = rawMessages
-			.filter(message => !(message.role === "custom" && message.customType === "advisor"))
-			.map(message => this.#dedupContextMessage(message));
+		const delta = this.#filterDeltaMessages(rawMessages).map(message => this.#dedupContextMessage(message));
 		if (delta.length === 0) return null;
 		const obfuscator = this.host.obfuscator;
 		let md = formatSessionHistoryMarkdown(delta, {
@@ -680,6 +764,174 @@ export class AdvisorRuntime {
 		}
 		this.#seenContext.set(msg.customType, msg.content);
 		return msg;
+	}
+
+	#filterDeltaMessages(messages: AgentMessage[]): AgentMessage[] {
+		const dropCallIds = new Set<string>();
+		for (const m of messages) {
+			if (m.role !== "assistant") continue;
+			const content = (m as AssistantMessage).content;
+			if (!Array.isArray(content)) continue;
+			for (const block of content) {
+				if (
+					block &&
+					typeof block === "object" &&
+					"type" in block &&
+					block.type === "toolCall" &&
+					"name" in block &&
+					block.name === CONSULT_TOOL_NAME &&
+					"id" in block &&
+					typeof block.id === "string" &&
+					this.#seenConsultToolCallIds.has(block.id)
+				) {
+					dropCallIds.add(block.id);
+				}
+			}
+		}
+		const out: AgentMessage[] = [];
+		for (const m of messages) {
+			if (m.role === "custom" && customTypeOf(m) === "advisor") continue;
+			if (m.role === "toolResult") {
+				const id = toolCallIdOf(m);
+				// Result-only deltas (call already past lastCount) must still drop
+				// against the session-scoped seen set, not only same-slice call ids.
+				if (id && (dropCallIds.has(id) || this.#seenConsultToolCallIds.has(id))) {
+					continue;
+				}
+				out.push(m);
+				continue;
+			}
+			if (m.role === "assistant") {
+				const content = (m as AssistantMessage).content;
+				if (!Array.isArray(content)) {
+					out.push(m);
+					continue;
+				}
+				const kept = content.filter(block => {
+					if (!block || typeof block !== "object" || !("type" in block) || block.type !== "toolCall") {
+						return true;
+					}
+					if (!("id" in block) || typeof block.id !== "string") return true;
+					return !dropCallIds.has(block.id);
+				});
+				if (kept.length === 0) continue;
+				if (kept.length === content.length) {
+					out.push(m);
+				} else {
+					out.push({ ...(m as object), content: kept } as AgentMessage);
+				}
+				continue;
+			}
+			out.push(m);
+		}
+		return out;
+	}
+
+	async #runConsult(job: AdvisorConsultRequest): Promise<{ readonly reply: string }> {
+		const epoch = this.#epoch;
+
+		let cursorBeforeCatchUp: number | undefined;
+		let seenContextBeforeCatchUp: Map<string, string> | undefined;
+		let didReprime = false;
+		try {
+			if (job.signal?.aborted) {
+				throw abortError(job.signal);
+			}
+
+			// Fold unread primary into the same text-only consult prompt — never a
+			// separate agentic review turn (that burned the 120s tool timeout).
+			this.#latestMessages = this.host.snapshotMessages();
+			cursorBeforeCatchUp = this.#lastCount;
+			seenContextBeforeCatchUp = new Map(this.#seenContext);
+			let catchUpDelta = this.#renderDelta(this.#latestMessages);
+			if (this.#epoch !== epoch) {
+				throw new Error("Advisor was reset during consultation");
+			}
+			if (job.signal?.aborted) {
+				throw abortError(job.signal);
+			}
+
+			const message =
+				this.host.obfuscator?.hasSecrets() === true ? this.host.obfuscator.obfuscate(job.message) : job.message;
+			let consultText = prompt
+				.render(consultPromptTemplate, {
+					message,
+					sessionUpdate: catchUpDelta?.text ?? undefined,
+				})
+				.trim();
+			const incomingTokens = estimateTokens({
+				role: "user",
+				content: consultText,
+				timestamp: Date.now(),
+			});
+			let shouldReprime = false;
+			if (this.host.maintainContext) {
+				try {
+					shouldReprime = await this.host.maintainContext(incomingTokens);
+				} catch (err) {
+					logger.debug("advisor context maintenance failed", { err: String(err) });
+				}
+			}
+			if (this.#epoch !== epoch) {
+				throw new Error("Advisor was reset during consultation");
+			}
+			if (job.signal?.aborted) {
+				throw abortError(job.signal);
+			}
+			if (shouldReprime) {
+				this.#resetAdvisorContext(false, false);
+				didReprime = true;
+				if (job.toolCallId) this.#seenConsultToolCallIds.add(job.toolCallId);
+				this.#latestMessages = this.host.snapshotMessages();
+				catchUpDelta = this.#renderDelta(this.#latestMessages);
+				consultText = prompt
+					.render(consultPromptTemplate, {
+						message,
+						sessionUpdate: catchUpDelta?.text ?? undefined,
+					})
+					.trim();
+			}
+
+			const messageSnapshot = this.agent.state.messages.length;
+			try {
+				this.host.beginAdvisorUpdate?.();
+				// Text-only: consult must not run an agentic tool loop (read/grep/task/…)
+				// or it can exceed the main tool's 120s timeout mid-investigation.
+				await this.agent.prompt(consultText, { toolChoice: "none" });
+				if (this.#epoch !== epoch) {
+					throw new Error("Advisor was reset during consultation");
+				}
+				const promptError = this.agent.state.error;
+				if (promptError) throw new Error(promptError);
+				const reply = extractAssistantTextSince(this.agent.state.messages, messageSnapshot);
+				return { reply: reply || "(advisor produced no text reply)" };
+			} catch (err) {
+				if (this.#epoch !== epoch) {
+					// reset/dispose already rejects via epoch; still surface.
+					throw err instanceof Error ? err : new Error(String(err));
+				}
+				this.#rollbackFailedTurn(messageSnapshot);
+				throw err;
+			}
+		} catch (err) {
+			// renderDelta advanced lastCount before the combined prompt; restore when
+			// the consult fails without a reset so later passive review still sees it.
+			if (this.#epoch === epoch && cursorBeforeCatchUp !== undefined) {
+				if (didReprime) {
+					// Re-prime cleared the advisor transcript and rewound cursor to 0, but the
+					// post-re-prime renderDelta advanced it again. Restore to 0 so a later
+					// passive review replays the full history and reconstructs context.
+					this.#lastCount = 0;
+					this.#seenContext.clear();
+				} else {
+					this.#lastCount = cursorBeforeCatchUp;
+					if (seenContextBeforeCatchUp) {
+						this.#seenContext = seenContextBeforeCatchUp;
+					}
+				}
+			}
+			throw err instanceof Error ? err : new Error(typeof err === "string" ? err : "Advisor consultation failed");
+		}
 	}
 
 	#notifyWaiters(): void {
@@ -853,7 +1105,7 @@ export class AdvisorRuntime {
 	}
 
 	async #drain(): Promise<void> {
-		if (this.#busy || this.#sessionTransitionPaused) return;
+		if (this.#busy || this.#sessionTransitionPaused || this.#consultBusy) return;
 		this.#busy = true;
 		try {
 			this.#syncModelIdentity();
@@ -1150,6 +1402,8 @@ export class AdvisorRuntime {
 		} finally {
 			this.#iterationAbort = undefined;
 			this.#busy = false;
+			this.#drainIdle?.();
+			this.#drainIdle = undefined;
 		}
 	}
 }
@@ -1355,4 +1609,40 @@ function scrubAdvisorHistory(
 		const next = obfuscateAdvisorMessage(obfuscator, message, sharedRegexSecretValues);
 		if (next !== message) messages[index] = next;
 	}
+}
+
+function customTypeOf(message: AgentMessage): string | undefined {
+	if (message.role !== "custom" && message.role !== "hookMessage") return undefined;
+	if (!message || typeof message !== "object" || !("customType" in message)) return undefined;
+	const value = (message as { customType?: unknown }).customType;
+	return typeof value === "string" ? value : undefined;
+}
+
+function abortError(signal: AbortSignal): Error {
+	return signal.reason instanceof Error ? signal.reason : new Error("aborted");
+}
+
+function toolCallIdOf(message: AgentMessage): string | undefined {
+	if (message.role !== "toolResult") return undefined;
+	if (!("toolCallId" in message)) return undefined;
+	const id = (message as { toolCallId?: unknown }).toolCallId;
+	return typeof id === "string" ? id : undefined;
+}
+
+function extractAssistantTextSince(messages: readonly AgentMessage[], startLen: number): string {
+	for (let i = messages.length - 1; i >= startLen; i--) {
+		const msg = messages[i];
+		if (msg.role !== "assistant") continue;
+		const content = (msg as AssistantMessage).content;
+		if (!Array.isArray(content)) continue;
+		const parts: string[] = [];
+		for (const block of content) {
+			if (block && typeof block === "object" && "type" in block && block.type === "text" && "text" in block) {
+				const text = typeof block.text === "string" ? block.text.trim() : "";
+				if (text) parts.push(text);
+			}
+		}
+		if (parts.length > 0) return parts.join("\n\n");
+	}
+	return "";
 }
