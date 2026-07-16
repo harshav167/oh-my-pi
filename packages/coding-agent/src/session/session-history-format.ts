@@ -55,6 +55,12 @@ export interface HistoryFormatOptions {
 	 */
 	toolResultIndex?: ReadonlyMap<string, ToolResultMessage>;
 	consumedToolCallIds?: Set<string>;
+	/**
+	 * Append the full text of `consult_advisor` tool results below the tool line.
+	 * Advisor re-prime after reset/compaction needs the advisor's prior replies,
+	 * not just `⇒ ok · N lines`.
+	 */
+	expandConsultResults?: boolean;
 }
 
 /** Max length of the primary-arg summary inside `→ tool(...)` lines. */
@@ -189,6 +195,7 @@ function toolCallLine(
 	result: ToolResultMessage | undefined,
 	includeToolIntent?: boolean,
 	expandEditDiffs?: boolean,
+	expandConsultResults?: boolean,
 ): string {
 	const head = `→ ${name}(${formatToolCallPrimaryArg(name, args)})`;
 	let base: string;
@@ -210,6 +217,13 @@ function toolCallLine(
 		const diff = (result?.details as { diff?: unknown } | undefined)?.diff;
 		if (typeof diff === "string" && diff.trim()) {
 			base = `${base}\n${fenceDiff(diff)}`;
+		}
+	}
+
+	if (expandConsultResults && name === "consult_advisor" && result && !result.isError) {
+		const body = contentToText(result.content).trim();
+		if (body) {
+			base = `${base}\n${body}`;
 		}
 	}
 
@@ -356,7 +370,14 @@ export function formatSessionHistoryMarkdown(messages: unknown[], opts?: History
 						const result = resultsByCallId.get(block.id);
 						if (result) consumed.add(block.id);
 						body.push(
-							toolCallLine(block.name, block.arguments, result, opts?.includeToolIntent, opts?.expandEditDiffs),
+							toolCallLine(
+								block.name,
+								block.arguments,
+								result,
+								opts?.includeToolIntent,
+								opts?.expandEditDiffs,
+								opts?.expandConsultResults,
+							),
 						);
 					} else if (opts?.includeThinking && block.type === "thinking" && block.thinking.trim()) {
 						body.push(`_thinking:_ ${block.thinking}`);
@@ -380,7 +401,17 @@ export function formatSessionHistoryMarkdown(messages: unknown[], opts?: History
 			case "toolResult": {
 				// Normally consumed by its toolCall; orphans (e.g. truncated history) get their own line.
 				if (consumed.has(msg.toolCallId)) break;
-				lines.push(toolCallLine(msg.toolName, undefined, msg, opts?.includeToolIntent, opts?.expandEditDiffs), "");
+				lines.push(
+					toolCallLine(
+						msg.toolName,
+						undefined,
+						msg,
+						opts?.includeToolIntent,
+						opts?.expandEditDiffs,
+						opts?.expandConsultResults,
+					),
+					"",
+				);
 				lastWatchedLabel = undefined;
 				break;
 			}

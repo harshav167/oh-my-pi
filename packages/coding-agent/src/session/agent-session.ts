@@ -95,7 +95,13 @@ import {
 	stringProperty,
 	withTimeout,
 } from "@oh-my-pi/pi-utils";
-import { type AdvisorConfig, type AdvisorRuntimeStatus, loadAdvisorTranscriptCosts } from "../advisor";
+import {
+	type AdvisorConfig,
+	type AdvisorConsultRequest,
+	type AdvisorConsultResult,
+	type AdvisorRuntimeStatus,
+	loadAdvisorTranscriptCosts,
+} from "../advisor";
 import { type AsyncJob, AsyncJobManager } from "../async";
 import { shouldEnableAppendOnlyContext } from "../config/append-only-context-mode";
 import type { ModelRegistry } from "../config/model-registry";
@@ -1430,6 +1436,7 @@ export class AgentSession {
 		this.#unsubscribeAppendOnly = onAppendOnlyModeChanged(_value => this.#syncAppendOnlyContext(this.model));
 		this.#unsubscribeModelRoles = onModelRolesChanged(() => this.#advisors.onModelRolesChanged());
 	}
+
 	/** Model registry for API key resolution and model discovery */
 	get modelRegistry(): ModelRegistry {
 		return this.#modelRegistry;
@@ -8408,11 +8415,13 @@ export class AgentSession {
 	}
 
 	/**
-	 * Enable or disable the advisor for this session. The setting is overridden for the session,
-	 * and the runtime is started or stopped to match.
-	 *
-	 * @returns true when the advisor is actively running after the call.
+	 * Main→advisor consultation on the live advisor's persistent thread.
+	 * Used by the `consult_advisor` tool.
 	 */
+	async consultAdvisor(opts: AdvisorConsultRequest): Promise<AdvisorConsultResult> {
+		return this.#advisors.consult(opts);
+	}
+
 	setAdvisorEnabled(enabled: boolean): boolean {
 		return this.#advisors.setAdvisorEnabled(enabled);
 	}

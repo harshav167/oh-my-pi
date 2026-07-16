@@ -84,6 +84,42 @@ describe("system prompt tool inventory", () => {
 
 	afterEach(cleanupTempHome(() => ({ tempDir, tempHomeDir, originalHome })));
 
+	it("includes advisor consultation policy only when consult_advisor is active", async () => {
+		const without = await buildSystemPrompt({
+			cwd: tempDir,
+			contextFiles: [],
+			skills: [],
+			rules: [],
+			toolNames: ["read", "bash"],
+			tools: TOOLS,
+			workspaceTree: { ...EMPTY_TREE, rootPath: tempDir },
+		});
+		const withoutText = without.systemPrompt.join("\n\n");
+		expect(withoutText).not.toContain("Advisor consultation");
+		expect(withoutText).not.toContain("consult_advisor");
+
+		const toolsWithConsult = new Map(TOOLS);
+		toolsWithConsult.set("consult_advisor", {
+			label: "Consult Advisor",
+			description: "Talk to the live advisor.",
+			parameters: { type: "object", properties: { message: { type: "string" } } },
+		});
+		const withConsult = await buildSystemPrompt({
+			cwd: tempDir,
+			contextFiles: [],
+			skills: [],
+			rules: [],
+			toolNames: ["read", "bash", "consult_advisor"],
+			tools: toolsWithConsult,
+			workspaceTree: { ...EMPTY_TREE, rootPath: tempDir },
+		});
+		const withText = withConsult.systemPrompt.join("\n\n");
+		expect(withText).toContain("Advisor consultation");
+		expect(withText).toContain("consult_advisor");
+		expect(withText).toContain("weigh, don't blindly obey");
+		expect(withText).toContain("Do NOT consult on every routine");
+	});
+
 	async function render(opts: { nativeTools: boolean; inlineToolDescriptors: boolean }): Promise<string> {
 		const { systemPrompt } = await buildSystemPrompt({
 			cwd: tempDir,

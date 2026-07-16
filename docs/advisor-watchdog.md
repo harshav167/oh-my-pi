@@ -81,6 +81,25 @@ Reset clears the advisor's private in-memory transcript and rewinds its cursor. 
 
 When the advisor is enabled mid-session, the cursor seeds to the current primary transcript length. That avoids replaying the whole old conversation on the first enabled turn.
 
+## Consulting the advisor
+
+The primary agent can talk **back** to the live advisor through the `consult_advisor` tool. This is a persistent thread on the same advisor `Agent` that runs passive reviews — not an ephemeral one-shot and not IRC (advisor refs stay non-messageable peers).
+
+| Field | Meaning |
+|---|---|
+| `message` | What to ask or tell the advisor. Continues the same conversation. |
+| `advisor?` | Name or slug when multiple advisors are active. Omit when only one is running. |
+
+Behavior:
+
+1. The consult shares the advisor runtime's FIFO with passive reviews. Any unread primary delta is folded into the **same** text-only prompt as `### Session update` + `### Consultation from primary` (no separate agentic pre-flush turn).
+2. During consultation the prompt uses `toolChoice: "none"` so **no tools** (including `advise`) can run; the reply is a single text turn that cannot tool-loop past the timeout.
+3. Repeated `consult_advisor` calls stay on the same advisor transcript. Prior advisory cards remain in the primary transcript; prior consult tool results remain there as well.
+4. After a successful consult, that tool-call id is stripped from later passive deltas (including result-only deltas after catch-up advanced the cursor past the tool call). On advisor reset/re-prime, seen ids clear and a full primary replay reconstructs prior consults (including expanded `consult_advisor` result text). If the combined consult prompt fails, the cursor is restored so the unread primary is not permanently skipped.
+5. Default timeout is 120s. While any consult is in flight, interrupting advisories are forced to the non-interrupting aside channel.
+6. The tool is always registered for the main session when the SDK can bind it; if no advisor runtime is active it returns a clear error. Subagent sessions only bind the tool when `advisor.subagents` is on and a runtime is built.
+7. When `consult_advisor` is active, the main system prompt includes a short **Advisor consultation** policy: treat `<advisory>` cards as non-binding; consult when unclear, contested, incomplete, or evidence-conflicting; prefer consult over inventing the advisor's reasons or asking the user about that note; skip routine actionable notes.
+
 ## Tools and isolation
 
 The advisor is a full agent with its own `Agent` instance and a distinct `ToolSession` whose id is suffixed `-advisor`. The advisor therefore does not share the primary agent's file snapshots, seen-lines tracking, conflict state, summary cache, or edit/yield capabilities.
@@ -91,7 +110,7 @@ Every advisor has the `advise` tool for surfacing notes into the primary transcr
 - `grep`
 - `glob`
 
-A `WATCHDOG.yml` roster entry may broaden this with `tools: [...]`, selecting any subset of the built-in pool the session actually built (a factory that returned `null`, e.g. `lsp` with no matching servers, is absent). Grantable tools include mutating ones: `edit`, `write`, `bash`, `eval`, `browser`, `debug`, `ast_edit`, `task`, `hub`, and the memory tools. Tool names outside [`BUILTIN_TOOL_NAMES`](../packages/coding-agent/src/tools/builtin-names.ts) are dropped with a warning.
+A `WATCHDOG.yml` roster entry may broaden this with `tools: [...]`, selecting any subset of the built-in pool the session actually built (a factory that returned `null`, e.g. `lsp` with no matching servers, is absent). Grantable tools include mutating ones: `edit`, `write`, `bash`, `eval`, `browser`, `debug`, `ast_edit`, `task`, `job`, and the memory tools. Tool names outside [`BUILTIN_TOOL_NAMES`](../packages/coding-agent/src/tools/builtin-names.ts) are dropped with a warning.
 
 Advisor grants are not routed through the primary agent's approval wrapper. The advisor pool is built from the built-in tool factories against its own `-advisor` `ToolSession` and then filtered by `WATCHDOG.yml`; it is not the primary `toolRegistry` wrapped with `ExtensionToolWrapper`. Granting write- or exec-tier tools therefore lets the advisor invoke those tools directly, subject to the tool's own runtime guards but not to `tools.approvalMode` / `tools.approval.<tool>` prompts. Keep mutating grants narrow and trusted.
 
@@ -258,7 +277,7 @@ Fields:
 - `instructions` (top level): shared prompt prepended to every advisor's system prompt alongside `WATCHDOG.md`. Concatenated across all discovered `WATCHDOG.yml` files.
 - `advisors[].name`: human label; slugified for the session id and the `<session>/__advisor.jsonl` filename. Duplicate slugs across files are resolved by the same specificity rule as `WATCHDOG.md` discovery (project leaf > project ancestor > user).
 - `advisors[].model`: optional model selector with optional `:level` thinking suffix (e.g. `x-ai/grok-code-fast:high`). Omitted → the advisor uses `modelRoles.advisor`.
-- `advisors[].tools`: optional list of built-in tool names to grant. Omitted or empty → the default `read`/`grep`/`glob` subset. Any name in [`BUILTIN_TOOL_NAMES`](../packages/coding-agent/src/tools/builtin-names.ts) is accepted, including mutating tools (`edit`, `write`, `bash`, `eval`, `browser`, `debug`, `ast_edit`, `task`, `hub`, and the memory tools). Legacy aliases (`search`→`grep`, `find`→`glob`) are normalized. Unknown names are dropped with a warning. See [Tools and isolation](#tools-and-isolation) for the safety implications of granting mutating tools.
+- `advisors[].tools`: optional list of built-in tool names to grant. Omitted or empty → the default `read`/`grep`/`glob` subset. Any name in [`BUILTIN_TOOL_NAMES`](../packages/coding-agent/src/tools/builtin-names.ts) is accepted, including mutating tools (`edit`, `write`, `bash`, `eval`, `browser`, `debug`, `ast_edit`, `task`, `job`, and the memory tools). Legacy aliases (`search`→`grep`, `find`→`glob`) are normalized. Unknown names are dropped with a warning. See [Tools and isolation](#tools-and-isolation) for the safety implications of granting mutating tools.
 - `advisors[].instructions`: this advisor's specialization, appended after the shared baseline. Both instruction fields expand `@path` imports like `WATCHDOG.md`.
 
 ### Discovery locations
@@ -302,4 +321,4 @@ Why a file:
 
 The file follows session switches: on `/new`, resume/switch, and branch the recorder reopens at the new session's path on the next advisor turn; before a `/drop` deletes the old artifacts dir the recorder feed is detached and drained so a queued write cannot recreate the deleted file. The on-disk log is append-only and independent of the in-memory context — re-primes and compaction never truncate it.
 
-The advisor is never a peer. The `advisor`-kind registry ref is excluded from every agent-facing surface — the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions — and cannot be messaged (`hub` send and collab chat refuse it) or revived/killed from the Agent Hub or collab. It is not addressable as a peer, regardless of what tools it has been granted.
+The advisor is never a peer. The `advisor`-kind registry ref is excluded from every agent-facing surface — the `irc` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions — and cannot be messaged (`irc send` and collab chat refuse it) or revived/killed from the Agent Hub or collab. It is not addressable as a peer, regardless of what tools it has been granted.

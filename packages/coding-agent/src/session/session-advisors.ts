@@ -42,6 +42,8 @@ import {
 	AdviseTool,
 	type AdvisorAgent,
 	type AdvisorConfig,
+	type AdvisorConsultRequest,
+	type AdvisorConsultResult,
 	AdvisorEmissionGuard,
 	type AdvisorMessageDetails,
 	type AdvisorNote,
@@ -302,6 +304,7 @@ export class SessionAdvisors {
 	#advisorAutoResumeSuppressed = false;
 	#preserveAdvisorAdvice = false;
 	#advisorPrimaryTurnsCompleted = 0;
+	#consultInFlightCount = 0;
 	#advisorInterruptImmuneTurnStart: number | undefined;
 	#pendingAdvisorCardEvents = new Set<Promise<void>>();
 	#advisorYieldQueueUnsubscribe: (() => void) | undefined;
@@ -322,6 +325,46 @@ export class SessionAdvisors {
 		this.#transformProviderContext = options.transformProviderContext;
 		if (options.initialCosts) this.#advisorCosts = new Map(options.initialCosts);
 		if (this.#advisorEnabled) this.#buildAdvisorRuntime();
+	}
+
+	/** Resolve a live advisor by name/slug for consult; single-advisor sessions default to the only one. */
+	#pickAdvisorForConsult(advisorNameOrSlug?: string): ActiveAdvisor | undefined {
+		if (this.#advisors.length === 0) return undefined;
+		const raw = advisorNameOrSlug?.trim();
+		if (!raw) {
+			if (this.#advisors.length === 1) return this.#advisors[0];
+			const names = this.#advisors.map(a => a.name).join(", ");
+			throw new Error(`Multiple advisors active; pass advisor= one of: ${names}`);
+		}
+		const key = raw.toLowerCase();
+		const match = this.#advisors.find(a => a.name.toLowerCase() === key || a.slug.toLowerCase() === key);
+		if (!match) {
+			const names = this.#advisors.map(a => a.name).join(", ");
+			throw new Error(`Unknown advisor "${raw}". Available: ${names}`);
+		}
+		return match;
+	}
+
+	/**
+	 * Main→advisor consultation on the live advisor's persistent thread.
+	 * Used by the `consult_advisor` tool.
+	 */
+	async consult(opts: AdvisorConsultRequest): Promise<AdvisorConsultResult> {
+		const target = this.#pickAdvisorForConsult(opts.advisor);
+		if (!target) {
+			throw new Error("No active advisor. Enable the advisor (/advisor on) and assign modelRoles.advisor.");
+		}
+		this.#consultInFlightCount++;
+		try {
+			const { reply } = await target.runtime.consult({
+				message: opts.message,
+				toolCallId: opts.toolCallId,
+				signal: opts.signal,
+			});
+			return { reply, advisor: target.name };
+		} finally {
+			this.#consultInFlightCount--;
+		}
 	}
 
 	/** Delivers one completed primary turn to every live advisor. */
@@ -994,6 +1037,7 @@ export class SessionAdvisors {
 			// loop consumes a steer at its next boundary.
 			streaming: this.#host.agent.state.isStreaming,
 			aborting: this.#host.abortInProgress(),
+			consultInFlight: this.#consultInFlightCount > 0,
 			terminalAnswerNoQueuedWork: this.#hasTerminalTextAnswerWithoutQueuedWork(),
 			interruptImmuneTurnActive: interrupting && this.#isAdvisorInterruptImmuneTurnActive(),
 		});
