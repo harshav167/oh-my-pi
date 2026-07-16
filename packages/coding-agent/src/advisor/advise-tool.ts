@@ -123,6 +123,7 @@ export function isAdvisorInterruptImmuneTurnActive(opts: {
  *   notes are downgraded to asides; preservation still wins.
  */
 export function resolveAdvisorDeliveryChannel(opts: {
+	consultInFlight?: boolean;
 	severity: AdvisorSeverity | undefined;
 	autoResumeSuppressed: boolean;
 	streaming: boolean;
@@ -130,6 +131,7 @@ export function resolveAdvisorDeliveryChannel(opts: {
 	terminalAnswerNoQueuedWork?: boolean;
 	interruptImmuneTurnActive?: boolean;
 }): AdvisorDeliveryChannel {
+	if (opts.consultInFlight && isInterruptingSeverity(opts.severity)) return "aside";
 	if (!isInterruptingSeverity(opts.severity)) return "aside";
 	if (opts.autoResumeSuppressed && (opts.aborting || !opts.streaming)) return "preserve";
 	if (opts.terminalAnswerNoQueuedWork && opts.severity !== "blocker" && !opts.streaming && !opts.aborting)

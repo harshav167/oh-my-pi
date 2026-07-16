@@ -1,9 +1,12 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { estimateTokens } from "@oh-my-pi/pi-agent-core/compaction";
 import type { AssistantMessage, ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
+import consultPromptTemplate from "../prompts/advisor/consult.md" with { type: "text" };
 import { obfuscateToolArguments, type SecretObfuscator } from "../secrets/obfuscator";
 import { formatSessionHistoryMarkdown, PRIMARY_CONTEXT_CUSTOM_TYPES } from "../session/session-history-format";
+import type { AdvisorConsultRequest } from "./consultation";
+import { AdvisorConsultationQueue } from "./consultation-queue";
 
 /**
  * Minimal slice of `Agent` the runtime drives — satisfied by pi-agent-core
@@ -12,7 +15,7 @@ import { formatSessionHistoryMarkdown, PRIMARY_CONTEXT_CUSTOM_TYPES } from "../s
  * this field after every prompt to detect a failed turn.
  */
 export interface AdvisorAgent {
-	prompt(input: string): Promise<void>;
+	prompt(input: string, options?: { toolChoice?: "none" | "auto" | "required" }): Promise<void>;
 	abort(reason?: unknown): void;
 	reset(): void;
 	/**
@@ -192,6 +195,8 @@ interface CatchupWaiter {
 	timer?: NodeJS.Timeout;
 }
 
+const CONSULT_TOOL_NAME = "consult_advisor";
+
 export class AdvisorRuntime {
 	#lastCount = 0;
 	/** Last-shown body, keyed by primary-context customType (plan/goal mode rules,
@@ -200,8 +205,13 @@ export class AdvisorRuntime {
 	 *  marker so the advisor isn't re-fed the full ~1k-token rules each turn.
 	 *  Cleared on every re-prime/seed and when a failed batch is dropped. */
 	#seenContext = new Map<string, string>();
+	/** Primary consult_advisor tool-call ids already delivered into advisor context. */
+	#seenConsultToolCallIds = new Set<string>();
+	#queue: AdvisorConsultationQueue;
 	#pending: PendingDelta[] = [];
 	#busy = false;
+	/** True while a main-agent consult is running (serializes with #drain). */
+	#consultBusy = false;
 	#backlog = 0;
 	#consecutiveFailures = 0;
 	#failureNotified = false;
@@ -218,7 +228,33 @@ export class AdvisorRuntime {
 		private readonly agent: AdvisorAgent,
 		private readonly host: AdvisorRuntimeHost,
 		private readonly retryDelayMs = 1000,
-	) {}
+	) {
+		this.#queue = new AdvisorConsultationQueue({
+			// Reviews use #pending/#drain directly; the queue is consult-only FIFO.
+			runReviews: async () => {},
+			runConsult: async request => {
+				// Wait for passive review drain to finish before consulting.
+				for (let i = 0; i < 10_000 && this.#busy; i++) await Bun.sleep(5);
+				if (this.disposed) throw new Error("Advisor disposed");
+				// Flush any reviews that arrived while we waited.
+				if (this.#pending.length > 0) {
+					await this.#drain();
+					for (let i = 0; i < 10_000 && this.#busy; i++) await Bun.sleep(5);
+				}
+				if (this.disposed) throw new Error("Advisor disposed");
+				this.#consultBusy = true;
+				try {
+					return await this.#runConsult(request);
+				} finally {
+					this.#consultBusy = false;
+					if (!this.disposed && this.#pending.length > 0) void this.#drain();
+				}
+			},
+			abortConsult: reason => this.agent.abort(reason),
+			markToolCallSeen: toolCallId => this.#seenConsultToolCallIds.add(toolCallId),
+			unmarkToolCallSeen: toolCallId => this.#seenConsultToolCallIds.delete(toolCallId),
+		});
+	}
 
 	get backlog(): number {
 		return this.#backlog;
@@ -260,6 +296,24 @@ export class AdvisorRuntime {
 		}
 	}
 
+	/**
+	 * Ask the advisor a question on the persistent thread. Serializes with passive
+	 * reviews: waits for an idle drain, folds unread primary into one text-only
+	 * consult prompt, then returns assistant text.
+	 */
+	consult(opts: AdvisorConsultRequest): Promise<{ readonly reply: string }> {
+		if (this.disposed) return Promise.reject(new Error("Advisor disposed"));
+		return this.#queue.consult(opts);
+	}
+
+	markConsultToolCallSeen(toolCallId: string): void {
+		if (toolCallId) this.#seenConsultToolCallIds.add(toolCallId);
+	}
+
+	unmarkConsultToolCallSeen(toolCallId: string): void {
+		this.#seenConsultToolCallIds.delete(toolCallId);
+	}
+
 	waitForCatchup(maxMs: number, threshold: number, signal?: AbortSignal): Promise<void> {
 		if (this.disposed || signal?.aborted || this.#backlog < threshold) return Promise.resolve();
 		const { promise, resolve } = Promise.withResolvers<void>();
@@ -283,10 +337,12 @@ export class AdvisorRuntime {
 	dispose(): void {
 		this.disposed = true;
 		this.#epoch++;
+		this.#queue.dispose(new Error("Advisor disposed"));
 		this.#pending = [];
 		this.#backlog = 0;
 		this.#consecutiveFailures = 0;
 		this.#failureNotified = false;
+		this.#seenConsultToolCallIds.clear();
 		this.#wakeAllWaiters();
 		try {
 			this.agent.abort("advisor disposed");
@@ -299,6 +355,7 @@ export class AdvisorRuntime {
 		this.#consecutiveFailures = 0;
 		this.#failureNotified = false;
 		this.#seenContext.clear();
+		this.#seenConsultToolCallIds.clear();
 		if (clearBacklog) {
 			this.#backlog = 0;
 		}
@@ -322,6 +379,7 @@ export class AdvisorRuntime {
 	 */
 	reset(): void {
 		this.#epoch++;
+		this.#queue.rejectConsults(new Error("Advisor was reset during consultation"));
 		this.#resetAdvisorContext(true, true);
 	}
 
@@ -332,11 +390,13 @@ export class AdvisorRuntime {
 	 */
 	seedTo(count: number): void {
 		this.#lastCount = count;
+		this.#queue.clearReviews();
 		this.#pending = [];
 		this.#backlog = 0;
 		this.#consecutiveFailures = 0;
 		this.#failureNotified = false;
 		this.#seenContext.clear();
+		this.#seenConsultToolCallIds.clear();
 		this.#wakeAllWaiters();
 	}
 
@@ -347,11 +407,9 @@ export class AdvisorRuntime {
 			this.#seenContext.clear();
 			return null;
 		}
-		const delta = all
-			.slice(this.#lastCount)
-			.filter(m => !(m.role === "custom" && m.customType === "advisor"))
-			.map(m => this.#dedupContextMessage(m));
+		const raw = all.slice(this.#lastCount);
 		this.#lastCount = all.length;
+		const delta = this.#filterDeltaMessages(raw).map(m => this.#dedupContextMessage(m));
 		if (delta.length === 0) return null;
 		const obfuscator = this.host.obfuscator;
 		const formattedDelta = obfuscator?.hasSecrets() ? obfuscateAdvisorDelta(obfuscator, delta) : delta;
@@ -361,6 +419,7 @@ export class AdvisorRuntime {
 			watchedRoles: true,
 			expandPrimaryContext: true,
 			expandEditDiffs: true,
+			expandConsultResults: true,
 		});
 		if (!md.trim()) return null;
 		const heading = wip ? "### Session update [in progress — more steps follow]" : "### Session update";
@@ -385,6 +444,174 @@ export class AdvisorRuntime {
 		}
 		this.#seenContext.set(msg.customType, msg.content);
 		return msg;
+	}
+
+	#filterDeltaMessages(messages: AgentMessage[]): AgentMessage[] {
+		const dropCallIds = new Set<string>();
+		for (const m of messages) {
+			if (m.role !== "assistant") continue;
+			const content = (m as AssistantMessage).content;
+			if (!Array.isArray(content)) continue;
+			for (const block of content) {
+				if (
+					block &&
+					typeof block === "object" &&
+					"type" in block &&
+					block.type === "toolCall" &&
+					"name" in block &&
+					block.name === CONSULT_TOOL_NAME &&
+					"id" in block &&
+					typeof block.id === "string" &&
+					this.#seenConsultToolCallIds.has(block.id)
+				) {
+					dropCallIds.add(block.id);
+				}
+			}
+		}
+		const out: AgentMessage[] = [];
+		for (const m of messages) {
+			if (m.role === "custom" && customTypeOf(m) === "advisor") continue;
+			if (m.role === "toolResult") {
+				const id = toolCallIdOf(m);
+				// Result-only deltas (call already past lastCount) must still drop
+				// against the session-scoped seen set, not only same-slice call ids.
+				if (id && (dropCallIds.has(id) || this.#seenConsultToolCallIds.has(id))) {
+					continue;
+				}
+				out.push(m);
+				continue;
+			}
+			if (m.role === "assistant") {
+				const content = (m as AssistantMessage).content;
+				if (!Array.isArray(content)) {
+					out.push(m);
+					continue;
+				}
+				const kept = content.filter(block => {
+					if (!block || typeof block !== "object" || !("type" in block) || block.type !== "toolCall") {
+						return true;
+					}
+					if (!("id" in block) || typeof block.id !== "string") return true;
+					return !dropCallIds.has(block.id);
+				});
+				if (kept.length === 0) continue;
+				if (kept.length === content.length) {
+					out.push(m);
+				} else {
+					out.push({ ...(m as object), content: kept } as AgentMessage);
+				}
+				continue;
+			}
+			out.push(m);
+		}
+		return out;
+	}
+
+	async #runConsult(job: AdvisorConsultRequest): Promise<{ readonly reply: string }> {
+		const epoch = this.#epoch;
+
+		let cursorBeforeCatchUp: number | undefined;
+		let seenContextBeforeCatchUp: Map<string, string> | undefined;
+		let didReprime = false;
+		try {
+			if (job.signal?.aborted) {
+				throw abortError(job.signal);
+			}
+
+			// Fold unread primary into the same text-only consult prompt — never a
+			// separate agentic review turn (that burned the 120s tool timeout).
+			this.#latestMessages = this.host.snapshotMessages();
+			cursorBeforeCatchUp = this.#lastCount;
+			seenContextBeforeCatchUp = new Map(this.#seenContext);
+			let catchUp = this.#renderDelta(this.#latestMessages);
+			if (this.#epoch !== epoch) {
+				throw new Error("Advisor was reset during consultation");
+			}
+			if (job.signal?.aborted) {
+				throw abortError(job.signal);
+			}
+
+			const message =
+				this.host.obfuscator?.hasSecrets() === true ? this.host.obfuscator.obfuscate(job.message) : job.message;
+			let consultText = prompt
+				.render(consultPromptTemplate, {
+					message,
+					sessionUpdate: catchUp ?? undefined,
+				})
+				.trim();
+			const incomingTokens = estimateTokens({
+				role: "user",
+				content: consultText,
+				timestamp: Date.now(),
+			});
+			let shouldReprime = false;
+			if (this.host.maintainContext) {
+				try {
+					shouldReprime = await this.host.maintainContext(incomingTokens);
+				} catch (err) {
+					logger.debug("advisor context maintenance failed", { err: String(err) });
+				}
+			}
+			if (this.#epoch !== epoch) {
+				throw new Error("Advisor was reset during consultation");
+			}
+			if (job.signal?.aborted) {
+				throw abortError(job.signal);
+			}
+			if (shouldReprime) {
+				this.#resetAdvisorContext(false, false);
+				didReprime = true;
+				if (job.toolCallId) this.#seenConsultToolCallIds.add(job.toolCallId);
+				this.#latestMessages = this.host.snapshotMessages();
+				catchUp = this.#renderDelta(this.#latestMessages);
+				consultText = prompt
+					.render(consultPromptTemplate, {
+						message,
+						sessionUpdate: catchUp ?? undefined,
+					})
+					.trim();
+			}
+
+			const messageSnapshot = this.agent.state.messages.length;
+			try {
+				this.host.beginAdvisorUpdate?.();
+				// Text-only: consult must not run an agentic tool loop (read/grep/task/…)
+				// or it can exceed the main tool's 120s timeout mid-investigation.
+				await this.agent.prompt(consultText, { toolChoice: "none" });
+				if (this.#epoch !== epoch) {
+					throw new Error("Advisor was reset during consultation");
+				}
+				const promptError = this.agent.state.error;
+				if (promptError) throw new Error(promptError);
+				const reply = extractAssistantTextSince(this.agent.state.messages, messageSnapshot);
+				return { reply: reply || "(advisor produced no text reply)" };
+			} catch (err) {
+				if (this.#epoch !== epoch) {
+					// reset/dispose already rejects via epoch; still surface.
+					throw err instanceof Error ? err : new Error(String(err));
+				}
+				this.#rollbackFailedTurn(messageSnapshot);
+				throw err;
+			}
+		} catch (err) {
+			// renderDelta advanced lastCount before the combined prompt; restore when
+			// the consult fails without a reset so later passive review still sees it.
+			if (this.#epoch === epoch && cursorBeforeCatchUp !== undefined) {
+				if (didReprime) {
+					// Re-prime cleared the advisor transcript and rewound cursor to 0, but the
+					// post-re-prime renderDelta advanced it again. Restore to 0 so a later
+					// passive review replays the full history and reconstructs context.
+					this.#lastCount = 0;
+					this.#seenContext.clear();
+				} else {
+					this.#lastCount = cursorBeforeCatchUp;
+					if (seenContextBeforeCatchUp) {
+						this.#seenContext = seenContextBeforeCatchUp;
+					}
+				}
+			}
+			throw err instanceof Error ? err : new Error(typeof err === "string" ? err : "Advisor consultation failed");
+		}
 	}
 
 	#notifyWaiters(): void {
@@ -497,7 +724,7 @@ export class AdvisorRuntime {
 	}
 
 	async #drain(): Promise<void> {
-		if (this.#busy) return;
+		if (this.#busy || this.#consultBusy) return;
 		this.#busy = true;
 		try {
 			while (!this.disposed && this.#pending.length) {
@@ -737,4 +964,40 @@ function obfuscateAdvisorDelta(obfuscator: SecretObfuscator, messages: AgentMess
 		return next;
 	});
 	return changed ? result : messages;
+}
+
+function customTypeOf(message: AgentMessage): string | undefined {
+	if (message.role !== "custom" && message.role !== "hookMessage") return undefined;
+	if (!message || typeof message !== "object" || !("customType" in message)) return undefined;
+	const value = (message as { customType?: unknown }).customType;
+	return typeof value === "string" ? value : undefined;
+}
+
+function abortError(signal: AbortSignal): Error {
+	return signal.reason instanceof Error ? signal.reason : new Error("aborted");
+}
+
+function toolCallIdOf(message: AgentMessage): string | undefined {
+	if (message.role !== "toolResult") return undefined;
+	if (!("toolCallId" in message)) return undefined;
+	const id = (message as { toolCallId?: unknown }).toolCallId;
+	return typeof id === "string" ? id : undefined;
+}
+
+function extractAssistantTextSince(messages: readonly AgentMessage[], startLen: number): string {
+	for (let i = messages.length - 1; i >= startLen; i--) {
+		const msg = messages[i];
+		if (msg.role !== "assistant") continue;
+		const content = (msg as AssistantMessage).content;
+		if (!Array.isArray(content)) continue;
+		const parts: string[] = [];
+		for (const block of content) {
+			if (block && typeof block === "object" && "type" in block && block.type === "text" && "text" in block) {
+				const text = typeof block.text === "string" ? block.text.trim() : "";
+				if (text) parts.push(text);
+			}
+		}
+		if (parts.length > 0) return parts.join("\n\n");
+	}
+	return "";
 }

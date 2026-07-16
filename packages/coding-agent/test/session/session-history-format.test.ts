@@ -115,6 +115,25 @@ describe("formatSessionHistoryMarkdown", () => {
 		expect(output).toContain("→ grep() ⇒ ok · 1 line");
 	});
 
+	it("expands an orphan consult result when requested", () => {
+		const reply = "First line of advice.\nSecond line that must survive truncation.";
+		const output = formatSessionHistoryMarkdown(
+			[
+				{
+					role: "toolResult",
+					toolCallId: "tc-consult-orphan",
+					toolName: "consult_advisor",
+					content: [{ type: "text", text: reply }],
+					isError: false,
+					timestamp: 1,
+				},
+			],
+			{ expandConsultResults: true },
+		);
+
+		expect(output).toContain(reply);
+	});
+
 	it("renders find paths without falling back to JSON arguments", () => {
 		const output = formatSessionHistoryMarkdown([
 			{

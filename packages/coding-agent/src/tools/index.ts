@@ -2,6 +2,7 @@ import type { InMemorySnapshotStore } from "@oh-my-pi/hashline";
 import type { AgentTelemetryConfig, AgentTool } from "@oh-my-pi/pi-agent-core";
 import type { FetchImpl, ImageContent, Model, ServiceTierByFamily, ToolChoice } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { AdvisorConsult } from "../advisor";
 import type { AsyncJobManager } from "../async/job-manager";
 import type { Rule } from "../capability/rule";
 import type { PromptTemplate } from "../config/prompt-templates";
@@ -39,6 +40,7 @@ import { BashTool } from "./bash";
 import { BrowserTool } from "./browser";
 import { type BuiltinToolName, type HiddenToolName, normalizeToolNames } from "./builtin-names";
 import { type CheckpointState, CheckpointTool, type CompletedRewindState, RewindTool } from "./checkpoint";
+import { ConsultAdvisorTool } from "./consult-advisor";
 import { DebugTool } from "./debug";
 import { EvalTool } from "./eval";
 import { resolveEvalBackends } from "./eval-backends";
@@ -73,6 +75,7 @@ export * from "./ast-grep";
 export * from "./bash";
 export * from "./browser";
 export * from "./checkpoint";
+export * from "./consult-advisor";
 export * from "./debug";
 export * from "./eval";
 export * from "./eval-backends";
@@ -189,6 +192,8 @@ export interface ToolSession {
 	/** Output schema for structured completion (subagents) */
 	outputSchema?: unknown;
 	/** Whether to include the yield tool by default */
+	/** Bound by AgentSession for the main-side consult_advisor tool. */
+	consultAdvisor?: AdvisorConsult;
 	requireYieldTool?: boolean;
 	/** Session starts with a prewalk hand-off armed. Keeps `todo` in yield-gated
 	 *  (subagent) registries: the prewalk plan nudge + todo gate need it. */
@@ -394,6 +399,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 export const HIDDEN_TOOLS: Record<HiddenToolName, ToolFactory> = {
 	yield: s => new YieldTool(s),
 	goal: s => new GoalTool(s),
+	consult_advisor: ConsultAdvisorTool.createIf,
 };
 
 export type ToolName = BuiltinToolName;
@@ -603,6 +609,16 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		const readTool = await logger.time("createTools:read", BUILTIN_TOOLS.read, session);
 		if (readTool) {
 			tools.push(wrapToolWithMetaNotice(readTool));
+		}
+	}
+
+	if (
+		(requestedTools === undefined || requestedTools.includes("consult_advisor")) &&
+		!tools.some(tool => tool.name === "consult_advisor")
+	) {
+		const consultTool = await logger.time("createTools:consult_advisor", HIDDEN_TOOLS.consult_advisor, session);
+		if (consultTool) {
+			tools.push(wrapToolWithMetaNotice(consultTool));
 		}
 	}
 

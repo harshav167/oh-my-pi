@@ -150,6 +150,8 @@ import {
 	AdviseTool,
 	type AdvisorAgent,
 	type AdvisorConfig,
+	type AdvisorConsultRequest,
+	type AdvisorConsultResult,
 	AdvisorEmissionGuard,
 	type AdvisorMessageDetails,
 	type AdvisorNote,
@@ -1787,6 +1789,7 @@ export class AgentSession {
 	#vibeModeState: VibeModeState | undefined;
 	#goalModeState: GoalModeState | undefined;
 	#goalRuntime: GoalRuntime;
+	#consultInFlightCount = 0;
 	#advisorEnabled = false;
 	#advisorTools?: AgentTool[];
 	#advisorWatchdogPrompt?: string;
@@ -2998,12 +3001,12 @@ export class AgentSession {
 			advisorAgent.setDisableReasoning(shouldDisableReasoning(advisorThinkingLevel));
 
 			const advisorAgentFacade: AdvisorAgent = {
-				prompt: async input => {
+				prompt: async (input, options) => {
 					let quarantined: string | undefined;
 					try {
 						quarantinedAdvisorOutput = undefined;
 						currentAdvisorInput = input;
-						await advisorAgent.prompt(input);
+						await advisorAgent.prompt(input, options);
 						quarantined = quarantinedAdvisorOutput;
 					} finally {
 						quarantinedAdvisorOutput = undefined;
@@ -3159,6 +3162,7 @@ export class AgentSession {
 			// loop consumes a steer at its next boundary.
 			streaming: this.agent.state.isStreaming,
 			aborting: this.#abortInProgress,
+			consultInFlight: this.#consultInFlightCount > 0,
 			terminalAnswerNoQueuedWork: this.#hasTerminalTextAnswerWithoutQueuedWork(),
 			interruptImmuneTurnActive: interrupting && this.#isAdvisorInterruptImmuneTurnActive(),
 		});
@@ -16635,6 +16639,46 @@ export class AgentSession {
 	 *
 	 * @returns true when the advisor is actively running after the call.
 	 */
+
+	#pickAdvisorForConsult(advisorNameOrSlug?: string): ActiveAdvisor | undefined {
+		if (this.#advisors.length === 0) return undefined;
+		const raw = advisorNameOrSlug?.trim();
+		if (!raw) {
+			if (this.#advisors.length === 1) return this.#advisors[0];
+			const names = this.#advisors.map(a => a.name).join(", ");
+			throw new Error(`Multiple advisors active; pass advisor= one of: ${names}`);
+		}
+		const key = raw.toLowerCase();
+		const match = this.#advisors.find(a => a.name.toLowerCase() === key || a.slug.toLowerCase() === key);
+		if (!match) {
+			const names = this.#advisors.map(a => a.name).join(", ");
+			throw new Error(`Unknown advisor "${raw}". Available: ${names}`);
+		}
+		return match;
+	}
+
+	/**
+	 * Main→advisor consultation on the live advisor's persistent thread.
+	 * Used by the `consult_advisor` tool.
+	 */
+	async consultAdvisor(opts: AdvisorConsultRequest): Promise<AdvisorConsultResult> {
+		const target = this.#pickAdvisorForConsult(opts.advisor);
+		if (!target) {
+			throw new Error("No active advisor. Enable the advisor (/advisor on) and assign modelRoles.advisor.");
+		}
+		this.#consultInFlightCount++;
+		try {
+			const { reply } = await target.runtime.consult({
+				message: opts.message,
+				toolCallId: opts.toolCallId,
+				signal: opts.signal,
+			});
+			return { reply, advisor: target.name };
+		} finally {
+			this.#consultInFlightCount--;
+		}
+	}
+
 	setAdvisorEnabled(enabled: boolean): boolean {
 		this.#advisorEnabled = enabled;
 		if (enabled) {

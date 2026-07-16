@@ -273,6 +273,6 @@ describe("createTools", () => {
 	});
 
 	it("HIDDEN_TOOLS contains yield and goal", () => {
-		expect(Object.keys(HIDDEN_TOOLS).sort()).toEqual(["goal", "yield"]);
+		expect(Object.keys(HIDDEN_TOOLS).sort()).toEqual(["consult_advisor", "goal", "yield"]);
 	});
 });

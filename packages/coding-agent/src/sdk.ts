@@ -1578,6 +1578,18 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			getHindsightSessionState: () => session?.getHindsightSessionState(),
 			getMnemopiSessionState: () => session?.getMnemopiSessionState(),
 			getAgentId: () => resolvedAgentId,
+			// Main always gets consult; subagents only when advisor.subagents is on
+			// (same gate as #buildAdvisorRuntime). Without this, createTools would
+			// inject consult_advisor into ordinary task subagents that have no runtime.
+			consultAdvisor:
+				agentKind === "main" || settings.get("advisor.subagents")
+					? opts => {
+							if (!session) {
+								return Promise.reject(new Error("consult_advisor is unavailable (no session binding)"));
+							}
+							return session.consultAdvisor(opts);
+						}
+					: undefined,
 			getToolByName: name => session?.getToolByName(name),
 			agentRegistry,
 			getSessionSpawns: () => options.spawns ?? "*",

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `consult_advisor`: the main agent can talk to the live advisor on a persistent thread (FIFO with passive reviews, text-only consult, multi-advisor targeting). When the tool is active, the main system prompt includes an **Advisor consultation** policy.
+
 ## [17.0.1] - 2026-07-16
 
 ### Changed
