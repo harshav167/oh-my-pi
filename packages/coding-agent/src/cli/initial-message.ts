@@ -1,16 +1,18 @@
-import type { ImageContent } from "@oh-my-pi/pi-ai";
+import type { ImageContent, VideoContent } from "@oh-my-pi/pi-ai";
 import type { Args } from "./args";
 
 export interface InitialMessageInput {
 	parsed: Args;
 	fileText?: string;
 	fileImages?: ImageContent[];
+	fileVideos?: VideoContent[];
 	stdinContent?: string;
 }
 
 export interface InitialMessageResult {
 	initialMessage?: string;
 	initialImages?: ImageContent[];
+	initialVideos?: VideoContent[];
 }
 
 /**
@@ -21,12 +23,18 @@ export function buildInitialMessage({
 	parsed,
 	fileText,
 	fileImages,
+	fileVideos,
 	stdinContent,
 }: InitialMessageInput): InitialMessageResult {
-	const hasInitialContext = stdinContent !== undefined || fileText !== undefined || (fileImages?.length ?? 0) > 0;
+	const hasInitialContext =
+		stdinContent !== undefined ||
+		fileText !== undefined ||
+		(fileImages?.length ?? 0) > 0 ||
+		(fileVideos?.length ?? 0) > 0;
 	if (!hasInitialContext) {
 		return {
 			initialImages: undefined,
+			initialVideos: undefined,
 		};
 	}
 
@@ -47,12 +55,13 @@ export function buildInitialMessage({
 				: stdinContent
 			: body.length > 0
 				? body
-				: fileImages && fileImages.length > 0
+				: (fileImages?.length ?? 0) > 0 || (fileVideos?.length ?? 0) > 0
 					? ""
 					: undefined;
 
 	return {
 		initialMessage,
 		initialImages: fileImages && fileImages.length > 0 ? fileImages : undefined,
+		initialVideos: fileVideos && fileVideos.length > 0 ? fileVideos : undefined,
 	};
 }

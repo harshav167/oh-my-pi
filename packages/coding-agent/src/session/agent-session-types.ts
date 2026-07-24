@@ -17,6 +17,7 @@ import type {
 	ServiceTierByFamily,
 	SimpleStreamOptions,
 	ToolChoice,
+	VideoContent,
 } from "@oh-my-pi/pi-ai";
 import type { postmortem } from "@oh-my-pi/pi-utils";
 import type { AdvisorConfig } from "../advisor";
@@ -274,6 +275,8 @@ export interface PromptOptions {
 	expandPromptTemplates?: boolean;
 	/** Image attachments. */
 	images?: ImageContent[];
+	/** Video attachments (inline, native delivery). */
+	videos?: VideoContent[];
 	/** Queue behavior while streaming. */
 	streamingBehavior?: "steer" | "followUp";
 	/** Optional tool choice override for the next LLM call. */
@@ -294,6 +297,8 @@ export interface FollowUpOptions {
 	synthetic?: boolean;
 	/** Whether to expand file-based prompt templates (default: true). */
 	expandPromptTemplates?: boolean;
+	/** Video attachments (inline, native delivery). */
+	videos?: VideoContent[];
 	/** Explicit billing/initiator attribution. */
 	attribution?: MessageAttribution;
 }

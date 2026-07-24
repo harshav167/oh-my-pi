@@ -8,7 +8,11 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
 import { $env, prompt, Snowflake } from "@oh-my-pi/pi-utils";
-import { resolveAgentModelPatterns } from "../config/model-resolver";
+import {
+	filterAvailableModelsByEnabledPatterns,
+	resolveAgentModelPatterns,
+	resolveModelOverride,
+} from "../config/model-resolver";
 import type { LocalProtocolOptions } from "../internal-urls";
 import { registerArtifactsDir } from "../internal-urls/registry-helpers";
 import { MCPManager } from "../mcp/manager";
@@ -153,6 +157,56 @@ export class StructuredSubagentError extends Error {
 	}
 }
 
+/** Trim empty caller model overrides so they never displace agent/settings defaults. */
+function normalizeCallerModel(model: string | string[] | undefined): string | string[] | undefined {
+	if (model === undefined) return undefined;
+	if (typeof model === "string") {
+		const trimmed = model.trim();
+		return trimmed || undefined;
+	}
+	const patterns = model.map(entry => entry.trim()).filter(Boolean);
+	return patterns.length > 0 ? patterns : undefined;
+}
+
+/**
+ * Preflight-validate an explicit caller model selector (or fallback chain) against
+ * the live available set. A chain is accepted when at least one selector resolves
+ * and passes the session `enabledModels` filter (upstream fallback semantics); a
+ * singular invalid selector, or a chain whose every selector is unknown/disabled,
+ * hard-fails with an actionable `list_models` hint. Empty/omitted models keep the
+ * agent-frontmatter path and are never validated here.
+ */
+function assertCallerModelAvailable(session: ToolSession, model: string | string[]): void {
+	const patterns = typeof model === "string" ? [model] : model;
+	const requested = patterns.join(", ");
+	const registry = session.modelRegistry;
+	if (!registry) {
+		throw new StructuredSubagentError(
+			"preflight",
+			`Cannot resolve model "${requested}": model registry unavailable. Call list_models after models are loaded, or omit model to use the agent default.`,
+		);
+	}
+	const enabledPatterns = session.settings.get("enabledModels");
+	const enabledFilter =
+		enabledPatterns && enabledPatterns.length > 0
+			? filterAvailableModelsByEnabledPatterns(registry.getAvailable(), enabledPatterns, session.settings)
+			: undefined;
+	for (const pattern of patterns) {
+		const resolved = resolveModelOverride([pattern], registry, session.settings);
+		if (!resolved.model) continue;
+		if (
+			enabledFilter &&
+			!enabledFilter.some(m => m.provider === resolved.model?.provider && m.id === resolved.model?.id)
+		) {
+			continue;
+		}
+		return; // at least one selector is resolvable and enabled
+	}
+	throw new StructuredSubagentError(
+		"preflight",
+		`Unknown or unavailable model "${requested}". Call list_models for available provider/id selectors, or use a role like @smol.`,
+	);
+}
 const PLAN_MODE_TOOLS = ["read", "grep", "glob", "web_search"] as const;
 
 function renderSubagentPrompt(assignment: string): string {
@@ -277,8 +331,12 @@ export async function resolveEffectiveSubagentPolicy(
 	}
 	const agentModelOverrides = request.session.settings.get("task.agentModelOverrides");
 	const parentActiveModelPattern = request.session.getActiveModelString?.();
+	const callerModel = normalizeCallerModel(request.model);
+	if (callerModel !== undefined) {
+		assertCallerModelAvailable(request.session, callerModel);
+	}
 	const modelOverride = resolveAgentModelPatterns({
-		settingsOverride: request.model ?? agentModelOverrides[agentName],
+		settingsOverride: callerModel ?? agentModelOverrides[agentName],
 		agentModel: effectiveAgent.model,
 		settings: request.session.settings,
 		activeModelPattern: parentActiveModelPattern,

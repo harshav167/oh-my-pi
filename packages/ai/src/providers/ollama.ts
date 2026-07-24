@@ -13,6 +13,7 @@ import type {
 	TextContent,
 	Tool,
 	ToolChoice,
+	UserMediaContent,
 } from "../types";
 import { normalizeSystemPrompts } from "../utils";
 import { clearStreamingPartialJson, kStreamingPartialJson } from "../utils/block-symbols";
@@ -173,7 +174,7 @@ function selectToolsForToolChoice(tools: Tool[] | undefined, toolChoice: ToolCho
 }
 
 function toPlainContent(
-	content: string | ReadonlyArray<TextContent | ImageContent>,
+	content: string | ReadonlyArray<TextContent | UserMediaContent>,
 	supportsImages: boolean,
 ): {
 	content: string;
@@ -182,7 +183,10 @@ function toPlainContent(
 	if (typeof content === "string") {
 		return { content };
 	}
-	const { textBlocks, imageBlocks, omittedImages } = partitionVisionContent(content, supportsImages);
+	const visionContent = content.filter(
+		(block): block is TextContent | ImageContent => block.type === "text" || block.type === "image",
+	);
+	const { textBlocks, imageBlocks, omittedImages } = partitionVisionContent(visionContent, supportsImages);
 	const text = textBlocks.map(block => block.text).join("\n");
 	return {
 		content: joinTextWithImagePlaceholder(text, omittedImages),

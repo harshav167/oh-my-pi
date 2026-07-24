@@ -122,6 +122,7 @@ Use tools whenever they improve correctness, completeness, or grounding.
 {{#if intentTracing}}- Most tools take `{{intentField}}`: a concise intent, present participle, 2–6 words, no period, capitalized.{{/if}}
 {{#if secretsEnabled}}- Redacted `$$HASH$$`, `$$HASH:CASE$$`, or `$$NAME_HASH:CASE$$` tokens in output are opaque strings.{{/if}}
 {{#has tools "inspect_image"}}- Image tasks: prefer `{{toolRefs.inspect_image}}` over `{{toolRefs.read}}` to spare session context.{{/has}}
+{{#has tools "read"}}- Video-capable active models: use `{{toolRefs.read}}` on a local video path; it attaches the original video to this conversation for native analysis. NEVER split frames unless the user explicitly requests it.{{/has}}
 
 # Specialized Tools
 You MUST use the specialized tool over its shell equivalent:

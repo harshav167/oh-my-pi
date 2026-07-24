@@ -5,6 +5,8 @@ import type { ImageContent, Model, TextContent } from "../types";
 
 export const NON_VISION_IMAGE_PLACEHOLDER = "[image omitted: model does not support vision]";
 
+export const NON_VIDEO_PLACEHOLDER = "[video omitted: model does not support video input]";
+
 export function partitionVisionContent(
 	content: ReadonlyArray<TextContent | ImageContent>,
 	supportsImages: boolean,

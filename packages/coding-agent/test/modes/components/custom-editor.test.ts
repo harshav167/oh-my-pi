@@ -10,6 +10,7 @@ import {
 	extractBracketedPastePaths,
 	extractImagePastePathsFromText,
 	extractImagePathFromText,
+	extractMediaPastePathsFromText,
 	extractPastePathsFromText,
 	SPACE_HOLD_MECHANICAL_RUN,
 	SPACE_HOLD_RELEASE_MS,
@@ -460,6 +461,22 @@ describe("extractImagePastePathsFromText (issue #6578)", () => {
 			expect(extractBracketedImagePastePaths(bracketedPaste(text))).toEqual(expected);
 		});
 	}
+});
+
+describe("extractMediaPastePathsFromText (native video paste routing)", () => {
+	it("routes pasted video file paths to the media paste handler", () => {
+		expect(extractMediaPastePathsFromText("/Users/me/Movies/clip.mp4")).toEqual(["/Users/me/Movies/clip.mp4"]);
+		expect(extractMediaPastePathsFromText("/tmp/a.mov")).toEqual(["/tmp/a.mov"]);
+	});
+
+	it("still routes image paths (media is a superset of image)", () => {
+		expect(extractMediaPastePathsFromText("/tmp/shot.png")).toEqual(["/tmp/shot.png"]);
+	});
+
+	it("leaves non-media paths and plain text on the normal text path", () => {
+		expect(extractMediaPastePathsFromText("/tmp/notes.txt")).toBeUndefined();
+		expect(extractMediaPastePathsFromText("just text")).toBeUndefined();
+	});
 });
 
 describe("CustomEditor space-hold push-to-talk", () => {

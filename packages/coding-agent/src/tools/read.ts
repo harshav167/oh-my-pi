@@ -27,6 +27,7 @@ import {
 } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import { LRUCache } from "lru-cache/raw";
+import { VIDEO_MIME_TYPES } from "../cli/file-processor";
 import {
 	canonicalSnapshotKey,
 	getFileSnapshotStore,
@@ -68,6 +69,7 @@ import {
 import { isInspectImageToolActive } from "../utils/inspect-image-mode";
 import { CONVERTIBLE_EXTENSIONS, convertFileWithMarkit } from "../utils/markit";
 import { isSampleProfilePath, renderSampleProfile } from "../utils/sample-profile";
+import { type LoadedVideoInput, loadVideoInput, MAX_VIDEO_INPUT_BYTES } from "../utils/video-loading";
 import { type ArchiveReader, formatArchiveEntryLines, openArchive, parseArchivePathCandidates } from "../utils/zip";
 import { buildDirectoryTree, type DirectoryTree } from "../workspace-tree";
 import {
@@ -2482,6 +2484,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		const imageMetadata = await readImageMetadata(absolutePath);
 		const mimeType = imageMetadata?.mimeType;
 		const ext = path.extname(absolutePath).toLowerCase();
+		const videoMimeType = VIDEO_MIME_TYPES.get(ext);
 		const shouldConvertWithMarkit = CONVERTIBLE_EXTENSIONS.has(ext);
 
 		// Profiler reports (macOS `sample` call trees, V8 `.cpuprofile` JSON):
@@ -2525,6 +2528,44 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				imageMetadata,
 				fileSize,
 			}));
+		} else if (videoMimeType && !isRawSelector(parsed)) {
+			const activeModel = this.session.getActiveModel?.();
+			if (activeModel?.input.includes("video") && this.session.queueVideoInput) {
+				let videoInput: LoadedVideoInput | null;
+				try {
+					videoInput = await loadVideoInput({
+						path: absolutePath,
+						cwd: this.session.cwd,
+						maxBytes: MAX_VIDEO_INPUT_BYTES,
+					});
+				} catch (error) {
+					throw new ToolError(error instanceof Error ? error.message : String(error));
+				}
+				if (!videoInput) {
+					throw new ToolError(
+						`Unsupported video file: ${formatPathRelativeToCwd(absolutePath, this.session.cwd)}`,
+					);
+				}
+				const displayPath = formatPathRelativeToCwd(absolutePath, this.session.cwd);
+				await this.session.queueVideoInput(
+					`The original local video "${displayPath}" is attached for native analysis. Answer the user's request using the complete video. Do not split it into frames.`,
+					videoInput.video,
+				);
+				return toolResult<ReadToolDetails>({ resolvedPath: absolutePath, suffixResolution })
+					.text(
+						prependSuffixResolutionNotice(
+							`Attached original video "${displayPath}" to the active model for native analysis.`,
+							suffixResolution,
+						),
+					)
+					.sourcePath(absolutePath)
+					.done();
+			}
+			const text = `[Video file '${formatPathRelativeToCwd(absolutePath, this.session.cwd)}' (${formatBytes(fileSize)}, ${videoMimeType}). The active model does not support native video input.]`;
+			return toolResult<ReadToolDetails>({ resolvedPath: absolutePath, suffixResolution })
+				.text(prependSuffixResolutionNotice(text, suffixResolution))
+				.sourcePath(absolutePath)
+				.done();
 		} else if (isNotebookPath(absolutePath) && !isRawSelector(parsed)) {
 			const notebookText = await readEditableNotebookText(absolutePath, localReadPath);
 			if (isMultiRange(parsed) && parsed.kind === "lines") {

@@ -61,6 +61,7 @@ import type {
 	ChatCompletionContentPart,
 	ChatCompletionContentPartImage,
 	ChatCompletionContentPartText,
+	ChatCompletionContentPartVideo,
 	ChatCompletionMessageParam,
 	ChatCompletionTool,
 	ChatCompletionToolMessageParam,
@@ -110,6 +111,7 @@ import { transformMessages } from "./transform-messages";
 import {
 	isDashscopeCompatibleModeTextOnlyQwen,
 	joinTextWithImagePlaceholder,
+	NON_VIDEO_PLACEHOLDER,
 	NON_VISION_IMAGE_PLACEHOLDER,
 } from "./vision-guard";
 
@@ -1907,33 +1909,61 @@ export function convertMessages(
 				});
 			} else {
 				const supportsImages = model.input.includes("image") && !isDashscopeCompatibleModeTextOnlyQwen(model);
+				const supportsVideos = model.input.includes("video");
 				const content: ChatCompletionContentPart[] = [];
 				let omittedImages = false;
+				let omittedVideos = false;
 				for (const item of msg.content) {
-					if (item.type === "text") {
-						const text = item.text.toWellFormed();
-						if (text.trim().length === 0) continue;
-						content.push({
-							type: "text",
-							text,
-						} satisfies ChatCompletionContentPartText);
-					} else if (supportsImages) {
-						content.push({
-							type: "image_url",
-							image_url: {
-								url: `data:${item.mimeType};base64,${item.data}`,
-								// Chat Completions has no "original"; omit it (provider default).
-								...(item.detail && item.detail !== "original" ? { detail: item.detail } : {}),
-							},
-						} satisfies ChatCompletionContentPartImage);
-					} else {
-						omittedImages = true;
+					switch (item.type) {
+						case "text": {
+							const text = item.text.toWellFormed();
+							if (text.trim().length === 0) continue;
+							content.push({
+								type: "text",
+								text,
+							} satisfies ChatCompletionContentPartText);
+							break;
+						}
+						case "image":
+							if (supportsImages) {
+								content.push({
+									type: "image_url",
+									image_url: {
+										url: `data:${item.mimeType};base64,${item.data}`,
+										// Chat Completions has no "original"; omit it (provider default).
+										...(item.detail && item.detail !== "original" ? { detail: item.detail } : {}),
+									},
+								} satisfies ChatCompletionContentPartImage);
+							} else {
+								omittedImages = true;
+							}
+							break;
+						case "video":
+							if (supportsVideos) {
+								content.push({
+									type: "video_url",
+									video_url: { url: `data:${item.mimeType};base64,${item.data}` },
+								} satisfies ChatCompletionContentPartVideo);
+							} else {
+								omittedVideos = true;
+							}
+							break;
+						default: {
+							const _exhaustive: never = item;
+							throw new Error(`Unsupported user content part: ${String(_exhaustive)}`);
+						}
 					}
 				}
 				if (omittedImages) {
 					content.push({
 						type: "text",
 						text: NON_VISION_IMAGE_PLACEHOLDER,
+					} satisfies ChatCompletionContentPartText);
+				}
+				if (omittedVideos) {
+					content.push({
+						type: "text",
+						text: NON_VIDEO_PLACEHOLDER,
 					} satisfies ChatCompletionContentPartText);
 				}
 				if (content.length === 0) continue;

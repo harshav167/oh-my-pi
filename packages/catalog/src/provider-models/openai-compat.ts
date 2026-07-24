@@ -89,12 +89,17 @@ function toModelName(value: unknown, fallback: string): string {
 	return trimmed.length > 0 ? trimmed : fallback;
 }
 
-function toInputCapabilities(value: unknown): ("text" | "image")[] {
+function toInputCapabilities(value: unknown): ("text" | "image" | "video")[] {
 	if (!Array.isArray(value)) {
 		return ["text"];
 	}
-	const supportsImage = value.some(item => item === "image");
-	return supportsImage ? ["text", "image"] : ["text"];
+	// Preserve whatever modalities the upstream source reports, for any provider.
+	// Video capability flows automatically when metadata includes it; the Kimi
+	// id-classifier is only a fallback for Kimi endpoints that omit the flag.
+	const input: ("text" | "image" | "video")[] = ["text"];
+	if (value.some(item => item === "image")) input.push("image");
+	if (value.some(item => item === "video")) input.push("video");
+	return input;
 }
 
 /**
@@ -403,7 +408,7 @@ interface OllamaResolvedMetadata {
 	capabilities?: string[];
 	reasoning?: boolean;
 	thinking?: ThinkingConfig;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 }
 
 interface OllamaShowMetadata {
@@ -412,7 +417,7 @@ interface OllamaShowMetadata {
 	capabilities?: string[];
 	reasoning?: boolean;
 	thinking?: ThinkingConfig;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 }
 
 function getOllamaContextWindow(modelInfo: Record<string, unknown> | undefined): number | undefined {
@@ -1226,7 +1231,7 @@ interface XAICuratedModel {
 	 * overrides `fetchOpenAICompatibleModels`' default of `["text"]` (which
 	 * otherwise strips image capability on every online refresh).
 	 */
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 }
 
 // Source of truth for the xai-oauth chat picker. Top of list = headline.
@@ -1819,6 +1824,17 @@ export const KIMI_K27_CODE_RECOMMENDED_MAX_TOKENS = 32_768;
 
 export function isKimiK27CodeModelId(modelId: string): boolean {
 	return /(?:^|\/)kimi[-._]?k2(?:[._-]?|p)7[-._]?code(?:[-._]?highspeed)?$/i.test(modelId);
+}
+
+export function isKimiVideoModelId(modelId: string): boolean {
+	return (
+		modelId === "k3" ||
+		isKimiK3ModelId(modelId) ||
+		/(?:^|\/)kimi[-._]?k2[._-]?6(?:[-._:]|$)/i.test(modelId) ||
+		isKimiK27CodeModelId(modelId) ||
+		// Kimi coding API serves K2.7-code as `kimi-for-coding` / `-highspeed`.
+		/(?:^|\/)kimi-for-coding(?:-highspeed)?$/i.test(modelId)
+	);
 }
 
 export function clampKimiK27CodeMaxTokens(modelId: string, candidate: number): number;
@@ -3032,7 +3048,11 @@ export function kimiCodeModelManagerOptions(
 							...defaults,
 							name: typeof entry.display_name === "string" ? entry.display_name : defaults.name,
 							reasoning,
-							input: entry.supports_image_in === true || id.includes("k2.5") ? ["text", "image"] : ["text"],
+							input: isKimiVideoModelId(id)
+								? ["text", "image", "video"]
+								: entry.supports_image_in === true || id.includes("k2.5")
+									? ["text", "image"]
+									: ["text"],
 							contextWindow: typeof entry.context_length === "number" ? entry.context_length : 262144,
 							maxTokens: kimiCodeMaxTokens(id),
 							thinking,
@@ -3056,7 +3076,7 @@ export function kimiCodeModelManagerOptions(
 
 /** Native LM Studio metadata keyed by model id from `/api/v0/models`. */
 export interface LmStudioNativeModelMetadata {
-	input: ("text" | "image")[];
+	input: ("text" | "image" | "video")[];
 	contextWindow?: number;
 }
 
@@ -3081,7 +3101,7 @@ function getLmStudioCapabilityNames(value: unknown): string[] {
 	return value.flatMap(item => (typeof item === "string" ? [item.toLowerCase()] : []));
 }
 
-function getLmStudioNativeInput(entry: Record<string, unknown>): ("text" | "image")[] {
+function getLmStudioNativeInput(entry: Record<string, unknown>): ("text" | "image" | "video")[] {
 	const modelType = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
 	const capabilities = getLmStudioCapabilityNames(entry.capabilities);
 	const supportsImage = modelType === "vlm" || capabilities.includes("vision") || capabilities.includes("image");
@@ -3661,7 +3681,7 @@ export function moonshotModelManagerOptions(
 							return {
 								...model,
 								reasoning: true,
-								input: ["text", "image"],
+								input: ["text", "image", "video"],
 								cost: isZeroCost ? { ...MOONSHOT_KIMI_K3_COST } : model.cost,
 								contextWindow: model.contextWindow ?? MOONSHOT_KIMI_K3_CONTEXT_WINDOW,
 								maxTokens: model.maxTokens ?? MOONSHOT_KIMI_K3_MAX_TOKENS,
@@ -3679,7 +3699,11 @@ export function moonshotModelManagerOptions(
 						return {
 							...model,
 							reasoning: isKimiK2Reasoning || model.reasoning,
-							input: isVision ? ["text", "image"] : model.input,
+							input: isKimiVideoModelId(id)
+								? ["text", "image", "video"]
+								: isVision
+									? ["text", "image"]
+									: model.input,
 							thinking:
 								model.thinking ??
 								(isKimiK2Reasoning

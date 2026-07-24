@@ -173,6 +173,7 @@ import type {
 	Tool,
 	ToolCall,
 	ToolResultMessage,
+	UserMediaContent,
 } from "../types";
 import { normalizeSystemPrompts } from "../utils";
 import {
@@ -4017,7 +4018,9 @@ function hasUserMessageImages(msg: Message): boolean {
 
 type CursorRootPromptContentPart = { type: "text"; text: string } | { type: "image"; image: string; mediaType: string };
 
-function buildCursorRootPromptContent(content: string | (TextContent | ImageContent)[]): CursorRootPromptContentPart[] {
+function buildCursorRootPromptContent(
+	content: string | (TextContent | UserMediaContent)[],
+): CursorRootPromptContentPart[] {
 	if (typeof content === "string") {
 		const text = content.trim();
 		return text ? [{ type: "text", text }] : [];
@@ -4029,14 +4032,14 @@ function buildCursorRootPromptContent(content: string | (TextContent | ImageCont
 			if (text) {
 				parts.push({ type: "text", text });
 			}
-		} else {
+		} else if (item.type === "image") {
 			parts.push({ type: "image", image: `data:${item.mimeType};base64,${item.data}`, mediaType: item.mimeType });
 		}
 	}
 	return parts;
 }
 
-function cursorUserContentKey(content: string | (TextContent | ImageContent)[]): string {
+function cursorUserContentKey(content: string | (TextContent | UserMediaContent)[]): string {
 	if (typeof content === "string") {
 		return content.trim();
 	}
@@ -4045,6 +4048,9 @@ function cursorUserContentKey(content: string | (TextContent | ImageContent)[]):
 		hash.update(item.type);
 		if (item.type === "text") {
 			hash.update(item.text);
+		} else if (item.type === "image") {
+			hash.update(item.mimeType);
+			hash.update(item.data);
 		} else {
 			hash.update(item.mimeType);
 			hash.update(item.data);
@@ -4451,7 +4457,7 @@ export function buildCursorHistoryForTest(
 	return { rootPromptMessagesJson, turnUserMessagesJson, turnStepMessagesJson };
 }
 function createCursorUserMessage(
-	content: string | (TextContent | ImageContent)[],
+	content: string | (TextContent | UserMediaContent)[],
 	text: string,
 	messageId = crypto.randomUUID(),
 ) {
@@ -4469,7 +4475,7 @@ function createCursorUserMessage(
 	});
 }
 
-function extractImages(content: (TextContent | ImageContent)[]) {
+function extractImages(content: (TextContent | UserMediaContent)[]) {
 	return content
 		.filter((item): item is ImageContent => item.type === "image")
 		.map(image =>
@@ -4508,7 +4514,7 @@ function buildGrpcRequest(
 	const activeMessage = context.messages[activeUserMessageIndex];
 	const activeUserMessage =
 		activeMessage?.role === "user" || activeMessage?.role === "developer" ? activeMessage : undefined;
-	let userContent: string | (TextContent | ImageContent)[] | undefined;
+	let userContent: string | (TextContent | UserMediaContent)[] | undefined;
 	let userText = "";
 	let hasUserImages = false;
 	if (activeUserMessage?.role === "user" || activeUserMessage?.role === "developer") {
@@ -4640,10 +4646,10 @@ function buildGrpcRequest(
 	return { requestBytes, blobStore, conversationState };
 }
 
-function hasImages(content: (TextContent | ImageContent)[]): boolean {
+function hasImages(content: (TextContent | UserMediaContent)[]): boolean {
 	return content.some(item => item.type === "image");
 }
-function extractText(content: (TextContent | ImageContent)[]): string {
+function extractText(content: (TextContent | UserMediaContent)[]): string {
 	return content
 		.filter((c): c is TextContent => c.type === "text")
 		.map(c => c.text)

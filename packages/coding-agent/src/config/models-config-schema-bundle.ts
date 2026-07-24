@@ -173,7 +173,7 @@ export const getModelsConfigSchemaBundle = once(() => {
 		"baseUrl?": "string",
 		"reasoning?": "boolean",
 		"thinking?": ModelThinkingSchema,
-		"input?": '("text" | "image")[]',
+		"input?": '("text" | "image" | "video")[]',
 		"supportsTools?": "boolean",
 		"cost?": {
 			input: "number",
@@ -222,7 +222,7 @@ export const getModelsConfigSchemaBundle = once(() => {
 		"name?": "string",
 		"reasoning?": "boolean",
 		"thinking?": ModelThinkingSchema,
-		"input?": '("text" | "image")[]',
+		"input?": '("text" | "image" | "video")[]',
 		"supportsTools?": "boolean",
 		"cost?": {
 			"input?": "number",

@@ -1,6 +1,6 @@
 import type { Clipboard, InMemorySnapshotStore } from "@oh-my-pi/hashline";
 import type { AgentOptions, AgentTelemetryConfig, AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { FetchImpl, ImageContent, Model, ServiceTierByFamily, ToolChoice } from "@oh-my-pi/pi-ai";
+import type { FetchImpl, ImageContent, Model, ServiceTierByFamily, ToolChoice, VideoContent } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AdvisorConsult } from "../advisor";
 import type { AsyncJobManager } from "../async/job-manager";
@@ -54,6 +54,7 @@ import { GrepTool } from "./grep";
 import { HubTool, isIrcEnabled } from "./hub";
 import { InspectImageTool } from "./inspect-image";
 import { LearnTool } from "./learn";
+import { ListModelsTool } from "./list-models";
 import { ManageSkillTool } from "./manage-skill";
 import { MemoryEditTool } from "./memory-edit";
 import { MemoryRecallTool } from "./memory-recall";
@@ -94,6 +95,7 @@ export * from "./hub";
 export * from "./image-gen";
 export * from "./inspect-image";
 export * from "./learn";
+export * from "./list-models";
 export * from "./manage-skill";
 export * from "./memory-edit";
 export * from "./memory-recall";
@@ -279,6 +281,8 @@ export interface ToolSession {
 	getActiveModel?: () => Model | undefined;
 	/** Session-scoped inspect_image mode override set by `/vision`; wins over the persisted setting. */
 	getInspectImageModeOverride?: () => InspectImageMode | undefined;
+	/** Steer a native video into the active model's conversation (used by `read` on a video file). */
+	queueVideoInput?(text: string, video: VideoContent): Promise<void>;
 	/** Get the session's live per-family service tiers (undefined = none). Source of truth for subagent `tier.subagent: inherit`. */
 	getServiceTierByFamily?: () => ServiceTierByFamily | undefined;
 	/** Auth storage for passing to subagents (avoids re-discovery) */
@@ -427,6 +431,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	checkpoint: CheckpointTool.createIf,
 	rewind: RewindTool.createIf,
 	task: s => TaskTool.create(s),
+	list_models: s => new ListModelsTool(s),
 	hub: s => new HubTool(s),
 	todo: s => new TodoTool(s),
 	web_search: s => new WebSearchTool(s),

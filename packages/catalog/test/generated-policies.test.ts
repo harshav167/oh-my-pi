@@ -33,6 +33,23 @@ function createSpec<TApi extends Api>(overrides: {
 }
 
 describe("generated model policies", () => {
+	it("stamps native video input on bundled Kimi video models, scoped to Kimi providers", () => {
+		const k3 = createSpec({ id: "k3", api: "openai-completions", provider: "kimi-code" });
+		k3.input = ["text", "image"];
+		const moonshotK3 = createSpec({ id: "kimi-k3", api: "openai-completions", provider: "moonshot" });
+		moonshotK3.input = ["text", "image"];
+		// Same-id-shaped model on an unrelated provider must NOT gain video.
+		const fireworksK3 = createSpec({ id: "k3", api: "openai-completions", provider: "fireworks" });
+		fireworksK3.input = ["text", "image"];
+		const models: ModelSpec<Api>[] = [k3, moonshotK3, fireworksK3];
+
+		applyGeneratedModelPolicies(models);
+
+		expect(k3.input).toContain("video");
+		expect(moonshotK3.input).toContain("video");
+		expect(fireworksK3.input).not.toContain("video");
+	});
+
 	it("re-bakes thinking metadata and applies parsed catalog corrections", () => {
 		const models: ModelSpec<Api>[] = [
 			createSpec({

@@ -385,6 +385,10 @@
 ### Removed
 
 - Removed the `model` parameter from `task` and `agent()`: explicit per-spawn model selectors and fallback chains are no longer supported; spawns always use the agent's configured model
+### Added
+
+- Added native inline video input for video-capable models (Kimi K3): pasting a local video path renders a `[Video #N, name, size, mime, duration]` chip plus a poster-frame preview and delivers the video to the model natively (no frame splitting, no separate tool). Pasting a video to a model without native video support leaves the path as plain text.
+- Added the `list_models` tool for listing available provider/id model selectors.
 
 ## [17.1.1] - 2026-07-24
 

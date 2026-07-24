@@ -3,7 +3,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
+import type { ImageContent, VideoContent } from "@oh-my-pi/pi-ai";
 import { getProjectDir, isEnoent, readImageMetadata } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { resolveReadPath } from "../tools/path-utils";
@@ -15,10 +15,22 @@ import { CONVERTIBLE_EXTENSIONS, convertFileWithMarkit } from "../utils/markit";
 // If a file exceeds these limits, we include it as a path-only <file/> block.
 const MAX_CLI_TEXT_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_CLI_IMAGE_BYTES = 25 * 1024 * 1024; // 25MB
+export const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024; // 50MB
+export const VIDEO_MIME_TYPES = new Map([
+	[".mp4", "video/mp4"],
+	[".webm", "video/webm"],
+	[".mov", "video/quicktime"],
+	[".m4v", "video/x-m4v"],
+	[".avi", "video/x-msvideo"],
+	[".mkv", "video/x-matroska"],
+	[".mpeg", "video/mpeg"],
+	[".mpg", "video/mpeg"],
+]);
 
 export interface ProcessedFiles {
 	text: string;
 	images: ImageContent[];
+	videos: VideoContent[];
 }
 
 export interface ProcessFileOptions {
@@ -31,6 +43,7 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 	const autoResizeImages = options?.autoResizeImages ?? true;
 	let text = "";
 	const images: ImageContent[] = [];
+	const videos: VideoContent[] = [];
 
 	for (const fileArg of fileArgs) {
 		// Expand and resolve path (handles ~ expansion and macOS screenshot Unicode spaces)
@@ -45,7 +58,8 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 		const imageMetadata = await readImageMetadata(absolutePath);
 		const mimeType = imageMetadata?.mimeType;
 		const ext = path.extname(absolutePath).toLowerCase();
-		const maxBytes = mimeType ? MAX_CLI_IMAGE_BYTES : MAX_CLI_TEXT_BYTES;
+		const videoMimeType = VIDEO_MIME_TYPES.get(ext);
+		const maxBytes = videoMimeType ? MAX_INLINE_VIDEO_BYTES : mimeType ? MAX_CLI_IMAGE_BYTES : MAX_CLI_TEXT_BYTES;
 		if (stat.size > maxBytes) {
 			console.error(
 				chalk.yellow(`Warning: Skipping file contents (too large: ${formatBytes(stat.size)}): ${absolutePath}`),
@@ -69,7 +83,14 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 			continue;
 		}
 
-		if (mimeType) {
+		if (videoMimeType) {
+			videos.push({
+				type: "video",
+				mimeType: videoMimeType,
+				data: buffer.toBase64(),
+			});
+			text += `<file name="${absolutePath}"></file>\n`;
+		} else if (mimeType) {
 			// Handle image file
 			const base64Content = buffer.toBase64();
 			let attachment: ImageContent;
@@ -128,5 +149,5 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 		}
 	}
 
-	return { text, images };
+	return { text, images, videos };
 }

@@ -1,6 +1,5 @@
 {{#if sessionUpdate}}
 {{sessionUpdate}}
-
 {{/if}}
 ### Consultation from primary
 

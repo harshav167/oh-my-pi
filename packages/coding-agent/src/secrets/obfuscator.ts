@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, Context, ImageContent, Message, TextContent } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage, Context, Message, TextContent, UserMediaContent } from "@oh-my-pi/pi-ai";
 import type { SessionContext } from "../session/session-context";
 import { compileSecretRegex } from "./regex";
 
@@ -1888,7 +1888,10 @@ export function deobfuscateAgentMessages(obfuscator: SecretObfuscator, messages:
 			case "compactionSummary": {
 				const summary = deob(message.summary);
 				const shortSummary = message.shortSummary === undefined ? undefined : deob(message.shortSummary);
-				const blocks = message.blocks === undefined ? undefined : deobfuscateTextBlocks(obfuscator, message.blocks);
+				const blocks =
+					message.blocks === undefined
+						? undefined
+						: (deobfuscateTextBlocks(obfuscator, message.blocks, allowLegacyAliases) as typeof message.blocks);
 				if (summary === message.summary && shortSummary === message.shortSummary && blocks === message.blocks) {
 					return message;
 				}
@@ -1968,11 +1971,11 @@ type UserFacingMessage = Extract<Message, { role: "user" | "developer" | "toolRe
 /** Obfuscate `text` blocks of a content array; image and other blocks pass through. */
 function obfuscateTextBlocks(
 	obfuscator: SecretObfuscator,
-	content: (TextContent | ImageContent)[],
+	content: (TextContent | UserMediaContent)[],
 	sharedRegexSecretValues?: ReadonlySet<string>,
-): (TextContent | ImageContent)[] {
+): (TextContent | UserMediaContent)[] {
 	let changed = false;
-	const result = content.map((block): TextContent | ImageContent => {
+	const result = content.map((block): TextContent | UserMediaContent => {
 		if (block.type !== "text") return block;
 		const text = obfuscator.obfuscate(block.text, sharedRegexSecretValues);
 		if (text === block.text) return block;
@@ -1985,10 +1988,13 @@ function obfuscateTextBlocks(
 /** Restore placeholders in `text` blocks of a content array; image and other blocks pass through. */
 function deobfuscateTextBlocks(
 	obfuscator: SecretObfuscator,
-	content: (TextContent | ImageContent)[],
-): (TextContent | ImageContent)[] {
+	content: (TextContent | UserMediaContent)[],
+	allowLegacyAliases = false,
+): (TextContent | UserMediaContent)[] {
+	const deob = (text: string): string =>
+		allowLegacyAliases ? obfuscator.deobfuscateStored(text) : obfuscator.deobfuscate(text);
 	let changed = false;
-	const result = content.map((block): TextContent | ImageContent => {
+	const result = content.map((block): TextContent | UserMediaContent => {
 		if (block.type !== "text") return block;
 		const text = obfuscator.deobfuscate(block.text);
 		if (text === block.text) return block;

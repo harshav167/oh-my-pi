@@ -234,6 +234,21 @@ export interface ChatCompletionContentPartInputAudioInputAudio {
 	format: "wav" | "mp3";
 }
 
+/** Video content part (Kimi native video input). */
+export interface ChatCompletionContentPartVideo {
+	video_url: ChatCompletionContentPartVideoVideoURL;
+	/** Always `video_url`. */
+	type: "video_url";
+	/** Explicit OpenAI prompt-cache breakpoint. */
+	prompt_cache_breakpoint?: { mode: "explicit" };
+}
+
+/** Video URL container: base64 data URL for inline delivery. */
+export interface ChatCompletionContentPartVideoVideoURL {
+	/** base64-encoded data URL of the video. */
+	url: string;
+}
+
 /** File content part. SDK `ChatCompletionContentPart.File`. */
 export interface ChatCompletionContentPartFile {
 	file: ChatCompletionContentPartFileFile;
@@ -268,6 +283,7 @@ export type ChatCompletionContentPart =
 	| ChatCompletionContentPartText
 	| ChatCompletionContentPartImage
 	| ChatCompletionContentPartInputAudio
+	| ChatCompletionContentPartVideo
 	| ChatCompletionContentPartFile;
 
 // ─── Tool calls ──────────────────────────────────────────────────────────────
