@@ -39,7 +39,7 @@ import type {
 	ThinkingLevel,
 } from "./google-types";
 import { transformMessages } from "./transform-messages";
-import { NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
+import { NON_VIDEO_PLACEHOLDER, NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
 
 export type {
 	Content,
@@ -209,6 +209,10 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 						const text = item.text.toWellFormed();
 						if (text.trim().length === 0) continue;
 						parts.push({ text });
+					} else if (item.type === "video") {
+						// Google/Gemini native video serialization is a separate follow-up;
+						// for now any video block on a Google model is dropped with a note.
+						parts.push({ text: NON_VIDEO_PLACEHOLDER });
 					} else if (supportsImages) {
 						parts.push({
 							inlineData: {

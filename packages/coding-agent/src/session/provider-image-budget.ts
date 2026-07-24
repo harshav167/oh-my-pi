@@ -1,10 +1,10 @@
 import type {
 	Context,
 	DeveloperMessage,
-	ImageContent,
 	Model,
 	TextContent,
 	ToolResultMessage,
+	UserMediaContent,
 	UserMessage,
 } from "@oh-my-pi/pi-ai";
 import { providerImageBudget } from "@oh-my-pi/snapcompact";
@@ -25,12 +25,12 @@ function countImages(context: Context): number {
 	return count;
 }
 
-function clampContent(
-	content: readonly (TextContent | ImageContent)[],
+function clampContent<TContent extends TextContent | UserMediaContent>(
+	content: readonly TContent[],
 	state: { remainingDrops: number },
-): (TextContent | ImageContent)[] | undefined {
+): TContent[] | undefined {
 	let changed = false;
-	const clamped: (TextContent | ImageContent)[] = [];
+	const clamped: TContent[] = [];
 	for (const part of content) {
 		if (part.type === "image" && state.remainingDrops > 0) {
 			state.remainingDrops--;

@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
+import type { ImageContent, VideoContent } from "@oh-my-pi/pi-ai";
 import {
 	addKeyAliases,
 	canonicalKeyId,
@@ -82,6 +82,7 @@ function unionOfMatchKeys(matchKeys: ReadonlyMap<ConfigurableEditorAction, Reado
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
 const BRACKETED_IMAGE_PATH_REGEX = /\.(?:png|jpe?g|gif|webp)$/i;
+const VIDEO_PATH_REGEX = /\.(?:mp4|mpeg|mov|avi|flv|mpg|webm|wmv|3gp|3gpp|m4v|mkv)$/i;
 const SHELL_ESCAPED_PATH_CHAR_REGEX = /\\([\\\s'"()[\]{}&;<>|?*!$`])/g;
 const URI_SCHEME_REGEX = /^[a-z][a-z0-9+.-]*:/i;
 const FILE_URI_REGEX = /^file:\/\//i;
@@ -179,6 +180,12 @@ function isExplicitPastedPath(path: string): boolean {
 
 function isImagePath(path: string): boolean {
 	return BRACKETED_IMAGE_PATH_REGEX.test(path);
+}
+
+/** A pasted file path pointing at an image OR a native video. Image detection is
+ *  unchanged; video extensions route to the same paste handler additively. */
+function isMediaPath(path: string): boolean {
+	return isImagePath(path) || VIDEO_PATH_REGEX.test(path);
 }
 
 function splitPastedPathSegments(payload: string): string[] | undefined {
@@ -317,6 +324,12 @@ export function extractBracketedImagePastePaths(data: string): string[] | undefi
 	return payload === undefined ? undefined : extractImagePastePathsFromText(payload);
 }
 
+/** Media (image or video) variant of {@link extractImagePastePathsFromText}. */
+export function extractMediaPastePathsFromText(text: string): string[] | undefined {
+	const paths = extractPastePathsFromText(text);
+	return paths?.every(isMediaPath) ? paths : undefined;
+}
+
 export function extractBracketedImagePastePath(data: string): string | undefined {
 	const paths = extractBracketedImagePastePaths(data);
 	return paths?.length === 1 ? paths[0] : undefined;
@@ -349,6 +362,21 @@ export function extractImagePathFromText(text: string): string | undefined {
 	if (paths?.length === 1 && isImagePath(paths[0])) return paths[0];
 	if (paths !== undefined) return undefined;
 	return extractWholeTextImagePath(text);
+}
+
+/** Media (image or video) variant of {@link extractImagePathFromText}: recognizes a
+ *  single explicit image OR video file path for the clipboard/file-URL paste routers. */
+export function extractMediaPathFromText(text: string): string | undefined {
+	const paths = extractPastePathsFromText(text);
+	if (paths?.length === 1 && isMediaPath(paths[0])) return paths[0];
+	if (paths !== undefined) return undefined;
+	const trimmed = text.trim();
+	if (!trimmed || /[\r\n]/.test(trimmed) || !ABSOLUTE_PATH_PREFIX_REGEX.test(trimmed)) return undefined;
+	const wholePath = normalizePastedPath(trimmed);
+	if (wholePath && isExplicitPastedPath(wholePath) && isMediaPath(wholePath)) {
+		return wholePath;
+	}
+	return undefined;
 }
 
 /**
@@ -389,6 +417,11 @@ export class CustomEditor extends Editor {
 	 *  `undefined` entries are images without a backing reference yet. */
 	pendingImageLinks: (string | undefined)[] = [];
 
+	/** Draft videos pasted into the composer, consumed on submit (native inline delivery). */
+	pendingVideos: VideoContent[] = [];
+	/** Per-video source file paths parallel to {@link pendingVideos}. */
+	pendingVideoPaths: string[] = [];
+
 	/**
 	 * The host {@link TUI}, captured when a plugin constructs this editor through
 	 * the upstream-pi `(tui, theme, keybindings)` convention. Undefined for omp's
@@ -425,6 +458,8 @@ export class CustomEditor extends Editor {
 		this.imageLinks = undefined;
 		this.pendingImages = [];
 		this.pendingImageLinks = [];
+		this.pendingVideos = [];
+		this.pendingVideoPaths = [];
 	}
 
 	/** Replace the composer draft with a restored historical prompt: sets the text and
@@ -814,11 +849,11 @@ export class CustomEditor extends Editor {
 				this.#trackAsyncPaste(Promise.resolve(this.onPasteImage()));
 				return;
 			}
-			const imagePaths = extractImagePastePathsFromText(content);
-			if (imagePaths && this.onPasteImagePath) {
+			const mediaPaths = extractMediaPastePathsFromText(content);
+			if (mediaPaths && this.onPasteImagePath) {
 				this.#trackAsyncPaste(
 					(async () => {
-						for (const p of imagePaths) await this.onPasteImagePath?.(p);
+						for (const p of mediaPaths) await this.onPasteImagePath?.(p);
 					})(),
 				);
 				return;

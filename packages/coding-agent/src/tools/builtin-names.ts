@@ -17,6 +17,7 @@ export const BUILTIN_TOOL_NAMES = [
 	"checkpoint",
 	"rewind",
 	"task",
+	"list_models",
 	"hub",
 	"todo",
 	"web_search",

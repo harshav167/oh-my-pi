@@ -56,6 +56,7 @@ import {
 	type ToolCall,
 	type ToolResultMessage,
 	type Usage,
+	type UserMessage,
 } from "../types";
 
 export type { OpenAIPromptCacheOptions } from "../types";
@@ -108,7 +109,12 @@ import type {
 	ResponseStreamEvent,
 } from "./openai-responses-wire";
 import { transformMessages } from "./transform-messages";
-import { joinTextWithImagePlaceholder, NON_VISION_IMAGE_PLACEHOLDER, partitionVisionContent } from "./vision-guard";
+import {
+	joinTextWithImagePlaceholder,
+	NON_VIDEO_PLACEHOLDER,
+	NON_VISION_IMAGE_PLACEHOLDER,
+	partitionVisionContent,
+} from "./vision-guard";
 
 /**
  * Keyless-provider sentinel. Custom providers configured with `auth: none`
@@ -1480,7 +1486,7 @@ function clampResponsesImageDetail(
 }
 
 export function convertResponsesInputContent(
-	content: string | Array<TextContent | ImageContent>,
+	content: UserMessage["content"],
 	supportsImages: boolean,
 	supportsImageDetailOriginal: boolean,
 	escapeControlTokens = false,
@@ -1496,7 +1502,11 @@ export function convertResponsesInputContent(
 		];
 	}
 
-	const { textBlocks, imageBlocks, omittedImages } = partitionVisionContent(content, supportsImages);
+	const omittedVideos = content.some(block => block.type === "video");
+	const visionContent = content.filter(
+		(block): block is TextContent | ImageContent => block.type === "text" || block.type === "image",
+	);
+	const { textBlocks, imageBlocks, omittedImages } = partitionVisionContent(visionContent, supportsImages);
 	const normalizedContent: ResponseInputContent[] = [];
 	for (const item of textBlocks) {
 		const raw = item.text.toWellFormed();
@@ -1518,6 +1528,12 @@ export function convertResponsesInputContent(
 		normalizedContent.push({
 			type: "input_text",
 			text: NON_VISION_IMAGE_PLACEHOLDER,
+		} satisfies ResponseInputText);
+	}
+	if (omittedVideos) {
+		normalizedContent.push({
+			type: "input_text",
+			text: NON_VIDEO_PLACEHOLDER,
 		} satisfies ResponseInputText);
 	}
 	return normalizedContent.length > 0 ? normalizedContent : undefined;

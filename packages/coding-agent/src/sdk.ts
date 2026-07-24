@@ -1707,6 +1707,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			getActiveModelString,
 			getActiveModel: () => agent?.state.model ?? model,
 			getInspectImageModeOverride: () => session?.getInspectImageModeOverride(),
+			queueVideoInput: async (text, video) => {
+				await session.steer(text, undefined, [video]);
+			},
 			getServiceTierByFamily: () => session?.serviceTierByFamily,
 			getImageAttachments: () => session?.getImageAttachments() ?? [],
 			getPlanModeState: () => session?.getPlanModeState(),

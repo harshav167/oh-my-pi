@@ -6,7 +6,7 @@
  * dropped.
  */
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
+import type { ImageContent, VideoContent } from "@oh-my-pi/pi-ai";
 import { InputController } from "@oh-my-pi/pi-coding-agent/modes/controllers/input-controller";
 import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
 
@@ -18,17 +18,22 @@ interface StubEditor {
 	imageLinks?: unknown;
 	pendingImages: ImageContent[];
 	pendingImageLinks: (string | undefined)[];
+	pendingVideos: VideoContent[];
+	pendingVideoPaths: string[];
 	clearDraft: (text?: string) => void;
 }
 interface PromptOptionsLike {
 	streamingBehavior?: "steer" | "followUp";
 	images?: ImageContent[];
+	videos?: VideoContent[];
 }
 
 function createContext(opts: {
 	isStreaming: boolean;
 	pendingImages: ImageContent[];
 	pendingImageLinks?: (string | undefined)[];
+	pendingVideos?: VideoContent[];
+	pendingVideoPaths?: string[];
 }) {
 	let editorText = "";
 	const editor: StubEditor = {
@@ -44,12 +49,16 @@ function createContext(opts: {
 		addToHistory: vi.fn(),
 		pendingImages: opts.pendingImages,
 		pendingImageLinks: opts.pendingImageLinks ? [...opts.pendingImageLinks] : opts.pendingImages.map(() => undefined),
+		pendingVideos: opts.pendingVideos ? [...opts.pendingVideos] : [],
+		pendingVideoPaths: opts.pendingVideoPaths ? [...opts.pendingVideoPaths] : [],
 		clearDraft(text?: string) {
 			if (text !== undefined) this.addToHistory(text);
 			this.setText("");
 			this.imageLinks = undefined;
 			this.pendingImages = [];
 			this.pendingImageLinks = [];
+			this.pendingVideos = [];
+			this.pendingVideoPaths = [];
 		},
 	};
 	const prompt = vi.fn(async (_text: string, _options?: PromptOptionsLike) => {});
@@ -103,6 +112,44 @@ describe("InputController.handleFollowUp image forwarding", () => {
 		// Pending image state is consumed so the next message does not resend it.
 		expect(ctx.editor.pendingImages).toEqual([]);
 		expect(ctx.editor.pendingImageLinks).toEqual([]);
+	});
+
+	it("forwards pending videos to session.prompt while streaming and clears them", async () => {
+		const video: VideoContent = { type: "video", mimeType: "video/mp4", data: "dmlkZW8=" };
+		const { ctx, editor, prompt } = createContext({
+			isStreaming: true,
+			pendingImages: [],
+			pendingVideos: [video],
+			pendingVideoPaths: ["/tmp/demo.mp4"],
+		});
+
+		const controller = new InputController(ctx);
+		editor.setText("[Video #1, demo.mp4] inspect this");
+		await controller.handleFollowUp();
+
+		expect(prompt).toHaveBeenCalledTimes(1);
+		const call = prompt.mock.calls[0];
+		if (!call) throw new Error("expected session.prompt to be called");
+		expect(call[1]?.videos).toEqual([video]);
+		expect(ctx.editor.pendingVideos).toEqual([]);
+		expect(ctx.editor.pendingVideoPaths).toEqual([]);
+	});
+
+	it("forwards a video-only follow-up (empty text) instead of dropping it", async () => {
+		const video: VideoContent = { type: "video", mimeType: "video/mp4", data: "dmlkZW8=" };
+		const { ctx, editor, prompt } = createContext({
+			isStreaming: true,
+			pendingImages: [],
+			pendingVideos: [video],
+			pendingVideoPaths: ["/tmp/demo.mp4"],
+		});
+
+		const controller = new InputController(ctx);
+		editor.setText("");
+		await controller.handleFollowUp();
+
+		expect(prompt).toHaveBeenCalledTimes(1);
+		expect(prompt.mock.calls[0]?.[1]?.videos).toEqual([video]);
 	});
 
 	it("queues image-only follow-ups while streaming", async () => {

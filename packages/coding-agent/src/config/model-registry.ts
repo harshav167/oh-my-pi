@@ -516,7 +516,7 @@ interface ModelPatch {
 	name?: string;
 	reasoning?: boolean;
 	thinking?: ThinkingConfig;
-	input?: ("text" | "image")[];
+	input?: Model<Api>["input"];
 	supportsTools?: boolean;
 	cost?: Partial<Model<Api>["cost"]>;
 	contextWindow?: number;
@@ -701,7 +701,7 @@ function finalizeCustomModel(model: CustomModelOverlay, options: CustomModelBuil
 		baseUrl: resolvedModel.baseUrl,
 		reasoning: resolvedModel.reasoning ?? reference?.reasoning ?? (options.useDefaults ? false : undefined),
 		thinking: inheritReferenceThinking(resolvedModel.thinking, reference, resolvedModel.provider),
-		input: input as ("text" | "image")[],
+		input,
 		...(supportsTools !== undefined ? { supportsTools } : {}),
 		cost,
 		contextWindow: resolvedModel.contextWindow ?? reference?.contextWindow ?? (options.useDefaults ? 128000 : null),
@@ -2788,7 +2788,7 @@ export interface ProviderConfigInput {
 		baseUrl?: string;
 		reasoning: boolean;
 		thinking?: ThinkingConfig;
-		input: ("text" | "image")[];
+		input: Model<Api>["input"];
 		supportsTools?: boolean;
 		cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
 		contextWindow: number;

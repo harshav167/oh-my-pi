@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Usage } from "@oh-my-pi/pi-ai";
 import { getStreamingPartialJson } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { type Component, Spacer, Text, TruncatedText } from "@oh-my-pi/pi-tui";
+import { type Component, getImageDimensions, Image, Spacer, Text, TruncatedText } from "@oh-my-pi/pi-tui";
 import type { AdvisorMessageDetails } from "../../advisor";
 import { COLLAB_PROMPT_MESSAGE_TYPE, type CollabPromptDetails } from "../../collab/protocol";
 import { settings } from "../../config/settings";
@@ -47,7 +47,7 @@ import {
 	type SkillPromptDetails,
 } from "../../session/messages";
 import type { SessionContext, StrippedToolCallsMarker } from "../../session/session-context";
-import { replaceTabs } from "../../tools/render-utils";
+import { replaceTabs, resolveImageOptions } from "../../tools/render-utils";
 import { buildSkillCommandPrompt, invokeSkillCommandFromText, isKnownSkillCommand } from "../skill-command";
 import { createAssistantMessageComponent } from "./interactive-context-helpers";
 import {
@@ -77,6 +77,14 @@ type AddMessageOptions = {
 	reuseSettledComponent?: boolean;
 };
 
+function isRenderableVideoPreview(image: ImageContent | undefined): image is ImageContent {
+	return (
+		image !== undefined &&
+		image.data.length > 0 &&
+		image.mimeType === "image/png" &&
+		getImageDimensions(image.data, image.mimeType) !== null
+	);
+}
 function imageLinksForMessage(
 	message: Extract<AgentMessage, { role: "developer" | "user" }>,
 	putBlobSync: InteractiveModeContext["sessionManager"]["putBlobSync"],
@@ -243,6 +251,12 @@ export class UiHelpers {
 				const textContent = this.ctx.getUserMessageText(message);
 				if (textContent) {
 					const isSynthetic = message.role === "developer" ? true : (message.synthetic ?? false);
+					const videoPreviews =
+						typeof message.content === "string"
+							? []
+							: message.content
+									.map(part => (part.type === "video" ? part.preview : undefined))
+									.filter(isRenderableVideoPreview);
 					const cached = options?.reuseSettledComponent
 						? this.ctx.transcriptMessageComponents.get(message)
 						: undefined;
@@ -260,6 +274,16 @@ export class UiHelpers {
 						this.ctx.transcriptMessageComponents.set(message, userComponent);
 					}
 					this.ctx.chatContainer.addChild(userComponent);
+					for (const preview of videoPreviews) {
+						this.ctx.chatContainer.addChild(
+							new Image(
+								preview.data,
+								preview.mimeType,
+								{ fallbackColor: (text: string) => theme.fg("toolOutput", text) },
+								{ ...resolveImageOptions(), budget: this.ctx.ui.imageBudget },
+							),
+						);
+					}
 					if (options?.populateHistory && message.role === "user" && !isSynthetic) {
 						this.ctx.editor.addToHistory(textContent);
 					}

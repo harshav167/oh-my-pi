@@ -1,13 +1,14 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
+import type { ImageContent, VideoContent } from "@oh-my-pi/pi-ai";
 import { type AutocompleteProvider, matchesKey, type SlashCommand } from "@oh-my-pi/pi-tui";
 import { $env, isEnoent, logger, sanitizeText } from "@oh-my-pi/pi-utils";
+import { MAX_INLINE_VIDEO_BYTES, VIDEO_MIME_TYPES } from "../../cli/file-processor";
 import { isSettingsInitialized, settings } from "../../config/settings";
 import { resolveLocalRoot } from "../../internal-urls";
 import { AssistantMessageComponent } from "../../modes/components/assistant-message";
-import { extractImagePathFromText } from "../../modes/components/custom-editor";
+import { extractMediaPathFromText } from "../../modes/components/custom-editor";
 import { renderSegmentTrack } from "../../modes/components/segment-track";
 import { TinyTitleDownloadProgressComponent } from "../../modes/components/tiny-title-download-progress";
 import { expandEmoticons } from "../../modes/emoji-autocomplete";
@@ -23,7 +24,8 @@ import { isTinyTitleLocalModelKey } from "../../tiny/models";
 import { isLowSignalTitleInput } from "../../tiny/text";
 import { tinyTitleClient } from "../../tiny/title-client";
 import type { TinyTitleProgressEvent } from "../../tiny/title-protocol";
-import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../../tools/render-utils";
+import { resolveReadPath } from "../../tools/path-utils";
+import { formatBytes, shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../../tools/render-utils";
 import { vocalizer } from "../../tts/vocalizer";
 import {
 	copyToClipboard,
@@ -35,6 +37,7 @@ import { EnhancedPasteController } from "../../utils/enhanced-paste";
 import { getEditorCommand, openInEditor } from "../../utils/external-editor";
 import { ensureSupportedImageInput, ImageInputTooLargeError, loadImageInput } from "../../utils/image-loading";
 import { resizeImage } from "../../utils/image-resize";
+import { createVideoPreview } from "../../utils/video-preview";
 
 /**
  * Slash commands that may carry secrets in their arguments should never be
@@ -605,6 +608,7 @@ export class InputController {
 		this.ctx.editor.onSubmit = async (text: string) => {
 			text = text.trim();
 			const hasPendingImages = this.ctx.editor.pendingImages.length > 0;
+			const hasPendingVideos = (this.ctx.editor.pendingVideos?.length ?? 0) > 0;
 			if ((!isSettingsInitialized() || settings.get("emojiAutocomplete")) && text) text = expandEmoticons(text);
 
 			// Focused subagent session: the editor is a plain chat box for it.
@@ -617,7 +621,7 @@ export class InputController {
 
 			// Empty submit while streaming with queued messages: abort the active
 			// turn and let the post-unwind drain deliver the agent-core queue.
-			if (!text && !hasPendingImages && this.ctx.session.isStreaming) {
+			if (!text && !hasPendingImages && !hasPendingVideos && this.ctx.session.isStreaming) {
 				if (this.ctx.session.queuedMessageCount > 0) {
 					const aborting = this.ctx.session.abort({ reason: USER_INTERRUPT_LABEL });
 					await aborting;
@@ -627,7 +631,7 @@ export class InputController {
 				return;
 			}
 
-			if (!text && !hasPendingImages) return;
+			if (!text && !hasPendingImages && !hasPendingVideos) return;
 
 			// Continue shortcuts: "." or "c" resume the agent with a hidden agent-authored
 			// developer directive (no visible user message) instead of an empty turn, so the
@@ -650,6 +654,10 @@ export class InputController {
 			let inputImages = this.ctx.editor.pendingImages.length > 0 ? [...this.ctx.editor.pendingImages] : undefined;
 			let inputImageLinks =
 				this.ctx.editor.pendingImageLinks.length > 0 ? [...this.ctx.editor.pendingImageLinks] : undefined;
+			const inputVideos = this.ctx.editor.pendingVideos?.length ? [...this.ctx.editor.pendingVideos] : undefined;
+			const inputVideoPaths = this.ctx.editor.pendingVideoPaths?.length
+				? [...this.ctx.editor.pendingVideoPaths]
+				: undefined;
 			let hasInputImages = (inputImages?.length ?? 0) > 0;
 
 			if (runner?.hasHandlers("input")) {
@@ -671,7 +679,7 @@ export class InputController {
 				hasInputImages = (inputImages?.length ?? 0) > 0;
 			}
 
-			if (!text && !hasInputImages) return;
+			if (!text && !hasInputImages && !inputVideos?.length) return;
 
 			const queueBody = parseQueueShorthand(text);
 			if (queueBody !== undefined) {
@@ -802,6 +810,9 @@ export class InputController {
 				const images = inputImages && inputImages.length > 0 ? [...inputImages] : undefined;
 				this.ctx.editor.pendingImages = [];
 				this.ctx.editor.pendingImageLinks = [];
+				const videos = inputVideos?.length ? [...inputVideos] : undefined;
+				this.ctx.editor.pendingVideos = [];
+				this.ctx.editor.pendingVideoPaths = [];
 				// Record the signature so the queued message's eventual delivery
 				// (a user-role `message_start` event) leaves any draft the user has
 				// typed since queuing intact. Same protection as #783, applied to
@@ -809,7 +820,7 @@ export class InputController {
 				try {
 					await this.ctx.withLocalSubmission(
 						text,
-						() => this.ctx.session.prompt(text, { streamingBehavior: "steer", images }),
+						() => this.ctx.session.prompt(text, { streamingBehavior: "steer", images, videos }),
 						{ imageCount: images?.length ?? 0 },
 					);
 				} catch (error) {
@@ -822,6 +833,10 @@ export class InputController {
 							? [...inputImageLinks]
 							: images.map(() => undefined);
 						this.ctx.editor.imageLinks = this.ctx.editor.pendingImageLinks;
+					}
+					if (videos && videos.length > 0) {
+						this.ctx.editor.pendingVideos = [...videos];
+						this.ctx.editor.pendingVideoPaths = inputVideoPaths ? [...inputVideoPaths] : [];
 					}
 					this.ctx.showError(error instanceof Error ? error.message : String(error));
 				}
@@ -838,8 +853,11 @@ export class InputController {
 				// Include any pending images from clipboard paste
 				this.ctx.editor.imageLinks = undefined;
 				const images = inputImages && inputImages.length > 0 ? [...inputImages] : undefined;
+				const videos = inputVideos?.length ? [...inputVideos] : undefined;
 				this.ctx.editor.pendingImages = [];
 				this.ctx.editor.pendingImageLinks = [];
+				this.ctx.editor.pendingVideos = [];
+				this.ctx.editor.pendingVideoPaths = [];
 
 				// Render user message immediately, then let session events catch up.
 				// Tag the submission as "steer": this is a normal Enter the controller
@@ -850,7 +868,9 @@ export class InputController {
 				const submission = this.ctx.startPendingSubmission({
 					text,
 					images,
+					videos,
 					imageLinks: inputImageLinks,
+					videoPaths: inputVideoPaths,
 					streamingBehavior: "steer",
 				});
 				// Start titling only after the optimistic row painted, so the local
@@ -870,11 +890,14 @@ export class InputController {
 				const images = inputImages && inputImages.length > 0 ? [...inputImages] : undefined;
 				this.ctx.editor.pendingImages = [];
 				this.ctx.editor.pendingImageLinks = [];
+				const videos = inputVideos?.length ? [...inputVideos] : undefined;
+				this.ctx.editor.pendingVideos = [];
+				this.ctx.editor.pendingVideoPaths = [];
 				this.#maybeStartTitleGeneration(text);
 				try {
 					await this.ctx.withLocalSubmission(
 						text,
-						() => this.ctx.session.prompt(text, { streamingBehavior: "steer", images }),
+						() => this.ctx.session.prompt(text, { streamingBehavior: "steer", images, videos }),
 						{
 							imageCount: images?.length ?? 0,
 						},
@@ -890,6 +913,10 @@ export class InputController {
 							? [...inputImageLinks]
 							: images.map(() => undefined);
 						this.ctx.editor.imageLinks = this.ctx.editor.pendingImageLinks;
+					}
+					if (videos && videos.length > 0) {
+						this.ctx.editor.pendingVideos = [...videos];
+						this.ctx.editor.pendingVideoPaths = inputVideoPaths ? [...inputVideoPaths] : [];
 					}
 					this.ctx.showError(error instanceof Error ? error.message : String(error));
 				}
@@ -1289,7 +1316,9 @@ export class InputController {
 		const images = this.ctx.editor.pendingImages.length > 0 ? [...this.ctx.editor.pendingImages] : undefined;
 		const imageLinks =
 			images && this.ctx.editor.pendingImageLinks.length > 0 ? [...this.ctx.editor.pendingImageLinks] : undefined;
-		if (!text && !images) return;
+		const videos = this.ctx.editor.pendingVideos?.length ? [...this.ctx.editor.pendingVideos] : undefined;
+		const videoPaths = this.ctx.editor.pendingVideoPaths?.length ? [...this.ctx.editor.pendingVideoPaths] : undefined;
+		if (!text && !images && !videos) return;
 
 		// Focused subagent session: follow-ups go to it; non-chat input is gated.
 		if (this.ctx.focusedAgentId) {
@@ -1341,6 +1370,10 @@ export class InputController {
 				this.ctx.editor.pendingImageLinks = imageLinks ? [...imageLinks] : images.map(() => undefined);
 				this.ctx.editor.imageLinks = this.ctx.editor.pendingImageLinks;
 			}
+			if (videos && videos.length > 0) {
+				this.ctx.editor.pendingVideos = [...videos];
+				this.ctx.editor.pendingVideoPaths = videoPaths ? [...videoPaths] : [];
+			}
 			this.ctx.showError(error instanceof Error ? error.message : String(error));
 		};
 
@@ -1349,7 +1382,7 @@ export class InputController {
 			try {
 				await this.ctx.withLocalSubmission(
 					text,
-					() => this.ctx.session.prompt(text, { streamingBehavior: "followUp", images }),
+					() => this.ctx.session.prompt(text, { streamingBehavior: "followUp", images, videos }),
 					{ imageCount: images?.length ?? 0 },
 				);
 			} catch (error) {
@@ -1363,7 +1396,7 @@ export class InputController {
 		// Not streaming — just submit normally
 		this.ctx.editor.clearDraft(text);
 		try {
-			await this.ctx.withLocalSubmission(text, () => this.ctx.session.prompt(text, { images }), {
+			await this.ctx.withLocalSubmission(text, () => this.ctx.session.prompt(text, { images, videos }), {
 				imageCount: images?.length ?? 0,
 			});
 		} catch (error) {
@@ -1528,6 +1561,7 @@ export class InputController {
 	}
 
 	async handleImagePathPaste(path: string): Promise<void> {
+		if (await this.#insertPendingVideo(path)) return;
 		try {
 			const image = await loadImageInput({
 				path,
@@ -1589,6 +1623,54 @@ export class InputController {
 		}
 	}
 
+	/** Attach a pasted local video path as a native inline attachment: renders the
+	 *  `[Video #N, name, size, mime, duration]` chip plus a poster-frame preview and
+	 *  queues the base64 video for native delivery. Returns false (so the caller
+	 *  falls through to plain-text paste) when the path is not a video or the active
+	 *  model does not support native video input. */
+	async #insertPendingVideo(videoPath: string): Promise<boolean> {
+		const ext = path.extname(videoPath).toLowerCase();
+		const mimeType = VIDEO_MIME_TYPES.get(ext);
+		if (!mimeType) return false;
+		// Recognized video on a model without native video input: paste the path as
+		// plain text and consume it here (no chip, no error, never the image loader).
+		if (!this.ctx.session.model?.input.includes("video")) {
+			this.ctx.editor.pasteText(videoPath);
+			this.ctx.ui.requestRender();
+			return true;
+		}
+		const absolutePath = path.resolve(resolveReadPath(videoPath, this.ctx.sessionManager.getCwd()));
+		const file = Bun.file(absolutePath);
+		if (file.size > MAX_INLINE_VIDEO_BYTES) {
+			this.ctx.showStatus(
+				`Video is too large for inline attachment (${MAX_INLINE_VIDEO_BYTES / 1024 / 1024} MB max)`,
+			);
+			return true;
+		}
+		const data = await file.bytes();
+		if (data.length === 0) {
+			this.ctx.showStatus("Pasted video is empty");
+			return true;
+		}
+		const video: VideoContent = { type: "video", mimeType, data: data.toBase64() };
+		const preview = await createVideoPreview(absolutePath);
+		this.ctx.editor.pendingVideos ??= [];
+		this.ctx.editor.pendingVideoPaths ??= [];
+		this.ctx.editor.pendingVideos.push(
+			preview.poster
+				? { ...video, preview: preview.poster, duration: preview.duration }
+				: { ...video, duration: preview.duration },
+		);
+		this.ctx.editor.pendingVideoPaths.push(absolutePath);
+		const videoNum = this.ctx.editor.pendingVideos.length;
+		const duration = preview.duration ? `, ${preview.duration}` : "";
+		this.ctx.editor.insertText(
+			`[Video #${videoNum}, ${path.basename(absolutePath)}, ${formatBytes(data.byteLength)}, ${mimeType}${duration}] `,
+		);
+		this.ctx.ui.requestRender();
+		return true;
+	}
+
 	async handleImagePaste(): Promise<boolean> {
 		try {
 			// When a modal paste-capable prompt (login/API-key Input) owns focus,
@@ -1628,7 +1710,7 @@ export class InputController {
 			const fileUrls = promptTarget ? [] : ((await this.clipboard.readMacFileUrls?.()) ?? []);
 			let attachedFromFileUrls = false;
 			for (const url of fileUrls) {
-				const candidate = extractImagePathFromText(url);
+				const candidate = extractMediaPathFromText(url);
 				if (!candidate) continue;
 				await this.handleImagePathPaste(candidate);
 				attachedFromFileUrls = true;
@@ -1650,9 +1732,9 @@ export class InputController {
 			// text. Covers terminals that paste the Finder file path as
 			// plain text rather than as a `public.file-url` (most macOS
 			// terminals do this for image clipboards).
-			const imagePath = promptTarget ? null : extractImagePathFromText(text);
-			if (imagePath) {
-				await this.handleImagePathPaste(imagePath);
+			const mediaPath = promptTarget ? null : extractMediaPathFromText(text);
+			if (mediaPath) {
+				await this.handleImagePathPaste(mediaPath);
 				return true;
 			}
 			// Route to the focused component when it accepts pastes (modal

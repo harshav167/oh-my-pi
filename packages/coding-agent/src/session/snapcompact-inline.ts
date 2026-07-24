@@ -15,7 +15,15 @@
  */
 
 import { countTokens } from "@oh-my-pi/pi-agent-core";
-import type { Context, ImageContent, Model, TextContent, ToolResultMessage, UserMessage } from "@oh-my-pi/pi-ai";
+import type {
+	Context,
+	ImageContent,
+	Model,
+	TextContent,
+	ToolResultMessage,
+	UserMediaContent,
+	UserMessage,
+} from "@oh-my-pi/pi-ai";
 import * as snapcompact from "@oh-my-pi/snapcompact";
 import contextFramesNote from "../prompts/system/snapcompact-context-frames-note.md" with { type: "text" };
 import contextStub from "../prompts/system/snapcompact-context-stub.md" with { type: "text" };
@@ -515,7 +523,7 @@ export class SnapcompactInlineTransformer {
 			}
 			const frames = cached.frames;
 			const original = messages[userIndex] as UserMessage;
-			const originalContent: (TextContent | ImageContent)[] =
+			const originalContent: (TextContent | UserMediaContent)[] =
 				typeof original.content === "string" ? [{ type: "text", text: original.content }] : original.content;
 			messages[userIndex] = {
 				...original,

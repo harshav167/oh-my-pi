@@ -20,6 +20,7 @@ import type {
 	Message,
 	MessageAttribution,
 	TextContent,
+	UserMediaContent,
 	UserMessage,
 } from "@oh-my-pi/pi-ai";
 import * as AIError from "@oh-my-pi/pi-ai/error";
@@ -628,7 +629,7 @@ function renderSteeringEnvelope(message: string): string {
 	return prompt.render(userInterjectionTemplate, { message });
 }
 
-function getArrayContentText(content: (TextContent | ImageContent)[]): string {
+function getArrayContentText(content: (TextContent | UserMediaContent)[]): string {
 	let firstText: string | undefined;
 	let textParts: string[] | undefined;
 	for (const part of content) {
@@ -645,14 +646,14 @@ function getArrayContentText(content: (TextContent | ImageContent)[]): string {
 	return textParts === undefined ? (firstText ?? "") : textParts.join("\n");
 }
 
-function getArrayContentImages(content: (TextContent | ImageContent)[]): ImageContent[] {
-	let images: ImageContent[] | undefined;
+function getArrayContentMedia(content: (TextContent | UserMediaContent)[]): UserMediaContent[] {
+	let media: UserMediaContent[] | undefined;
 	for (const part of content) {
-		if (part.type !== "image") continue;
-		if (images === undefined) images = [];
-		images.push(part);
+		if (part.type === "text") continue;
+		if (media === undefined) media = [];
+		media.push(part);
 	}
-	return images ?? [];
+	return media ?? [];
 }
 
 function wrapSteeringUserMessage(message: UserMessage): UserMessage {
@@ -663,8 +664,8 @@ function wrapSteeringUserMessage(message: UserMessage): UserMessage {
 
 	const text = getArrayContentText(message.content);
 	if (text.length === 0) return message;
-	const content: (TextContent | ImageContent)[] = [{ type: "text", text: renderSteeringEnvelope(text) }];
-	content.push(...getArrayContentImages(message.content));
+	const content: (TextContent | UserMediaContent)[] = [{ type: "text", text: renderSteeringEnvelope(text) }];
+	content.push(...getArrayContentMedia(message.content));
 	return { ...userMessageWithoutSteering(message), content };
 }
 
@@ -691,13 +692,13 @@ export function wrapSteeringForModel(messages: AgentMessage[]): AgentMessage[] {
 
 /** Result of filtering image blocks out of a `(TextContent | ImageContent)[]` array. */
 interface StripContentResult {
-	content: (TextContent | ImageContent)[];
+	content: (TextContent | UserMediaContent)[];
 	removed: number;
 }
 
-function stripImagesFromArrayContent(content: (TextContent | ImageContent)[]): StripContentResult {
+function stripImagesFromArrayContent(content: (TextContent | UserMediaContent)[]): StripContentResult {
 	let removed = 0;
-	const kept: (TextContent | ImageContent)[] = [];
+	const kept: (TextContent | UserMediaContent)[] = [];
 	for (const part of content) {
 		if (part.type === "image") {
 			removed++;
@@ -752,7 +753,7 @@ function stripImagesFromMessageContent(message: AgentMessage): number {
 			let removed = 0;
 			const { content, removed: contentRemoved } = stripImagesFromArrayContent(message.content);
 			if (contentRemoved > 0) {
-				message.content = content;
+				message.content = content as typeof message.content;
 				removed += contentRemoved;
 			}
 			const details = message.details as { images?: unknown } | null | undefined;
@@ -810,7 +811,7 @@ export function replaceLlmImagesWithText(messages: Message[], placeholder: strin
 		if (msg.role !== "user" && msg.role !== "developer" && msg.role !== "toolResult") continue;
 		const content = msg.content;
 		if (!Array.isArray(content) || !content.some(part => part.type === "image")) continue;
-		const replaced: (TextContent | ImageContent)[] = [];
+		const replaced: (TextContent | UserMediaContent)[] = [];
 		for (const part of content) {
 			if (part.type !== "image") {
 				replaced.push(part);

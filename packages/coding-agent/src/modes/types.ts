@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { CompactionOutcome } from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantMessage, ImageContent, Message, Usage, UsageReport } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage, ImageContent, Message, Usage, UsageReport, VideoContent } from "@oh-my-pi/pi-ai";
 import type { Component, Container, EditorTheme, Loader, Spacer, Text, TUI } from "@oh-my-pi/pi-tui";
 import type { CollabGuestLink } from "../collab/guest";
 import type { CollabHost } from "../collab/host";
@@ -51,7 +51,9 @@ export type CompactionQueuedMessage = {
 export type SubmittedUserInput = {
 	text: string;
 	images?: ImageContent[];
+	videos?: VideoContent[];
 	imageLinks?: (string | undefined)[];
+	videoPaths?: string[];
 	customType?: string;
 	/** Route through `session.prompt(text, { synthetic: true })` so the text lands
 	 *  as a hidden agent-authored `developer` message rather than a visible user
@@ -282,7 +284,9 @@ export interface InteractiveModeContext {
 	startPendingSubmission(input: {
 		text: string;
 		images?: ImageContent[];
+		videos?: VideoContent[];
 		imageLinks?: (string | undefined)[];
+		videoPaths?: string[];
 		customType?: string;
 		display?: boolean;
 		streamingBehavior?: "steer" | "followUp";

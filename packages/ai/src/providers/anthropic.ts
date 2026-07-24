@@ -45,6 +45,7 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 	Usage,
+	UserMediaContent,
 } from "../types";
 import { isRecord, normalizeSystemPrompts, normalizeToolCallId, resolveCacheRetention } from "../utils";
 import { createAbortSourceTracker } from "../utils/abort";
@@ -100,7 +101,7 @@ import {
 } from "./github-copilot-headers";
 import { getOpenAIPromptCacheKey } from "./openai-shared";
 import { transformMessages } from "./transform-messages";
-import { NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
+import { NON_VIDEO_PLACEHOLDER, NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
 
 export type AnthropicHeaderOptions = {
 	apiKey: string;
@@ -928,11 +929,21 @@ async function resizeAnthropicManyImageBlock(block: ImageContent): Promise<Image
 	}
 }
 
-async function resizeAnthropicManyImageContent(
+function resizeAnthropicManyImageContent(
 	content: (TextContent | ImageContent)[],
 	state: { resized: number },
 	limit: ResizeLimiter,
-): Promise<(TextContent | ImageContent)[]> {
+): Promise<(TextContent | ImageContent)[]>;
+function resizeAnthropicManyImageContent(
+	content: (TextContent | UserMediaContent)[],
+	state: { resized: number },
+	limit: ResizeLimiter,
+): Promise<(TextContent | UserMediaContent)[]>;
+async function resizeAnthropicManyImageContent(
+	content: (TextContent | UserMediaContent)[],
+	state: { resized: number },
+	limit: ResizeLimiter,
+): Promise<(TextContent | UserMediaContent)[]> {
 	let changed = false;
 	const next = await Promise.all(
 		content.map(async block => {
@@ -1011,7 +1022,7 @@ type AnthropicToolResultContent =
  * Convert content blocks to Anthropic API format
  */
 function convertContentBlocks(
-	content: (TextContent | ImageContent)[],
+	content: (TextContent | UserMediaContent)[],
 	supportsImages = true,
 ): AnthropicToolResultContent {
 	const blocks: Array<
@@ -1034,6 +1045,10 @@ function convertContentBlocks(
 			if (text.trim().length === 0) continue;
 			sawText = true;
 			blocks.push({ type: "text", text });
+			continue;
+		}
+		if (block.type === "video") {
+			blocks.push({ type: "text", text: NON_VIDEO_PLACEHOLDER });
 			continue;
 		}
 

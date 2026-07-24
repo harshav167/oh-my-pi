@@ -34,7 +34,17 @@ export function streamKimi(
 	context: Context,
 	options?: KimiOptions,
 ): AssistantMessageEventStream {
-	return streamOpenAIAnthropicShim(model, context, options, {
+	const hasVideo = context.messages.some(
+		message =>
+			(message.role === "user" || message.role === "developer") &&
+			Array.isArray(message.content) &&
+			message.content.some(part => part.type === "video"),
+	);
+	const resolvedOptions =
+		// Video is delivered via `video_url`, which only the OpenAI-format serializer emits.
+		// Force it whenever a video is present so the default (often anthropic) can't drop it.
+		hasVideo ? { ...options, format: "openai" as const } : options;
+	return streamOpenAIAnthropicShim(model, context, resolvedOptions, {
 		anthropicBaseUrl: model.baseUrl.replace(/\/v1\/?$/, ""),
 		defaultFormat: model.compat.kimiApiFormat ?? "anthropic",
 		anthropicThinkingMode: model.compat.thinkingFormat === "kimi" ? "anthropic-adaptive" : undefined,

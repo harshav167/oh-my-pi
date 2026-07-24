@@ -720,6 +720,21 @@ export interface ImageContent {
 	detail?: "auto" | "low" | "high" | "original";
 }
 
+export interface VideoContent {
+	type: "video";
+	/** base64 encoded video data (inline delivery only). */
+	data: string;
+	mimeType: string; // e.g., "video/mp4", "video/webm"
+	duration?: string;
+	preview?: {
+		type: "image";
+		data: string;
+		mimeType: string;
+	};
+}
+
+export type UserMediaContent = ImageContent | VideoContent;
+
 export type ComputerAction =
 	| {
 			type: "click";
@@ -802,7 +817,7 @@ export type ProviderPayload = OpenAIResponsesHistoryPayload;
 
 export interface UserMessage {
 	role: "user";
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | UserMediaContent)[];
 	/** True if the message was injected by the system (e.g., auto-continue). */
 	synthetic?: boolean;
 	/** True when injected mid-turn as a steer; consumed by the agent's pre-LLM transform to wrap it for emphasis. Never rendered. */
@@ -816,7 +831,7 @@ export interface UserMessage {
 
 export interface DeveloperMessage {
 	role: "developer";
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | UserMediaContent)[];
 	/** Who initiated this message for billing/attribution semantics. */
 	attribution?: MessageAttribution;
 	/** Provider-specific opaque payload used to reconstruct transport-native history. */

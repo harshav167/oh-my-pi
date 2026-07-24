@@ -20,6 +20,7 @@ import { buildModelReferenceIndex, resolveModelReference } from "../src/identity
 import { resolveModelThinking } from "../src/model-thinking";
 import {
 	ALIBABA_TOKEN_PLAN_STATIC_MODELS,
+	isKimiVideoModelId,
 	resolveWaferServerlessThinkingFormat,
 } from "../src/provider-models/openai-compat";
 import type { Api, Model, ModelSpec } from "../src/types";
@@ -233,6 +234,16 @@ function applyGeneratedModelPolicy(model: ModelSpec<Api>): void {
 
 	if (model.provider === "ollama-cloud") {
 		model.omitMaxOutputTokens = true;
+	}
+
+	// Kimi K3 and related Kimi video families accept native video input on the
+	// kimi-code/moonshot native APIs. Pin it at generation time so the bundled
+	// catalog (offline/cached/default startup) advertises video without relying
+	// on a live discovery pass or a user config override.
+	if ((model.provider === "kimi-code" || model.provider === "moonshot") && isKimiVideoModelId(model.id)) {
+		if (!model.input.includes("video")) {
+			model.input = model.input.includes("image") ? ["text", "image", "video"] : ["text", "video"];
+		}
 	}
 
 	// GLM Coding Plan: GLM-5.2 is the selectable 1M served id; pin it so

@@ -12,7 +12,7 @@ import {
 	ThinkingLevel,
 } from "@oh-my-pi/pi-agent-core";
 import type { CompactionOutcome } from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantMessage, ImageContent, Message, Model, Usage, UsageReport } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage, ImageContent, Message, Model, Usage, UsageReport, VideoContent } from "@oh-my-pi/pi-ai";
 import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
 import type {
 	AutocompleteProvider,
@@ -1550,7 +1550,9 @@ export class InteractiveMode implements InteractiveModeContext {
 	startPendingSubmission(input: {
 		text: string;
 		images?: ImageContent[];
+		videos?: VideoContent[];
 		imageLinks?: (string | undefined)[];
+		videoPaths?: string[];
 		customType?: string;
 		display?: boolean;
 		streamingBehavior?: "steer" | "followUp";
@@ -1558,7 +1560,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		const submission: SubmittedUserInput = {
 			text: input.text,
 			images: input.images,
+			videos: input.videos,
 			imageLinks: input.imageLinks,
+			videoPaths: input.videoPaths,
 			customType: input.customType,
 			display: input.display,
 			streamingBehavior: input.streamingBehavior,
@@ -1575,7 +1579,11 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.addMessageToChat(
 					{
 						role: "user",
-						content: [{ type: "text", text: submission.text }, ...(submission.images ?? [])],
+						content: [
+							{ type: "text", text: submission.text },
+							...(submission.images ?? []),
+							...(submission.videos ?? []),
+						],
 						attribution: "user",
 						timestamp: Date.now(),
 					},
@@ -1858,7 +1866,11 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.addMessageToChat(
 				{
 					role: "user",
-					content: [{ type: "text", text: submission.text }, ...(submission.images ?? [])],
+					content: [
+						{ type: "text", text: submission.text },
+						...(submission.images ?? []),
+						...(submission.videos ?? []),
+					],
 					attribution: "user",
 					timestamp: Date.now(),
 				},

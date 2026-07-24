@@ -64,6 +64,9 @@
 ### Fixed
 
 - Disabled the first-event watchdog for local OpenAI-compatible backends while retaining the 300-second inter-event watchdog, so long llama.cpp prompt prefill is not canceled and retried ([#6524](https://github.com/can1357/oh-my-pi/issues/6524)).
+### Added
+
+- Added native video input capability for Kimi K3 and related Kimi video families, centralized in `isKimiVideoModelId` (families: `k3`/`kimi-k3`, `kimi-k2.6`, `kimi-k2.7-code`). The `kimi-code`/`moonshot` discovery resolvers, the bundled generator policy (`applyGeneratedModelPolicy`), and the dynamic-model merge all advertise/preserve `input: ["text", "image", "video"]` so video works on default/offline startup without a config override. The model `input` type and config schema now accept `"video"`.
 
 ## [17.1.1] - 2026-07-24
 
