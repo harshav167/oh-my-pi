@@ -1,7 +1,8 @@
-//! N-API bindings for microphone capture and speaker playback.
+//! N-API bindings for microphone capture, speaker playback, and device
+//! discovery.
 //!
-//! The engine — device discovery, format conversion, mixing, drain semantics —
-//! lives in `pi_voice::audio`; these classes adapt its mono `f32` contract to
+//! The engine — device enumeration, format conversion, mixing, drain semantics
+//! — lives in `pi_voice::audio`; these classes adapt its mono `f32` contract to
 //! TypeScript callbacks and `Float32Array` buffers.
 
 use std::sync::Arc;
@@ -12,12 +13,42 @@ use napi::{
 };
 use napi_derive::napi;
 use parking_lot::Mutex;
-use pi_voice::audio::{CaptureStream, PlaybackState, PlaybackStream};
+use pi_voice::audio::{
+	CaptureStream,
+	PLAYBACK_MAX_QUEUE_SECONDS,
+	PlaybackState,
+	PlaybackStream,
+	list_audio_devices as engine_list_audio_devices,
+};
 
 type CaptureCallback = ThreadsafeFunction<Float32Array, UnknownReturnValue>;
 
-/// Default-microphone capture converted to mono `f32` at the requested sample
-/// rate.
+/// One selectable native audio endpoint.
+#[napi(object)]
+pub struct AudioDeviceInfo {
+	pub id:         String,
+	pub name:       String,
+	/// `"input"` or `"output"`.
+	pub kind:       String,
+	pub is_default: bool,
+}
+
+/// Enumerate selectable input and output devices.
+#[napi]
+pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>> {
+	let devices = engine_list_audio_devices().map_err(napi::Error::from_reason)?;
+	Ok(devices
+		.into_iter()
+		.map(|device| AudioDeviceInfo {
+			id:         device.id,
+			name:       device.name,
+			kind:       device.kind,
+			is_default: device.is_default,
+		})
+		.collect())
+}
+
+/// Microphone capture converted to mono `f32` at the requested sample rate.
 #[napi]
 pub struct AudioCapture {
 	stream: Mutex<Option<CaptureStream>>,
@@ -25,17 +56,24 @@ pub struct AudioCapture {
 
 #[napi]
 impl AudioCapture {
-	/// Open the default microphone and deliver low-latency mono PCM chunks.
+	/// Open the selected microphone and deliver low-latency mono PCM chunks.
 	#[napi(constructor)]
 	pub fn new(
 		sample_rate: u32,
 		#[napi(ts_arg_type = "(error: Error | null, samples: Float32Array) => void")]
 		on_audio: CaptureCallback,
+		input_device_id: Option<String>,
 	) -> Result<Self> {
-		let stream = CaptureStream::start(sample_rate, move |samples| {
-			on_audio
-				.call(Ok(Float32Array::new(samples.to_vec())), ThreadsafeFunctionCallMode::NonBlocking);
-		})
+		let stream = CaptureStream::start(
+			sample_rate,
+			input_device_id.as_deref().unwrap_or_default(),
+			move |samples| {
+				on_audio.call(
+					Ok(Float32Array::new(samples.to_vec())),
+					ThreadsafeFunctionCallMode::NonBlocking,
+				);
+			},
+		)
 		.map_err(napi::Error::from_reason)?;
 		Ok(Self { stream: Mutex::new(Some(stream)) })
 	}
@@ -61,9 +99,14 @@ pub struct AudioPlayback {
 #[napi]
 impl AudioPlayback {
 	/// Open the default speaker at the requested logical sample rate.
+	///
+	/// Synthesis outruns realtime, so the queue holds a whole long utterance;
+	/// the cap exists only so a runaway producer cannot exhaust memory.
 	#[napi(constructor)]
 	pub fn new(sample_rate: u32) -> Result<Self> {
-		let stream = PlaybackStream::start(sample_rate).map_err(napi::Error::from_reason)?;
+		let capacity = (sample_rate as usize).saturating_mul(PLAYBACK_MAX_QUEUE_SECONDS);
+		let stream = PlaybackStream::start(sample_rate, "", capacity, None)
+			.map_err(napi::Error::from_reason)?;
 		let state = stream.state();
 		Ok(Self { stream: Mutex::new(Some(stream)), state })
 	}
@@ -120,5 +163,13 @@ impl AudioPlayback {
 			stream.stop().map_err(napi::Error::from_reason)?;
 		}
 		Ok(())
+	}
+}
+
+impl Drop for AudioPlayback {
+	fn drop(&mut self) {
+		if let Some(mut stream) = self.stream.get_mut().take() {
+			let _ = stream.stop();
+		}
 	}
 }

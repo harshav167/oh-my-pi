@@ -30,6 +30,10 @@ function createContext(): ContextHarness {
 		settings: Settings.isolated({ "live.voice": "vale" }),
 		keybindings: { getKeys: vi.fn(() => ["ctrl+l"]) },
 		session: {},
+		// `#buildLiveHost` reads these two eagerly when it narrows the session into
+		// the host port; everything else it needs is behind a lazy closure that a
+		// delegation would have to trigger.
+		session: { modelRegistry: { authStorage: {} }, sessionId: "test-session" },
 		extractAssistantText: vi.fn(() => ""),
 		editor,
 		editorContainer: {

@@ -61,7 +61,9 @@ export const isoProbe = nativeBindings.isoProbe;
 export const isoResolve = nativeBindings.isoResolve;
 export const isoStart = nativeBindings.isoStart;
 export const isoStop = nativeBindings.isoStop;
+export const listAudioDevices = nativeBindings.listAudioDevices;
 export const listWorkspace = nativeBindings.listWorkspace;
+export const liveAudioProcessingAvailable = nativeBindings.liveAudioProcessingAvailable;
 export const matchesKey = nativeBindings.matchesKey;
 export const matchesKittySequence = nativeBindings.matchesKittySequence;
 export const matchesLegacySequence = nativeBindings.matchesLegacySequence;
@@ -129,6 +131,23 @@ export const KeyEventType = {
 	Press: 1,
 	Repeat: 2,
 	Release: 3,
+};
+export const LiveAgcMode = {
+	Off: "off",
+	AdaptiveDigital: "adaptiveDigital",
+	FixedDigital: "fixedDigital",
+};
+export const LiveEchoCancellationMode = {
+	Off: "off",
+	Full: "full",
+	Mobile: "mobile",
+};
+export const LiveNoiseSuppressionLevel = {
+	Off: "off",
+	Low: "low",
+	Moderate: "moderate",
+	High: "high",
+	VeryHigh: "veryHigh",
 };
 export const MacOSAppearance = {
 	Dark: "dark",
