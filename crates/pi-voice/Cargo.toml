@@ -15,10 +15,13 @@ audiopus_sys.workspace = true
 bytes.workspace = true
 flume.workspace = true
 maudio.workspace = true
+maudio-sys.workspace = true
 opus.workspace = true
 parking_lot.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 webrtc.workspace = true
+webrtc-audio-processing.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Regenerate miniaudio FFI bindings from the compiled headers on macOS only.
