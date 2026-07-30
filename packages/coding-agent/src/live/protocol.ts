@@ -1,3 +1,5 @@
+import { chunkByUtf8Bytes } from "@oh-my-pi/pi-utils";
+
 /** Frameless Bidi model used by Codex Desktop live calls. */
 export const LIVE_MODEL: "gpt-live-1-codex" = "gpt-live-1-codex";
 
@@ -10,12 +12,24 @@ export type LiveContextChannel = "speakable" | "commentary";
 /** Text content item accepted by Frameless Bidi context appends. */
 export type LiveInputTextContent = { type: "input_text"; text: string };
 
+export type LiveInitialItem = {
+	role: "user" | "developer" | "assistant";
+	text: string;
+};
+
+type LiveInitialWireItem = {
+	type: "message";
+	role: LiveInitialItem["role"];
+	content: Array<{ type: "input_text" | "output_text"; text: string }>;
+};
+
 /** Session object posted alongside the SDP when opening a live call. */
 export type LiveSessionPayload = {
-	model: typeof LIVE_MODEL;
+	model: string;
 	instructions: string;
 	audio: { output: { voice: string } };
 	delegation: { type: "client" };
+	initial_items?: LiveInitialWireItem[];
 };
 
 /** Messages sent by the client over the Frameless Bidi data channel. */
@@ -52,6 +66,8 @@ export type LiveServerEvent =
 			};
 	  }
 	| { type: "error"; message: string }
+	/** Nonterminal native media diagnostic; logged, never fatal. */
+	| { type: "live.diagnostic"; message: string }
 	| { type: "unknown"; wireType: string };
 
 type UnknownRecord = Record<string, unknown>;
@@ -155,6 +171,8 @@ export function parseLiveServerEvent(payload: unknown): LiveServerEvent | null {
 			return parseTurnDoneEvent(parsed);
 		case "delegation.created":
 			return parseDelegationCreatedEvent(parsed);
+		case "live.diagnostic":
+			return typeof parsed.message === "string" ? { type: "live.diagnostic", message: parsed.message } : null;
 		case "error":
 			return parseErrorEvent(parsed);
 		default:
@@ -163,12 +181,23 @@ export function parseLiveServerEvent(payload: unknown): LiveServerEvent | null {
 }
 
 /** Build the session object posted in the multipart WebRTC call request. */
-export function buildLiveSessionPayload(instructions: string, voice: string): LiveSessionPayload {
+export function buildLiveSessionPayload(options: {
+	readonly instructions: string;
+	readonly model: string;
+	readonly voice: string;
+	readonly initialItems: readonly LiveInitialItem[];
+}): LiveSessionPayload {
+	const initialItems: LiveInitialWireItem[] = options.initialItems.map(item => ({
+		type: "message",
+		role: item.role,
+		content: [{ type: item.role === "assistant" ? "output_text" : "input_text", text: item.text }],
+	}));
 	return {
-		model: LIVE_MODEL,
-		instructions,
-		audio: { output: { voice } },
+		model: options.model,
+		instructions: options.instructions,
+		audio: { output: { voice: options.voice } },
 		delegation: { type: "client" },
+		...(initialItems.length === 0 ? {} : { initial_items: initialItems }),
 	};
 }
 
@@ -200,34 +229,13 @@ export function buildSessionClose(): LiveClientMessage {
 	return { type: "session.close" };
 }
 
-function utf8ByteLength(codePoint: number): number {
-	if (codePoint <= 0x7f) return 1;
-	if (codePoint <= 0x7ff) return 2;
-	if (codePoint <= 0xffff) return 3;
-	return 4;
-}
-
-/** Split context into character-safe chunks of at most 500 UTF-8 bytes. */
+/**
+ * Split context into character-safe chunks of at most 500 UTF-8 bytes.
+ *
+ * Hard cuts, not newline-preferred: this is a protocol field with no escape
+ * sequences, so packing tighter is strictly better. Empty input still yields one
+ * empty chunk because the wire expects at least one append frame.
+ */
 export function chunkLiveContext(text: string): string[] {
-	if (text.length === 0) return [""];
-
-	const chunks: string[] = [];
-	let chunkStart = 0;
-	let chunkBytes = 0;
-	let index = 0;
-	while (index < text.length) {
-		const codePoint = text.codePointAt(index);
-		if (codePoint === undefined) break;
-		const characterLength = codePoint > 0xffff ? 2 : 1;
-		const characterBytes = utf8ByteLength(codePoint);
-		if (chunkBytes + characterBytes > CONTEXT_CHUNK_BYTES) {
-			chunks.push(text.slice(chunkStart, index));
-			chunkStart = index;
-			chunkBytes = 0;
-		}
-		chunkBytes += characterBytes;
-		index += characterLength;
-	}
-	chunks.push(text.slice(chunkStart));
-	return chunks;
+	return chunkByUtf8Bytes(text, CONTEXT_CHUNK_BYTES, { emptyResult: [""] });
 }

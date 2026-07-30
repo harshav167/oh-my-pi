@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { SETTING_TABS } from "@oh-my-pi/pi-coding-agent/config/settings-schema";
 import { loadHindsightConfig } from "@oh-my-pi/pi-coding-agent/hindsight/config";
 import { SettingsSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/settings-selector";
 import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
@@ -56,9 +57,15 @@ function createSelector(onCancel: () => void = () => {}): SettingsSelectorCompon
 	);
 }
 
-/** Switch the selector to the memory tab. SETTING_TABS puts memory at index 4 (after appearance/model/interaction/context). */
+/**
+ * Switch the selector to the memory tab.
+ *
+ * Derived from `SETTING_TABS` rather than a hard-coded arrow count so that
+ * inserting a tab ahead of memory does not silently retarget these tests.
+ */
 function focusMemoryTab(comp: SettingsSelectorComponent): void {
-	for (let i = 0; i < 4; i++) {
+	const steps = SETTING_TABS.indexOf("memory");
+	for (let i = 0; i < steps; i++) {
 		comp.handleInput("\x1b[C");
 	}
 }

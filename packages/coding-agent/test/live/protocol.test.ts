@@ -95,13 +95,32 @@ describe("Frameless Bidi server events", () => {
 });
 
 describe("Frameless Bidi client payloads", () => {
-	test("builds the exact live call session JSON", () => {
-		const payload = buildLiveSessionPayload("Be concise.", "marin");
+	test("builds the exact live call session JSON with initial items", () => {
+		const payload = buildLiveSessionPayload({
+			instructions: "Be concise.",
+			model: "gpt-live-1-codex",
+			voice: "sol",
+			initialItems: [
+				{ role: "developer", text: "Prior context" },
+				{ role: "assistant", text: "Earlier answer" },
+			],
+		});
 
 		expect(LIVE_MODEL).toBe("gpt-live-1-codex");
 		expect(JSON.stringify(payload)).toBe(
-			'{"model":"gpt-live-1-codex","instructions":"Be concise.","audio":{"output":{"voice":"marin"}},"delegation":{"type":"client"}}',
+			'{"model":"gpt-live-1-codex","instructions":"Be concise.","audio":{"output":{"voice":"sol"}},"delegation":{"type":"client"},"initial_items":[{"type":"message","role":"developer","content":[{"type":"input_text","text":"Prior context"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Earlier answer"}]}]}',
 		);
+	});
+
+	test("omits initial items when history is empty", () => {
+		expect(
+			buildLiveSessionPayload({
+				instructions: "Wait.",
+				model: "gpt-live-1-codex",
+				voice: "sol",
+				initialItems: [],
+			}),
+		).not.toHaveProperty("initial_items");
 	});
 
 	test("builds the exact delegation context JSON", () => {

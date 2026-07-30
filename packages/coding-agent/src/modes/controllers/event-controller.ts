@@ -538,6 +538,15 @@ export class EventController {
 			this.ctx.addMessageToChat(event.message);
 			this.ctx.ui.requestRender();
 		} else if (event.message.role === "assistant") {
+			// A `/live` delegation presents this turn's prose itself: the voice model
+			// speaks it and the handoff emits one durable screen artifact, so an
+			// ordinary streaming assistant block here would be the same reply again.
+			// Only the prose is owned — the tool timeline below stays visible,
+			// because watching the delegated work is the point of having it on
+			// screen. Every downstream assistant handler keys off
+			// `ctx.streamingComponent`, so leaving it unset suppresses the whole text
+			// path rather than half of it.
+			if (this.ctx.turnPresentationOwned?.()) return;
 			this.#lastVisibleBlockCount = 0;
 			this.ctx.streamingComponent = createAssistantMessageComponent(this.ctx);
 			this.ctx.streamingMessage = event.message;

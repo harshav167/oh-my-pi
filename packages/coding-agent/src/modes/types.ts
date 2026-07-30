@@ -328,6 +328,32 @@ export interface InteractiveModeContext {
 	getUserMessageText(message: Message): string;
 	findLastAssistantMessage(): AssistantMessage | undefined;
 	extractAssistantText(message: AssistantMessage): string;
+	/**
+	 * Whether some feature currently owns the streaming turn's presentation.
+	 *
+	 * A feature that renders a turn on its own surface — `/live` voice today, any
+	 * future owner — installs this for as long as it holds a turn, and the event
+	 * controller then suppresses that turn's assistant prose and reasoning while it
+	 * is true. One generic ownership check, not a per-feature branch.
+	 *
+	 * Prose only: the tool timeline keeps rendering. A delegated turn's tool boxes
+	 * are progress the user is meant to watch (and to still find in scrollback
+	 * afterwards), so suppressing them left the surface showing nothing but a
+	 * working indicator. Only the reply text is duplicated by an owner that
+	 * presents it some other way.
+	 *
+	 * A boolean is sufficient because `AgentSession` serializes turns: a
+	 * turn-starting send that arrives while one is streaming is refused when it
+	 * carries per-turn overrides and otherwise becomes a steer or a queued batch
+	 * (`sendCustomMessage` gates on `isStreaming`). So no unrelated turn streams
+	 * beside an owned one — an ordinary terminal or extension turn runs before or
+	 * after it, when this predicate is false, and renders normally. Steered text
+	 * merges into the owned turn and is owned with it, which is correct.
+	 *
+	 * An owner MUST render the turn somewhere itself and MUST clear this on
+	 * teardown; leaving it installed silences the transcript.
+	 */
+	turnPresentationOwned?: () => boolean;
 	/** Refresh the running-subagents status badge from the active local or collab registry. */
 	syncRunningSubagentBadge(): void;
 	updateEditorBorderColor(): void;

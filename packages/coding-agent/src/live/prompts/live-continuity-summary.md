@@ -1,0 +1,2 @@
+Session compaction summary:
+{{summary}}

@@ -25,6 +25,7 @@ import {
 	type LateDiagnosticsFile,
 	LateDiagnosticsMessageComponent,
 } from "../../modes/components/late-diagnostics-message";
+import { createLiveWorkerArtifact, liveVoiceMessage } from "../../modes/components/live-worker-artifact";
 import {
 	groupedReadUsageCallIds,
 	ReadToolGroupComponent,
@@ -42,6 +43,11 @@ import type { CompactionQueuedMessage, InteractiveModeContext, RenderSessionCont
 import {
 	BACKGROUND_TAN_DISPATCH_MESSAGE_TYPE,
 	type CustomMessage,
+	LIVE_DELEGATION_MESSAGE_TYPE,
+	LIVE_TRANSCRIPT_MESSAGE_TYPE,
+	LIVE_WORKER_MESSAGE_TYPE,
+	type LiveTranscriptDetails,
+	type LiveWorkerDetails,
 	LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE,
 	SKILL_PROMPT_MESSAGE_TYPE,
 	type SkillPromptDetails,
@@ -95,6 +101,22 @@ function imageLinksForMessage(
 			content.type === "image" && typeof content.data === "string" && typeof content.mimeType === "string",
 	);
 	return materializeImageReferenceLinksSync(images, putBlobSync);
+}
+
+/**
+ * Identity of the delegated turn a `live-worker` row closes.
+ *
+ * Walks back from the boundary to the last assistant record inside the range so
+ * the projected artifact is credited to the model that actually produced it,
+ * not to the voice model that requested it.
+ */
+function lastOwnedAssistant(messages: readonly AgentMessage[], boundary: number): AssistantMessage | undefined {
+	for (let i = boundary - 1; i >= 0; i -= 1) {
+		const message = messages[i];
+		if (message?.role === "assistant") return message;
+		if (message?.role === "custom" && message.customType === LIVE_DELEGATION_MESSAGE_TYPE) return undefined;
+	}
+	return undefined;
 }
 
 export class UiHelpers {
@@ -411,14 +433,128 @@ export class UiHelpers {
 		};
 		const messages = sessionContext.messages;
 		const count = messages.length;
+		// Presentation ownership for `/live` delegations, replayed from the durable
+		// boundary rows: `live-delegation` opens a range and `live-worker` closes it
+		// carrying the screen body. Only CLOSED ranges suppress anything — the rows
+		// are best-effort, so a crash mid-delegation must degrade to replaying that
+		// one raw turn, never to hiding the rest of the session.
+		//
+		// Inside a closed range only the delegated turn's PROSE is suppressed. Its
+		// assistant records still contribute their tool timeline, and their
+		// `toolResult` records still settle those boxes, so a resumed session shows
+		// the same tool activity the call showed live instead of a bare report. A
+		// user, extension, or terminal message that landed during a long delegation
+		// renders normally. The records themselves stay in the log and in provider
+		// context; this only decides what is drawn.
+		const liveOwned = new Set<number>();
+		const liveClosed = new Set<number>();
+		/**
+		 * Voice rows inside a range closed by a row from BEFORE `withheld` existed.
+		 *
+		 * Such a row only knows the full body, so that range replays the way it used
+		 * to — one artifact carrying everything. Replaying its spoken turns on top
+		 * would put the same answer on screen twice, which is the defect the newer
+		 * rows avoid by recording what the call actually drew.
+		 */
+		const liveLegacyVoice = new Set<number>();
+		let openedAt: number | undefined;
 		for (let i = 0; i < count; i++) {
 			const message = messages[i]!;
+			if (message.role !== "custom") continue;
+			if (message.customType === LIVE_DELEGATION_MESSAGE_TYPE) {
+				openedAt = i;
+				continue;
+			}
+			if (message.customType !== LIVE_WORKER_MESSAGE_TYPE || openedAt === undefined) continue;
+			const legacy = (message.details as LiveWorkerDetails | undefined)?.withheld === undefined;
+			for (let owned = openedAt; owned < i; owned += 1) {
+				const inner = messages[owned]!;
+				// Assistant records only: a `toolResult` carries no prose, and
+				// suppressing it would leave its tool box hanging unsettled forever.
+				if (inner.role === "assistant") liveOwned.add(owned);
+				if (legacy && inner.role === "custom" && inner.customType === LIVE_TRANSCRIPT_MESSAGE_TYPE) {
+					liveLegacyVoice.add(owned);
+				}
+			}
+			// Only a close that actually paired with an opener projects: an orphan
+			// row has no range behind it, so crediting it to whatever assistant
+			// happens to precede it would attribute a report to an unrelated turn.
+			liveClosed.add(i);
+			openedAt = undefined;
+		}
+		for (let i = 0; i < count; i++) {
+			const message = messages[i]!;
+			// Owned: this assistant record's prose is presented by the delegation's
+			// artifact, so only its tool calls are drawn from here.
+			const owned = liveOwned.has(i);
+			if (message.role === "custom" && message.customType === LIVE_TRANSCRIPT_MESSAGE_TYPE) {
+				// Already carried by a legacy range's full-body artifact below.
+				if (liveLegacyVoice.has(i)) continue;
+				// The voice half of the conversation. Replayed because a resumed session
+				// has no visualizer and no audio: without these rows a call's turns are
+				// invisible whenever the voice delivered the whole answer, which is the
+				// common case.
+				//
+				// One deliberate difference from the call: the user's own speech went to
+				// the visualizer's transient line, never into the chat. Here it becomes a
+				// user row, because there is no visualizer to put it in and a transcript
+				// showing only the agent's side of a conversation is not a transcript.
+				const turn = message.details as LiveTranscriptDetails | undefined;
+				const spoken = turn?.text?.trim();
+				if (!spoken) continue;
+				flushPendingUsage();
+				if (turn?.role === "user") {
+					this.ctx.chatContainer.addChild(new UserMessageComponent(spoken, false, []));
+					continue;
+				}
+				const voice = createAssistantMessageComponent(this.ctx);
+				// Same accent the live surface gives a spoken turn, so the two halves of
+				// a resumed transcript stay visually distinct.
+				voice.setTextColorTransform(text => theme.fg("borderAccent", text));
+				voice.updateContent(liveVoiceMessage(spoken, turn?.model, message.timestamp ?? Date.now()));
+				voice.markTranscriptBlockFinalized();
+				this.ctx.chatContainer.addChild(voice);
+				continue;
+			}
+			if (message.role === "custom" && message.customType === LIVE_WORKER_MESSAGE_TYPE) {
+				if (!liveClosed.has(i)) continue;
+				const details = message.details as LiveWorkerDetails | undefined;
+				// What the CALL drew, not the whole body: `undefined` predates the field
+				// so the full body is the best available replay, while an empty string
+				// means the voice delivered everything and the call drew nothing — so
+				// nothing is drawn here either, and the voice rows above carry the turn.
+				const drawn = (details?.withheld ?? details?.screen)?.trim();
+				const source = lastOwnedAssistant(messages, i);
+				// No owned assistant record means nothing ran under this delegation,
+				// so there is no identity to credit and nothing worth drawing.
+				if (!drawn || !source) continue;
+				flushPendingUsage();
+				// Same renderer the live call used, credited to the model that
+				// actually produced the body rather than to the voice model.
+				this.ctx.chatContainer.addChild(
+					createLiveWorkerArtifact(this.ctx, {
+						text: drawn,
+						api: source.api,
+						provider: source.provider,
+						model: source.model,
+						timestamp: message.timestamp,
+					}),
+				);
+				continue;
+			}
 			if (message.role !== "toolResult") flushPendingUsage();
 			// Assistant messages need special handling for tool calls
 			if (message.role === "assistant") {
 				const timeline = splitAssistantMessageToolTimeline(message);
-				this.ctx.addMessageToChat(message, { reuseSettledComponent: options.reuseSettledComponents });
-				const lastChild = this.ctx.chatContainer.children[this.ctx.chatContainer.children.length - 1];
+				if (!owned) {
+					this.ctx.addMessageToChat(message, { reuseSettledComponent: options.reuseSettledComponents });
+				}
+				// Deliberately not read for an owned record: the last child is then some
+				// earlier block (a tool box, or a previous delegation's artifact), and
+				// crediting this turn's usage or cache marker to it would be a lie.
+				const lastChild = owned
+					? undefined
+					: this.ctx.chatContainer.children[this.ctx.chatContainer.children.length - 1];
 				const assistantComponent = lastChild instanceof AssistantMessageComponent ? lastChild : undefined;
 				if (assistantComponent) {
 					const usage = message.usage;
@@ -444,7 +580,8 @@ export class UiHelpers {
 				const hasErrorStop = errorPresentation.kind === "full";
 				const errorMessage = hasErrorStop ? errorPresentation.text : null;
 				const appendAssistantSegment = (segment: AssistantMessage | undefined) => {
-					if (!segment || !assistantHasVisibleContent(segment)) return;
+					// Owned inter-tool text is prose too, and the artifact already has it.
+					if (owned || !segment || !assistantHasVisibleContent(segment)) return;
 					const component = createAssistantMessageComponent(this.ctx, segment);
 					this.ctx.chatContainer.addChild(component);
 				};
@@ -567,8 +704,12 @@ export class UiHelpers {
 						),
 					);
 				}
+				// An owned record's usage row is deliberately dropped: the artifact
+				// renders with zeroed usage, and the live call showed no row either
+				// (the whole assistant path is suppressed while a delegation owns it),
+				// so drawing one only on reload would invent a difference.
 				pendingUsage =
-					this.ctx.settings.get("display.showTokenUsage") && assistantUsageIsBilled(message.usage)
+					!owned && this.ctx.settings.get("display.showTokenUsage") && assistantUsageIsBilled(message.usage)
 						? message.usage
 						: undefined;
 				pendingUsageDuration = message.duration;

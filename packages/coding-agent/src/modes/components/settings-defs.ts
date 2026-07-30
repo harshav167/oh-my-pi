@@ -9,6 +9,7 @@
  * (or `options: "runtime"` for runtime-injected lists like themes).
  */
 
+import { liveAudioProcessingAvailable } from "@oh-my-pi/pi-natives";
 import { TERMINAL } from "@oh-my-pi/pi-tui";
 import { Settings } from "../../config/settings";
 import {
@@ -144,6 +145,7 @@ const CONDITIONS: Record<string, () => boolean> = {
 			return false;
 		}
 	},
+	liveAudioProcessingAvailable: () => liveAudioProcessingAvailable(),
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
