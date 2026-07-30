@@ -18,7 +18,8 @@ import { once, prompt, sanitizeText } from "@oh-my-pi/pi-utils";
 import { type Type, type } from "arktype";
 import computerDescription from "../prompts/tools/computer.md" with { type: "text" };
 import { truncateForPrompt } from "./approval";
-import { type ComputerController, ComputerSupervisor, registerComputerController } from "./computer/supervisor";
+import { createComputerController } from "./computer/cua-controller";
+import { type ComputerController, registerComputerController } from "./computer/supervisor";
 import type { ToolSession } from "./index";
 import { ToolError, throwIfAborted } from "./tool-errors";
 
@@ -431,7 +432,7 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 
 	constructor(
 		readonly session: ToolSession,
-		createController: ComputerControllerFactory = options => new ComputerSupervisor(options),
+		createController: ComputerControllerFactory = createComputerController,
 	) {
 		this.#createController = createController;
 		this.#usesCoordinateSafeImageSizing = usesCoordinateSafeImageSizing(session.getActiveModel?.());
@@ -482,8 +483,12 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 		const capture = await this.#controller.execute(actions.map(toDesktopAction), signal);
 		throwIfAborted(signal);
 		const data = Buffer.from(capture.data).toBase64();
+		const contextText = [capture.contextText, capture.structuredJson].filter(Boolean).join("\n");
 		return {
-			content: [{ type: "image", data, mimeType: "image/png", detail: "original" }],
+			content: [
+				...(contextText ? [{ type: "text" as const, text: contextText }] : []),
+				{ type: "image", data, mimeType: "image/png", detail: "original" },
+			],
 			details: {
 				width: capture.width,
 				height: capture.height,

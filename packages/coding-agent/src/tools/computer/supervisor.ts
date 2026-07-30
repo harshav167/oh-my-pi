@@ -14,9 +14,14 @@ const START_TIMEOUT_MS = 10_000;
 const CLOSE_TIMEOUT_MS = 1_500;
 const SMOKE_TIMEOUT_MS = 5_000;
 
+export interface ComputerCapture extends DesktopCapture {
+	contextText?: string;
+	structuredJson?: string;
+}
+
 export interface ComputerController {
 	readonly capabilities: DesktopCapabilities | undefined;
-	execute(actions: DesktopAction[], signal?: AbortSignal): Promise<DesktopCapture>;
+	execute(actions: DesktopAction[], signal?: AbortSignal): Promise<ComputerCapture>;
 	close(): Promise<void>;
 }
 
@@ -76,7 +81,7 @@ export function spawnComputerWorker(): ComputerWorkerHandle {
 }
 
 interface PendingRequest {
-	resolve(capture: DesktopCapture): void;
+	resolve(capture: ComputerCapture): void;
 	reject(error: unknown): void;
 }
 
@@ -101,9 +106,9 @@ export class ComputerSupervisor implements ComputerController {
 		return this.#capabilities;
 	}
 
-	execute(actions: DesktopAction[], signal?: AbortSignal): Promise<DesktopCapture> {
+	execute(actions: DesktopAction[], signal?: AbortSignal): Promise<ComputerCapture> {
 		if (this.#closed) return Promise.reject(new ToolError("Computer session is closed"));
-		const run = (): Promise<DesktopCapture> => this.#execute(actions, signal);
+		const run = (): Promise<ComputerCapture> => this.#execute(actions, signal);
 		const result = this.#serial.then(run, run);
 		this.#serial = result.then(
 			() => undefined,
@@ -112,13 +117,13 @@ export class ComputerSupervisor implements ComputerController {
 		return result;
 	}
 
-	async #execute(actions: DesktopAction[], signal?: AbortSignal): Promise<DesktopCapture> {
+	async #execute(actions: DesktopAction[], signal?: AbortSignal): Promise<ComputerCapture> {
 		if (this.#closed) throw new ToolError("Computer session is closed");
 		if (signal?.aborted) throw new ToolAbortError();
 		await this.#start();
 		if (signal?.aborted) throw new ToolAbortError();
 		const id = `computer-${++this.#nextId}`;
-		const request = Promise.withResolvers<DesktopCapture>();
+		const request = Promise.withResolvers<ComputerCapture>();
 		this.#pending.set(id, request);
 		this.#worker!.send({ type: "execute", id, actions });
 		if (!signal) return request.promise;

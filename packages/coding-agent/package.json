@@ -75,6 +75,7 @@
     "@opentelemetry/sdk-trace-base": "catalog:",
     "@opentelemetry/sdk-trace-node": "catalog:",
     "@puppeteer/browsers": "catalog:",
+    "@trycua/cua-driver": "0.12.3",
     "@types/turndown": "catalog:",
     "@xterm/headless": "catalog:",
     "arktype": "catalog:",

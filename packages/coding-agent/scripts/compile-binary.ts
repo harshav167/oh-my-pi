@@ -1,8 +1,29 @@
+import { CUA_EXTERNAL_PACKAGES, CUA_PACKAGE } from "../src/tools/computer/cua-packages";
 import { buildDocsIndexPayload } from "./generate-docs-index";
 import { createLegacyPiVirtualModulePlugin } from "./legacy-pi-virtual-module";
 
 /** Native runtime dependencies always resolved from the on-demand install instead of embedded into compiled binaries. */
-export const COMPILED_EXTERNAL_DEPENDENCIES: readonly string[] = Object.freeze(["fastembed", "onnxruntime-node"]);
+export const COMPILED_EXTERNAL_DEPENDENCIES: readonly string[] = Object.freeze([
+	...CUA_EXTERNAL_PACKAGES,
+	"fastembed",
+	"onnxruntime-node",
+]);
+
+/**
+ * The pinned driver version, read from the declaration that owns it.
+ *
+ * Baked into the binary as `PI_CUA_DRIVER_VERSION` so the runtime installer does
+ * not have to locate a manifest inside a compiled executable. Read here rather
+ * than repeated as a literal: a compiled binary that installs a different
+ * version than the npm bundle declares is the drift this prevents.
+ */
+async function pinnedCuaVersion(repoRoot: string): Promise<string> {
+	const manifestPath = `${repoRoot}/packages/coding-agent/package.json`;
+	const manifest = (await Bun.file(manifestPath).json()) as { dependencies?: Record<string, string> };
+	const version = manifest.dependencies?.[CUA_PACKAGE];
+	if (!version) throw new Error(`${manifestPath} does not declare ${CUA_PACKAGE}`);
+	return version;
+}
 
 /** Inputs shared by local and release coding-agent binary builds. */
 export interface CodingAgentCompileOptions {
@@ -39,6 +60,7 @@ export async function compileCodingAgent(options: CodingAgentCompileOptions): Pr
 			define: {
 				"process.env.PI_COMPILED": JSON.stringify("true"),
 				"process.env.PI_TINY_TRANSFORMERS_VERSION": JSON.stringify(options.transformersVersion),
+				"process.env.PI_CUA_DRIVER_VERSION": JSON.stringify(await pinnedCuaVersion(options.repoRoot)),
 				"process.env.PI_DOCS_EMBED": JSON.stringify((await buildDocsIndexPayload()).payload),
 			},
 			minify: {

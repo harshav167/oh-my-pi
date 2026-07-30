@@ -499,6 +499,26 @@ describe("computer tool", () => {
 		await tool.close();
 	});
 
+	it("returns CUA accessibility context before the screenshot", async () => {
+		const controller: ComputerController = {
+			capabilities,
+			execute: async () => ({
+				...capture(1),
+				contextText: "[1] Submit button",
+				structuredJson: '{"role":"button"}',
+			}),
+			close: async () => {},
+		};
+		const tool = new ComputerTool(toolSession(Settings.isolated({ "computer.enabled": true })), () => controller);
+
+		const result = await tool.execute("call", { actions: [{ type: "screenshot" }] });
+
+		expect(result.content).toEqual([
+			{ type: "text", text: '[1] Submit button\n{"role":"button"}' },
+			{ type: "image", data: "AQ==", mimeType: "image/png", detail: "original" },
+		]);
+	});
+
 	it("fails closed on malformed action fields before native dispatch", async () => {
 		const controller = new FakeController();
 		const tool = new ComputerTool(toolSession(Settings.isolated({ "computer.enabled": true })), () => controller);
