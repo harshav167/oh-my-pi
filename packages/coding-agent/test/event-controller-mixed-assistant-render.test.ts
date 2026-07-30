@@ -48,7 +48,7 @@ function lineContaining(lines: string[], marker: string): number {
 	return index;
 }
 
-function createFixture() {
+function createFixture(options: { turnPresentationOwned?: () => boolean } = {}) {
 	const chatContainer = new TranscriptContainer();
 	const pendingTools = new Map();
 	const ui = {
@@ -91,6 +91,7 @@ function createFixture() {
 		showPinnedError: vi.fn(),
 		clearTransientSessionUi: vi.fn(),
 		lastAssistantUsage: zeroUsage(),
+		turnPresentationOwned: options.turnPresentationOwned,
 	} as unknown as InteractiveModeContext;
 
 	return { controller: new EventController(ctx), chatContainer };
@@ -210,5 +211,71 @@ describe("EventController mixed assistant text/tool rendering", () => {
 		expect(lines.filter(line => line.includes(MIDDLE_MARKER))).toHaveLength(1);
 		expect(middleLine).toBeLessThan(toolResultBLine);
 		expect(toolResultBLine).toBeLessThan(finalLine);
+	});
+});
+
+describe("EventController presentation ownership", () => {
+	beforeAll(async () => {
+		await initTheme(false);
+	});
+
+	beforeEach(async () => {
+		resetSettingsForTest();
+		await Settings.init({ inMemory: true, overrides: { "display.smoothStreaming": false } });
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		resetSettingsForTest();
+	});
+
+	it("hides an owned turn's prose while still rendering its tool timeline", async () => {
+		const { controller, chatContainer } = createFixture({ turnPresentationOwned: () => true });
+		const toolCall: ToolCall = {
+			type: "toolCall",
+			id: TOOL_CALL_A_ID,
+			name: "contract_probe_a",
+			arguments: { value: "a" },
+		};
+		const completed = assistantMessage([{ type: "text", text: INTRO_MARKER }, toolCall]);
+
+		await controller.handleEvent({ type: "message_start", message: assistantMessage([]) } as Extract<
+			AgentSessionEvent,
+			{ type: "message_start" }
+		>);
+		await controller.handleEvent({
+			type: "message_update",
+			message: completed,
+			assistantMessageEvent: { type: "toolcall_end", contentIndex: 1, toolCall, partial: completed },
+		} as Extract<AgentSessionEvent, { type: "message_update" }>);
+		await controller.handleEvent({
+			type: "tool_execution_start",
+			toolCallId: TOOL_CALL_A_ID,
+			toolName: "contract_probe_a",
+			args: { value: "a" },
+		} as Extract<AgentSessionEvent, { type: "tool_execution_start" }>);
+		await controller.handleEvent({
+			type: "tool_execution_end",
+			toolCallId: TOOL_CALL_A_ID,
+			toolName: "contract_probe_a",
+			result: { content: [{ type: "text", text: TOOL_RESULT_A_MARKER }] },
+			isError: false,
+		} as Extract<AgentSessionEvent, { type: "tool_execution_end" }>);
+		await controller.handleEvent({ type: "message_end", message: completed } as Extract<
+			AgentSessionEvent,
+			{ type: "message_end" }
+		>);
+
+		const rendered = chatContainer
+			.render(120)
+			.map(line => Bun.stripANSI(line))
+			.join("\n");
+		// The owner delivers this turn's prose — voice, plus its own artifact — so an
+		// ordinary assistant block would be the same answer a second time.
+		expect(rendered).not.toContain(INTRO_MARKER);
+		// The tool timeline is not prose. Suppressing it too left the surface showing
+		// nothing but a working indicator while the delegated work ran.
+		expect(rendered).toContain("contract_probe_a");
+		expect(rendered).toContain(TOOL_RESULT_A_MARKER);
 	});
 });

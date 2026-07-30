@@ -310,6 +310,54 @@ export const DEFAULT_CUSTOM_MESSAGE_TYPE = "custom-message";
 /** Custom message carrying a coding request delegated by the live voice model. */
 export const LIVE_DELEGATION_MESSAGE_TYPE = "live-delegation";
 
+/** Hidden record of one completed live voice turn, used to seed continuity. */
+export const LIVE_TRANSCRIPT_MESSAGE_TYPE = "live-transcript";
+
+/**
+ * Closes a live call by handing the coding agent the remaining voice transcript.
+ *
+ * Deliberately NOT a `live-delegation`: it opens no presentation range and asks
+ * for no work. Filed under the delegation type it would leave an ownership range
+ * open at the end of every call, and a later close landing after it would
+ * suppress the prose of a turn that was never delegated.
+ */
+export const LIVE_TAIL_MESSAGE_TYPE = "live-tail";
+
+/** Persisted details of a `live-transcript` custom message. */
+export interface LiveTranscriptDetails {
+	role: "user" | "assistant";
+	text: string;
+	/** Voice model that spoke an assistant turn, for rebuild attribution. */
+	model?: string;
+}
+
+/**
+ * Closes the presentation range a `live-delegation` opened, and carries that
+ * delegated turn's screen-only body.
+ *
+ * The delegated assistant and tool records stay in the log and in provider
+ * context — they are the coding agent's own history — but they are not the
+ * turn's presentation. This row is the durable ownership boundary transcript
+ * rebuild uses to project that range into the same single artifact the live
+ * call rendered, instead of replaying it as ordinary main-agent output.
+ */
+export const LIVE_WORKER_MESSAGE_TYPE = "live-worker";
+
+/** Persisted details of a `live-worker` custom message. */
+export interface LiveWorkerDetails {
+	/** Full screen body for the delegated turn, directive already stripped. */
+	screen: string;
+	/**
+	 * The part of `screen` audio never took, which is all the live call drew.
+	 *
+	 * Rebuild draws this rather than `screen` so a resumed session shows what the
+	 * call showed. An empty string means the voice delivered the whole answer and
+	 * the call drew nothing; `undefined` means the row predates this field, so
+	 * rebuild falls back to `screen`.
+	 */
+	withheld?: string;
+}
+
 /** Content shape accepted for extension-injected messages. */
 export type CustomMessageContent = string | (TextContent | ImageContent)[];
 
@@ -1146,6 +1194,15 @@ function convertOne(m: AgentMessage, interruptedNext: boolean): Message[] {
 			return out;
 		}
 		case "custom": {
+			// Live voice transcript rows are a continuity store, never model
+			// input. `buildLiveInitialItems` reads them back off the session
+			// log to seed the next call; letting them reach the provider is
+			// the echo loop in slow motion, surviving a reload or compaction.
+			if (m.customType === LIVE_TRANSCRIPT_MESSAGE_TYPE) return [];
+			// Presentation-only: the delegated assistant message it projects is
+			// already in context, so replaying this row would feed the model its
+			// own answer a second time.
+			if (m.customType === LIVE_WORKER_MESSAGE_TYPE) return [];
 			if (!isCustomMessageContent(m.content)) return [];
 			if (isUserInvokedSkillPrompt(m)) {
 				return [

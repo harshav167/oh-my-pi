@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Effort } from "@oh-my-pi/pi-ai";
+import * as piNatives from "@oh-my-pi/pi-natives";
 import {
 	type Component,
 	Container,
@@ -25,6 +26,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@oh-my-pi/pi-tui";
+import { logger } from "@oh-my-pi/pi-utils";
 import type { ShapeTarget } from "@oh-my-pi/snapcompact";
 import {
 	getDefault,
@@ -49,6 +51,30 @@ import { handleInputOrEscape, PluginSettingsComponent } from "./plugin-settings"
 import { getSettingDef, getSettingsForTab, type SettingDef } from "./settings-defs";
 import { SnapcompactShapePreview } from "./snapcompact-shape-preview";
 import { getPreset } from "./status-line/presets";
+
+type AudioDeviceSettingPath = "live.inputDeviceId" | "live.outputDeviceId";
+
+function resolveAudioDeviceOptions(path: AudioDeviceSettingPath): { readonly value: string; readonly label: string }[] {
+	const kind = path === "live.inputDeviceId" ? "input" : "output";
+	try {
+		return [
+			{ value: "", label: "Default" },
+			...piNatives
+				.listAudioDevices()
+				.filter(device => device.kind === kind)
+				.map(device => ({
+					value: device.id,
+					label: `${device.name}${device.isDefault ? " (system default)" : ""}`,
+				})),
+		];
+	} catch (error) {
+		logger.debug("Failed to enumerate live audio devices", {
+			kind,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return [{ value: "", label: "Default" }];
+	}
+}
 
 /**
  * A submenu component for selecting from a list of options.
@@ -950,15 +976,21 @@ export class SettingsSelectorComponent implements Component {
 					changed,
 				};
 
-			case "submenu":
+			case "submenu": {
+				const rawValue = this.#getSubmenuCurrentValue(def.path, currentValue);
+				const displayValue =
+					def.path === "live.inputDeviceId" || def.path === "live.outputDeviceId"
+						? (resolveAudioDeviceOptions(def.path).find(option => option.value === rawValue)?.label ?? rawValue)
+						: rawValue;
 				return {
 					id: def.path,
 					label: def.label,
 					description: def.description,
-					currentValue: this.#getSubmenuCurrentValue(def.path, currentValue),
-					submenu: (cv, done) => this.#createSubmenu(def, cv, done),
+					currentValue: displayValue,
+					submenu: (_displayValue, done) => this.#createSubmenu(def, rawValue, done),
 					changed,
 				};
+			}
 
 			case "text":
 				return {
@@ -1041,6 +1073,8 @@ export class SettingsSelectorComponent implements Component {
 			});
 		} else if (def.path === "theme.dark" || def.path === "theme.light") {
 			options = this.context.availableThemes.map(t => ({ value: t, label: t }));
+		} else if (def.path === "live.inputDeviceId" || def.path === "live.outputDeviceId") {
+			options = resolveAudioDeviceOptions(def.path);
 		}
 
 		// Preview handlers

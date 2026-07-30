@@ -75,6 +75,7 @@ export type SettingTab =
 	| "appearance"
 	| "model"
 	| "interaction"
+	| "voice"
 	| "context"
 	| "memory"
 	| "files"
@@ -91,6 +92,7 @@ export const SETTING_TABS: SettingTab[] = [
 	"appearance",
 	"model",
 	"interaction",
+	"voice",
 	"context",
 	"memory",
 	"files",
@@ -105,6 +107,7 @@ export const TAB_METADATA: Record<SettingTab, { label: string; icon: `tab.${stri
 	appearance: { label: "Appearance", icon: "tab.appearance" },
 	model: { label: "Model", icon: "tab.model" },
 	interaction: { label: "Interaction", icon: "tab.interaction" },
+	voice: { label: "Voice", icon: "tab.voice" },
 	context: { label: "Context", icon: "tab.context" },
 	memory: { label: "Memory", icon: "tab.memory" },
 	files: { label: "Files", icon: "tab.files" },
@@ -134,6 +137,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Agent",
 		"Git",
 	],
+	voice: ["Live Session", "Audio", "Continuity & Handoffs", "Computer Use", "Speech Input", "Speech Output"],
 	context: ["General", "Compaction", "Rules (TTSR)", "Experimental"],
 	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight"],
 	files: ["Editing", "Reading", "Read Summaries", "LSP"],
@@ -2062,13 +2066,308 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	// Live voice
+	"live.model": {
+		type: "string",
+		default: "gpt-live-1-codex",
+		ui: { tab: "voice", group: "Live Session", label: "Live Model", description: "Private realtime model id" },
+	},
+	"live.codingModel": {
+		type: "string",
+		default: "openai-codex/gpt-5.6-terra",
+		ui: {
+			tab: "voice",
+			group: "Live Session",
+			label: "Coding Model",
+			description: "Model that runs delegated voice coding turns",
+		},
+	},
+	"live.codingThinkingLevel": {
+		type: "enum",
+		values: THINKING_EFFORTS,
+		default: "low",
+		ui: {
+			tab: "voice",
+			group: "Live Session",
+			label: "Coding Thinking Level",
+			description: "Reasoning depth for delegated voice coding turns",
+			options: THINKING_EFFORTS.map(getThinkingLevelMetadata),
+		},
+	},
+	"live.voice": {
+		type: "enum",
+		values: ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove"] as const,
+		default: "sol",
+		ui: {
+			tab: "voice",
+			group: "Live Session",
+			label: "Live Voice",
+			description: "Voice used by the private realtime session",
+			options: ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove"].map(value => ({
+				value,
+				label: value,
+			})),
+		},
+	},
+	"live.connectTimeoutMs": {
+		type: "number",
+		default: 20_000,
+		ui: {
+			tab: "voice",
+			group: "Live Session",
+			label: "Connect Timeout",
+			description: "Connection and activation timeout",
+			options: [10_000, 20_000, 30_000, 60_000].map(value => ({ value: String(value), label: `${value / 1000}s` })),
+		},
+	},
+	"live.sidebandConnectAttempts": {
+		type: "number",
+		default: 5,
+		ui: {
+			tab: "voice",
+			group: "Live Session",
+			label: "Sideband Attempts",
+			description: "Initial sideband connection attempts",
+			options: [1, 3, 5, 8].map(value => ({ value: String(value), label: String(value) })),
+		},
+	},
+	"live.inactivityTimeoutMinutes": {
+		type: "number",
+		default: 30,
+		ui: {
+			tab: "voice",
+			group: "Live Session",
+			label: "Inactivity Timeout",
+			description: "Minutes before an idle live session ends; zero disables",
+			options: [0, 10, 20, 30, 60].map(value => ({
+				value: String(value),
+				label: value === 0 ? "Off" : `${value}m`,
+			})),
+		},
+	},
+	"live.outputActiveLevel": {
+		type: "number",
+		default: 0.015,
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "Output Activity Level",
+			description: "RMS level that marks voice output active",
+			options: [0.01, 0.015, 0.025, 0.05].map(value => ({ value: String(value), label: String(value) })),
+		},
+	},
+	"live.vadStartRms": {
+		type: "number",
+		default: 0.015,
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "VAD Start RMS",
+			description: "Microphone level that counts as speech for activity tracking",
+			options: [0.005, 0.01, 0.015, 0.025, 0.04].map(value => ({ value: String(value), label: String(value) })),
+		},
+	},
+	"live.echoCancellationMode": {
+		type: "enum",
+		values: ["off", "full", "mobile"] as const,
+		default: "full",
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "Echo Cancellation",
+			description: "WebRTC audio-processing echo canceller",
+			condition: "liveAudioProcessingAvailable",
+			options: [
+				{ value: "off", label: "Off" },
+				{ value: "full", label: "Full (AEC3)" },
+				{ value: "mobile", label: "Mobile (AECM)" },
+			],
+		},
+	},
+	"live.echoDelayMs": {
+		type: "number",
+		default: 0,
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "Echo Delay",
+			description: "Render-to-capture delay; zero uses automatic estimation",
+			condition: "liveAudioProcessingAvailable",
+			options: [0, 20, 40, 60, 80, 100, 150].map(value => ({
+				value: String(value),
+				label: value === 0 ? "Auto" : `${value}ms`,
+			})),
+		},
+	},
+	"live.noiseSuppressionLevel": {
+		type: "enum",
+		values: ["off", "low", "moderate", "high", "veryHigh"] as const,
+		default: "moderate",
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "Noise Suppression",
+			description: "WebRTC noise-suppression strength",
+			condition: "liveAudioProcessingAvailable",
+			options: [
+				{ value: "off", label: "Off" },
+				{ value: "low", label: "Low" },
+				{ value: "moderate", label: "Moderate" },
+				{ value: "high", label: "High" },
+				{ value: "veryHigh", label: "Very High" },
+			],
+		},
+	},
+	"live.agcMode": {
+		type: "enum",
+		values: ["off", "adaptiveDigital", "fixedDigital"] as const,
+		default: "adaptiveDigital",
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "Automatic Gain",
+			description: "WebRTC digital gain-control mode",
+			condition: "liveAudioProcessingAvailable",
+			options: [
+				{ value: "off", label: "Off" },
+				{ value: "adaptiveDigital", label: "Adaptive Digital" },
+				{ value: "fixedDigital", label: "Fixed Digital" },
+			],
+		},
+	},
+	"live.agcTargetLevelDbfs": {
+		type: "number",
+		default: 3,
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "AGC Target dBFS",
+			description: "Gain-control target below full scale",
+			condition: "liveAudioProcessingAvailable",
+			options: [0, 3, 6, 9, 12].map(value => ({ value: String(value), label: String(value) })),
+		},
+	},
+	"live.agcCompressionGainDb": {
+		type: "number",
+		default: 9,
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "AGC Compression",
+			description: "Maximum digital compression gain in dB",
+			condition: "liveAudioProcessingAvailable",
+			options: [0, 3, 6, 9, 12, 18, 24].map(value => ({ value: String(value), label: String(value) })),
+		},
+	},
+	"live.agcLimiter": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "AGC Limiter",
+			description: "Limit processed microphone audio to the target level",
+			condition: "liveAudioProcessingAvailable",
+		},
+	},
+	"live.inputDeviceId": {
+		type: "string",
+		default: "",
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "Input Device",
+			description: "Microphone used by /live",
+			options: "runtime",
+		},
+	},
+	"live.outputDeviceId": {
+		type: "string",
+		default: "",
+		ui: {
+			tab: "voice",
+			group: "Audio",
+			label: "Output Device",
+			description: "Speaker used by /live",
+			options: "runtime",
+		},
+	},
+	"live.includeContinuity": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "voice",
+			group: "Continuity & Handoffs",
+			label: "Session Continuity",
+			description: "Seed live mode with bounded session history",
+		},
+	},
+	"live.continuityMaxItems": {
+		type: "number",
+		default: 64,
+		ui: {
+			tab: "voice",
+			group: "Continuity & Handoffs",
+			label: "Continuity Items",
+			description: "Maximum initial history items",
+			options: [16, 32, 64, 128].map(value => ({ value: String(value), label: String(value) })),
+		},
+	},
+	"live.continuityMaxTokens": {
+		type: "number",
+		default: 4096,
+		ui: {
+			tab: "voice",
+			group: "Continuity & Handoffs",
+			label: "Continuity Tokens",
+			description: "Maximum estimated initial-history tokens",
+			options: [2048, 4096, 8192].map(value => ({ value: String(value), label: String(value) })),
+		},
+	},
+	"live.handoffFlushMs": {
+		type: "number",
+		default: 200,
+		ui: {
+			tab: "voice",
+			group: "Continuity & Handoffs",
+			label: "Handoff Flush",
+			description: "Stream batching interval",
+			options: [100, 200, 300, 500].map(value => ({ value: String(value), label: `${value}ms` })),
+		},
+	},
+	"live.flushTranscriptTail": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "voice",
+			group: "Continuity & Handoffs",
+			label: "Flush Transcript Tail",
+			description: "Send unhandled live transcript context to the coding agent on stop",
+		},
+	},
+	"live.computerUse": {
+		type: "enum",
+		values: ["auto", "off"] as const,
+		default: "auto",
+		ui: {
+			tab: "voice",
+			group: "Computer Use",
+			label: "Live Computer Use",
+			description: "Advertise the first-party computer capability to live mode",
+			options: [
+				{ value: "auto", label: "Auto" },
+				{ value: "off", label: "Off" },
+			],
+		},
+	},
+
 	// Speech-to-text
 	"stt.enabled": {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "interaction",
-			group: "Speech",
+			tab: "voice",
+			group: "Speech Input",
 			label: "Speech-to-Text",
 			description: "Enable speech-to-text input via microphone",
 		},
@@ -2084,8 +2383,8 @@ export const SETTINGS_SCHEMA = {
 		values: STT_MODEL_VALUES,
 		default: DEFAULT_STT_MODEL_KEY,
 		ui: {
-			tab: "interaction",
-			group: "Speech",
+			tab: "voice",
+			group: "Speech Input",
 			label: "Speech Model",
 			description:
 				"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.",
@@ -2097,8 +2396,8 @@ export const SETTINGS_SCHEMA = {
 		values: STT_SUBMIT_TRIGGER_VALUES,
 		default: "never",
 		ui: {
-			tab: "interaction",
-			group: "Speech",
+			tab: "voice",
+			group: "Speech Input",
 			label: "Speech-to-Text Submit Trigger",
 			description:
 				"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.",
@@ -3847,8 +4146,8 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "tools",
-			group: "Available Tools",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Speech Generation",
 			description: "Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis",
 		},
@@ -3903,7 +4202,7 @@ export const SETTINGS_SCHEMA = {
 
 	"computer.backend": {
 		type: "enum",
-		values: ["auto", "native"] as const,
+		values: ["auto", "native", "cua"] as const,
 		default: "auto",
 		ui: {
 			tab: "tools",
@@ -3913,6 +4212,7 @@ export const SETTINGS_SCHEMA = {
 			options: [
 				{ value: "auto", label: "Auto" },
 				{ value: "native", label: "Native" },
+				{ value: "cua", label: "CUA Driver" },
 			],
 		},
 	},
@@ -4945,8 +5245,8 @@ export const SETTINGS_SCHEMA = {
 		values: ["auto", "local", "xai"] as const,
 		default: "auto",
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Text-to-Speech Provider",
 			description: "Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice",
 			options: [
@@ -4969,8 +5269,8 @@ export const SETTINGS_SCHEMA = {
 		values: TTS_LOCAL_MODEL_VALUES,
 		default: DEFAULT_TTS_LOCAL_MODEL_KEY,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Local TTS Model",
 			description: "On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
 			options: TTS_LOCAL_MODEL_OPTIONS,
@@ -4981,8 +5281,8 @@ export const SETTINGS_SCHEMA = {
 		values: TTS_LOCAL_VOICE_VALUES,
 		default: DEFAULT_TTS_VOICE,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Local TTS Voice",
 			description: "Kokoro voice used by the local TTS backend (American/British, female/male)",
 			options: TTS_LOCAL_VOICE_OPTIONS,
@@ -4992,8 +5292,8 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Speech Vocalization",
 			description: "Speak the assistant's output aloud through the speakers as it streams",
 		},
@@ -5003,8 +5303,8 @@ export const SETTINGS_SCHEMA = {
 		values: ["all", "assistant", "yield"] as const,
 		default: "assistant",
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Speech Vocalization Mode",
 			description:
 				"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end",
@@ -5019,8 +5319,8 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Enhanced Speech Rewriting",
 			description:
 				"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
@@ -5031,8 +5331,8 @@ export const SETTINGS_SCHEMA = {
 		values: TTS_LOCAL_VOICE_VALUES,
 		default: DEFAULT_TTS_VOICE,
 		ui: {
-			tab: "providers",
-			group: "Services",
+			tab: "voice",
+			group: "Speech Output",
 			label: "Speech Vocalization Voice",
 			description: "Kokoro voice used when speaking the assistant's output aloud",
 			options: TTS_LOCAL_VOICE_OPTIONS,

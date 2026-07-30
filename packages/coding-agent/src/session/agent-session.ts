@@ -27,6 +27,7 @@ import {
 	AgentBusyError,
 	type AgentEvent,
 	type AgentMessage,
+	type AgentPromptOptions,
 	type AgentState,
 	type AgentTool,
 	type AgentToolCall,
@@ -408,6 +409,14 @@ type SetSessionNameWithTrigger = (
 
 const kPersistedSessionEntryId = Symbol("persistedSessionEntryId");
 type PersistedAssistantMessage = AssistantMessage & { [kPersistedSessionEntryId]?: string };
+/**
+ * Per-turn agent overrides for an agent-initiated turn.
+ *
+ * Applies to one turn and leaves `AgentState` untouched, so a delegated voice
+ * turn can run under its own model, effort, and output contract without
+ * changing the model the terminal session is using.
+ */
+export type AgentTurnOverrides = Pick<AgentPromptOptions, "systemPromptAppend" | "model" | "thinkingLevel">;
 
 export class AgentSession {
 	readonly agent: Agent;
@@ -3723,10 +3732,19 @@ export class AgentSession {
 		this.#usageFallbackConfirmer = confirmer;
 	}
 
-	async #runUsageAwarePreflight(): Promise<boolean> {
+	/**
+	 * `external` lets a caller that has given up abort the preflight itself,
+	 * not merely decline the turn afterwards. The health request and the
+	 * fallback confirmer both honour the signal, so an in-flight network call
+	 * or a waiting confirmation is released rather than pinning this promise.
+	 */
+	async #runUsageAwarePreflight(external?: AbortSignal): Promise<boolean> {
 		const generation = this.#promptGeneration;
 		const controller = new AbortController();
 		this.#usagePreflightAbortControllers.add(controller);
+		const onExternalAbort = () => controller.abort();
+		if (external?.aborted) controller.abort();
+		else external?.addEventListener("abort", onExternalAbort, { once: true });
 		try {
 			await this.#maybeApplyUsageAwareFallback(controller.signal);
 			return !controller.signal.aborted && this.#promptGeneration === generation;
@@ -3734,6 +3752,7 @@ export class AgentSession {
 			if (controller.signal.aborted || this.#promptGeneration !== generation) return false;
 			throw error;
 		} finally {
+			external?.removeEventListener("abort", onExternalAbort);
 			this.#usagePreflightAbortControllers.delete(controller);
 		}
 	}
@@ -5559,17 +5578,42 @@ export class AgentSession {
 
 	async #promptAgentInitiatedMessage(
 		message: CustomMessage,
-		options?: { acceptTerminalEmptyStop?: boolean },
+		options?: {
+			acceptTerminalEmptyStop?: boolean;
+			onAccepted?: () => void;
+			turnOverrides?: AgentTurnOverrides;
+			signal?: AbortSignal;
+		},
 	): Promise<void> {
 		this.#beginInFlight();
 		try {
-			if (!(await this.#runUsageAwarePreflight())) return;
+			// The signal aborts the preflight itself, so a caller that gives up
+			// releases the in-flight health request or fallback confirmation
+			// rather than leaving this promise pinned. Re-checked below because
+			// acceptance and the prompt are what actually commit work.
+			if (!(await this.#runUsageAwarePreflight(options?.signal))) return;
+			if (options?.signal?.aborted) return;
 			const acceptTerminalEmptyStop = options?.acceptTerminalEmptyStop === true;
 			if (acceptTerminalEmptyStop) {
 				this.#resetPromptMaintenanceState();
 			}
 			this.#recovery.setAcceptTerminalEmptyStop(acceptTerminalEmptyStop);
-			await this.agent.prompt(message);
+			// Preflight passed, so the message is going to the agent: this is the
+			// acceptance point, strictly earlier than the turn completing below.
+			// `Agent.prompt` refuses outright when it is already streaming or has
+			// no model, and a refused message was never accepted.
+			const { isStreaming: agentBusy, model } = this.agent.state;
+			// An override supplies its own model, so the turn is viable even when
+			// session state has none.
+			if (!agentBusy && (options?.turnOverrides?.model ?? model)) {
+				try {
+					options?.onAccepted?.();
+				} catch {
+					// A listener must never abort the turn it is observing.
+				}
+			}
+			if (options?.signal?.aborted) return;
+			await this.agent.prompt(message, options?.turnOverrides);
 			await this.#waitForPostPromptRecovery();
 		} finally {
 			this.#recovery.setAcceptTerminalEmptyStop(false);
@@ -5624,6 +5668,11 @@ export class AgentSession {
 	 * — including when `triggerTurn` is downgraded because the client defers
 	 * agent-initiated turns. Callers that must mirror the resulting `agent_end`
 	 * use this to avoid acting on a turn that never ran.
+	 *
+	 * `onAccepted` fires once the session owns the message — appended, queued,
+	 * or handed to `agent.prompt` after preflight — which for `triggerTurn` is
+	 * strictly earlier than this promise, since that resolves at turn end. It
+	 * never fires when preflight rejects the message.
 	 */
 	async sendCustomMessage<T = unknown>(
 		message: CustomMessagePayload<T>,
@@ -5632,6 +5681,23 @@ export class AgentSession {
 			deliverAs?: "steer" | "followUp" | "nextTurn";
 			queueChipText?: string;
 			acceptTerminalEmptyStop?: boolean;
+			/** Invoked when the session takes ownership, before any turn runs. */
+			onAccepted?: () => void;
+			/**
+			 * Per-turn model/effort/system-prompt overrides. Honoured only when
+			 * this call actually starts a turn (`triggerTurn`); a steer or
+			 * follow-up joins a turn that is already configured.
+			 */
+			turnOverrides?: AgentTurnOverrides;
+			/**
+			 * Aborts an agent-initiated turn that has not committed yet.
+			 *
+			 * Cancels the usage preflight itself — which can reach the network
+			 * and wait on a fallback confirmation — and is re-checked before
+			 * acceptance and before the prompt, so a caller that gives up
+			 * neither pins this call nor lets it start work behind their back.
+			 */
+			signal?: AbortSignal;
 		},
 	): Promise<boolean> {
 		const normalizedPayload = normalizeCustomMessagePayload<T>(message);
@@ -5654,9 +5720,41 @@ export class AgentSession {
 			timestamp: Date.now(),
 		};
 		const normalizedAppMessage = await this.#normalizeAgentMessageImages(appMessage);
+		// Every branch below that takes ownership reports it; the preflight
+		// rejections deliberately do not.
+		const accept = (): void => {
+			try {
+				options?.onAccepted?.();
+			} catch {
+				// A listener must never break delivery it is only observing.
+			}
+		};
+		// Per-turn overrides only survive a call that starts the turn here and
+		// now. Every queueing path funnels into `#queueHiddenNextTurnMessage`,
+		// a shared batch flushed as a single prompt, which has nowhere to put
+		// one message's model/effort/system-prompt — and steering joins a turn
+		// that is already configured. Either way the overrides vanish and the
+		// delegated work runs without the contract it was written for, so
+		// refuse instead and let the caller retire and retry.
+		//
+		// This deliberately does NOT touch the normal idle trigger path (the
+		// primary live delegation route): that is neither streaming nor
+		// deferred, so it falls through and passes overrides on to
+		// `#promptAgentInitiatedMessage`.
+		if (options?.triggerTurn && options.turnOverrides) {
+			const deferred = this.#clientBridge?.deferAgentInitiatedTurns === true && !this.#allowAcpAgentInitiatedTurns;
+			if (this.isStreaming || deferred) {
+				logger.warn("Refused an agent-initiated turn that cannot carry its per-turn overrides", {
+					customType: normalizedAppMessage.customType,
+					reason: this.isStreaming ? "streaming" : "deferred",
+				});
+				return false;
+			}
+		}
 		if (this.isStreaming) {
 			if (options?.deliverAs === "nextTurn") {
 				this.#queueHiddenNextTurnMessage(normalizedAppMessage, options?.triggerTurn ?? false);
+				accept();
 				return false;
 			}
 			if (!(await this.#runUsageAwarePreflight())) return false;
@@ -5666,6 +5764,7 @@ export class AgentSession {
 			} else {
 				this.agent.steer(normalizedAppMessage);
 			}
+			accept();
 			this.#scheduleIdleQueueDrain();
 			return false;
 		}
@@ -5674,10 +5773,14 @@ export class AgentSession {
 			if (options?.triggerTurn) {
 				if (this.#clientBridge?.deferAgentInitiatedTurns && !this.#allowAcpAgentInitiatedTurns) {
 					this.#queueHiddenNextTurnMessage(normalizedAppMessage, false);
+					accept();
 					return false;
 				}
 				await this.#promptAgentInitiatedMessage(normalizedAppMessage, {
 					acceptTerminalEmptyStop: options.acceptTerminalEmptyStop === true,
+					onAccepted: accept,
+					turnOverrides: options.turnOverrides,
+					signal: options.signal,
 				});
 				return true;
 			}
@@ -5689,15 +5792,21 @@ export class AgentSession {
 				normalizedAppMessage.details,
 				normalizedAppMessage.attribution,
 			);
+			accept();
 			return false;
 		}
 
 		if (options?.triggerTurn) {
 			if (this.#clientBridge?.deferAgentInitiatedTurns && !this.#allowAcpAgentInitiatedTurns) {
 				this.#queueHiddenNextTurnMessage(normalizedAppMessage, false);
+				accept();
 				return false;
 			}
-			await this.#promptAgentInitiatedMessage(normalizedAppMessage);
+			await this.#promptAgentInitiatedMessage(normalizedAppMessage, {
+				onAccepted: accept,
+				turnOverrides: options.turnOverrides,
+				signal: options.signal,
+			});
 			return true;
 		}
 
@@ -5709,7 +5818,47 @@ export class AgentSession {
 			normalizedAppMessage.details,
 			normalizedAppMessage.attribution,
 		);
+		accept();
 		return false;
+	}
+
+	/**
+	 * Persist a custom record to the session log without touching model context.
+	 *
+	 * The record is written to the log and is visible to transcript rebuild, but
+	 * it never enters `agent.state.messages` and never becomes provider context.
+	 * Distinct from {@link sendCustomMessage}, which appends to the agent's
+	 * message list in every branch — while a turn streams it falls through to
+	 * `agent.steer()`, and both idle branches append first. A feature that must
+	 * record something the model has already produced (a spoken transcript, a
+	 * presentation boundary) has no correct variant of that call, and reaching
+	 * around to `sessionManager.appendCustomMessageEntry` is how that gap was
+	 * previously filled in feature code.
+	 *
+	 * Best-effort by contract: callers use this for records whose loss degrades
+	 * presentation rather than correctness, so a failed write must not take down
+	 * the caller. Returns whether the row was written.
+	 */
+	appendLogOnlyCustomMessage<T = unknown>(message: CustomMessagePayload<T>): boolean {
+		// Same normalization as `sendCustomMessage`, so a log-only row is shaped
+		// identically to one that went through the agent.
+		const normalized = normalizeCustomMessagePayload<T>(message);
+		try {
+			this.sessionManager.appendCustomMessageEntry<T>(
+				normalized.customType,
+				normalized.content,
+				normalized.display,
+				normalized.details,
+				normalized.attribution,
+			);
+			return true;
+		} catch (cause) {
+			logger.warn("Failed to persist a log-only custom message", {
+				customType: normalized.customType,
+				error: cause instanceof Error ? cause.message : String(cause),
+			});
+			return false;
+		}
 	}
 
 	/**

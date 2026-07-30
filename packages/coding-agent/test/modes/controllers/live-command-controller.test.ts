@@ -37,7 +37,9 @@ describe("LiveCommandController", () => {
 		const ctx = createContext();
 		let receivedVoice: string | undefined;
 		const controller = new LiveCommandController(ctx, options => {
-			receivedVoice = options.voice;
+			// The voice moved onto the resolved config, which is what the transport
+			// now reads; the boundary this pins is unchanged.
+			receivedVoice = options.config.voice;
 			const session = new LiveSessionController(options);
 			vi.spyOn(session, "start").mockResolvedValue();
 			vi.spyOn(session, "stop").mockResolvedValue();

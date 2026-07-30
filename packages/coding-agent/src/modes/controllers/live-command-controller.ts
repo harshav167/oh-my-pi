@@ -1,11 +1,23 @@
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
-import { LiveSessionController, type LiveSessionControllerOptions, type LiveTranscript } from "../../live/controller";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
+import { resolveModelOverride } from "../../config/model-resolver";
+import type { LiveConfig } from "../../live/config";
+import { resolveLiveConfig } from "../../live/config";
+import {
+	LiveSessionController,
+	type LiveSessionControllerOptions,
+	type LiveSessionHost,
+	type LiveTranscript,
+	type LiveTurnSession,
+} from "../../live/controller";
+import { acquireLiveSessionLease } from "../../live/lease";
+import liveCodingInstructions from "../../live/prompts/live-coding-instructions.md" with { type: "text" };
 import { LIVE_MODEL } from "../../live/protocol";
 import { LiveVisualizer } from "../../live/visualizer";
+import { resolveThinkingLevelForModel, toReasoningEffort } from "../../thinking";
 import { vocalizer } from "../../tts/vocalizer";
 import type { AssistantMessageComponent } from "../components/assistant-message";
 import type { CustomEditor } from "../components/custom-editor";
+import { createLiveWorkerArtifact, liveVoiceMessage } from "../components/live-worker-artifact";
 import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
 import { createAssistantMessageComponent } from "../utils/interactive-context-helpers";
@@ -13,14 +25,6 @@ import { createAssistantMessageComponent } from "../utils/interactive-context-he
 const ANIMATION_INTERVAL_MS = 80;
 type LiveSessionFactory = (options: LiveSessionControllerOptions) => LiveSessionController;
 
-const LIVE_MESSAGE_USAGE: AssistantMessage["usage"] = {
-	input: 0,
-	output: 0,
-	cacheRead: 0,
-	cacheWrite: 0,
-	totalTokens: 0,
-	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-};
 function errorFrom(cause: unknown): Error {
 	return cause instanceof Error ? cause : new Error(String(cause));
 }
@@ -41,15 +45,30 @@ export class LiveCommandController {
 	#assistantTranscriptComponent: AssistantMessageComponent | undefined;
 	#assistantTranscriptTurn = 0;
 	#assistantTranscriptStartedAt = 0;
+	#releaseLease: (() => void) | undefined;
+	#liveModel: string = LIVE_MODEL;
+	/**
+	 * Whether the current call ever reached the active state.
+	 *
+	 * Separates a failed start (hold the surface so retry is reachable) from a
+	 * mid-call drop (return to the editor). Reset by `#start`.
+	 */
+	#everActive = false;
 
 	constructor(ctx: InteractiveModeContext, createSession?: LiveSessionFactory) {
 		this.#ctx = ctx;
 		this.#createSession = createSession;
 	}
 
-	/** Whether a live session is connected, connecting, or closing. */
+	/**
+	 * Whether the live surface owns the editor area.
+	 *
+	 * Includes a held failed-start panel: it has no session, but the editor is
+	 * still detached, so anything that would take the editor (STT, a new turn)
+	 * must not start behind it.
+	 */
 	get active(): boolean {
-		return this.#session !== undefined || this.#settling !== undefined;
+		return this.#session !== undefined || this.#settling !== undefined || this.#visualizer !== undefined;
 	}
 
 	/** Start live mode, or stop the currently active session. */
@@ -67,6 +86,9 @@ export class LiveCommandController {
 		const session = this.#session;
 		if (!session) {
 			if (this.#settling) await this.#settling;
+			// A held failed-start surface has no session left; Escape must still
+			// dismiss it, or the user is stranded on an error panel.
+			if (this.#visualizer) this.#restoreEditor();
 			return;
 		}
 		try {
@@ -92,57 +114,89 @@ export class LiveCommandController {
 	}
 
 	async #start(): Promise<void> {
-		this.#assistantTranscriptTurn = 0;
-		this.#assistantTranscriptStartedAt = 0;
-		const visualizer = new LiveVisualizer({
-			onStop: () => {
-				void this.stop().catch(cause => this.#ctx.showError(errorFrom(cause).message));
-			},
-			onToggleMute: () => this.#session?.toggleMute(),
-		});
-		this.#mountVisualizer(visualizer);
-
-		let session: LiveSessionController;
-		const options: LiveSessionControllerOptions = {
-			session: this.#ctx.session,
-			extractAssistantText: message => this.#ctx.extractAssistantText(message),
-			voice: this.#ctx.settings.get("live.voice"),
-			callbacks: {
-				onPhase: phase => {
-					if (this.#visualizer !== visualizer) return;
-					visualizer.setPhase(phase);
-					this.#ctx.ui.requestComponentRender(visualizer);
-				},
-				onLevels: input => {
-					if (this.#visualizer !== visualizer) return;
-					visualizer.setInputLevel(input);
-					this.#ctx.ui.requestComponentRender(visualizer);
-				},
-				onTranscript: transcript => {
-					if (this.#visualizer !== visualizer) return;
-					if (!transcript) {
-						visualizer.clearTranscript();
-						this.#ctx.ui.requestComponentRender(visualizer);
-					} else if (transcript.role === "user") {
-						visualizer.setTranscript(transcript.text);
-						this.#ctx.ui.requestComponentRender(visualizer);
-					} else {
-						this.#presentAssistantTranscript(transcript);
-					}
-				},
-				onTerminal: error => this.#finish(session, error),
-			},
-		};
-		session = this.#createSession ? this.#createSession(options) : new LiveSessionController(options);
-		this.#session = session;
-
+		const releaseLease = acquireLiveSessionLease();
+		this.#releaseLease = releaseLease;
 		try {
-			await session.start();
-		} catch (cause) {
-			if (this.#session === session) {
-				await session.stop();
-				this.#finish(session, errorFrom(cause));
+			const config = resolveLiveConfig(this.#ctx.settings);
+			this.#everActive = false;
+			this.#liveModel = config.model;
+			this.#assistantTranscriptTurn = 0;
+			this.#assistantTranscriptStartedAt = 0;
+			const visualizer = new LiveVisualizer({
+				onStop: () => {
+					void this.stop().catch(cause => this.#ctx.showError(errorFrom(cause).message));
+				},
+				onToggleMute: () => this.#session?.toggleMute(),
+				onToggleOutputMute: () => this.#session?.toggleOutputMute(),
+				onRefreshMicrophone: () => {
+					void this.#session?.refreshMicrophone().catch(cause => this.#ctx.showError(errorFrom(cause).message));
+				},
+				onRetry: () => {
+					void this.#retry().catch(cause => this.#ctx.showError(errorFrom(cause).message));
+				},
+			});
+			this.#mountVisualizer(visualizer);
+
+			let session: LiveSessionController;
+			const options: LiveSessionControllerOptions = {
+				host: this.#buildLiveHost(config, this.#ctx.session),
+				config,
+				callbacks: {
+					onState: state => {
+						if (this.#visualizer !== visualizer) return;
+						// Latched: once a call has been active, a later failure is a drop
+						// rather than a failed start, and drops return to the editor.
+						if (state.connection === "active") this.#everActive = true;
+						visualizer.setState(state);
+						this.#ctx.ui.requestComponentRender(visualizer);
+					},
+					onLevels: input => {
+						if (this.#visualizer !== visualizer) return;
+						visualizer.setInputLevel(input);
+						this.#ctx.ui.requestComponentRender(visualizer);
+					},
+					onTranscript: transcript => {
+						if (this.#visualizer !== visualizer) return;
+						if (!transcript) {
+							visualizer.clearTranscript();
+							this.#ctx.ui.requestComponentRender(visualizer);
+						} else if (transcript.role === "user") {
+							visualizer.setTranscript(transcript.text);
+							this.#ctx.ui.requestComponentRender(visualizer);
+						} else {
+							this.#presentAssistantTranscript(transcript);
+						}
+					},
+					onScreen: text => this.#presentWorkerArtifact(session, text),
+					onTerminal: error => this.#finish(session, error),
+				},
+			};
+			session = this.#createSession?.(options) ?? new LiveSessionController(options);
+			this.#session = session;
+			// Scoped to the handoff's active delegation, not to the call: an
+			// unrelated terminal or extension turn during this call still renders
+			// normally. While a delegation IS owned, the event controller suppresses
+			// its assistant and tool rendering and this controller owns the turn's
+			// single visible artifact.
+			this.#ctx.turnPresentationOwned = () => this.#session === session && session.delegatedTurnActive;
+
+			try {
+				await session.start();
+			} catch (cause) {
+				if (this.#session === session) {
+					await session.stop().catch(cleanupCause => {
+						logger.debug("Live session startup cleanup failed", { error: errorFrom(cleanupCause).message });
+					});
+					this.#finish(session, errorFrom(cause));
+				}
 			}
+		} catch (cause) {
+			if (this.#releaseLease === releaseLease) {
+				releaseLease();
+				this.#releaseLease = undefined;
+			}
+			this.#restoreEditor();
+			throw cause;
 		}
 	}
 
@@ -165,17 +219,9 @@ export class LiveCommandController {
 			this.#assistantTranscriptComponent = component;
 			this.#assistantTranscriptStartedAt = Date.now();
 		}
-		const message: AssistantMessage = {
-			role: "assistant",
-			content: [{ type: "text", text: transcript.text }],
-			api: "openai-codex-responses",
-			provider: "openai-codex",
-			model: LIVE_MODEL,
-			usage: { ...LIVE_MESSAGE_USAGE },
-			stopReason: "stop",
-			timestamp: this.#assistantTranscriptStartedAt,
-		};
-		component.updateContent(message, { transient: !transcript.final });
+		component.updateContent(liveVoiceMessage(transcript.text, this.#liveModel, this.#assistantTranscriptStartedAt), {
+			transient: !transcript.final,
+		});
 		if (transcript.final) {
 			component.markTranscriptBlockFinalized();
 			this.#assistantTranscriptComponent = undefined;
@@ -186,6 +232,74 @@ export class LiveCommandController {
 		} else {
 			this.#ctx.ui.requestComponentRender(component);
 		}
+	}
+
+	/**
+	 * Build the live host port from this interactive session.
+	 *
+	 * The only place `AgentSession` is turned into the narrow set of capabilities
+	 * a call needs. Model resolution lives here because it needs the registry and
+	 * settings, which the controller no longer sees; the resolved overrides are
+	 * what both the delegated turn and the rendered artifact are credited to.
+	 */
+	#buildLiveHost(config: LiveConfig, turnSession: LiveTurnSession): LiveSessionHost {
+		const session = this.#ctx.session;
+		return {
+			// The port the caller already acquired, so the controller cannot end up
+			// sending through a different session than the caller checked.
+			turnSession,
+			authStorage: session.modelRegistry.authStorage,
+			sessionId: session.sessionId,
+			contextMessages: () => session.buildDisplaySessionContext().messages,
+			activeToolNames: () => session.getActiveToolNames(),
+			resolveCodingOverrides: () => {
+				const { model, warning } = resolveModelOverride(
+					[config.codingModel],
+					session.modelRegistry,
+					session.settings,
+				);
+				if (!model) {
+					// MUST NOT degrade to undefined: a delegated turn with no contract is
+					// the unrestrained, terminal-shaped agent this whole path prevents.
+					throw new Error(
+						`live.codingModel "${config.codingModel}" did not match an available model${warning ? `: ${warning}` : ""}`,
+					);
+				}
+				return {
+					systemPromptAppend: [prompt.render(liveCodingInstructions, {})],
+					model,
+					thinkingLevel: toReasoningEffort(resolveThinkingLevelForModel(model, config.codingThinkingLevel)),
+				};
+			},
+			appendLogOnly: message => session.appendLogOnlyCustomMessage(message),
+			extractAssistantText: message => this.#ctx.extractAssistantText(message),
+		};
+	}
+
+	/**
+	 * Renders the delegated turn's screen-only body as its single visible
+	 * artifact.
+	 *
+	 * The ordinary transcript path is suppressed for an owned turn, so this is
+	 * the only place that detail reaches the terminal during the call. Transcript
+	 * rebuild projects the persisted `live-worker` row through the same renderer,
+	 * so a resumed session shows the identical block.
+	 */
+	#presentWorkerArtifact(session: LiveSessionController, text: string): void {
+		if (!text.trim()) return;
+		this.#finalizeAssistantTranscript();
+		// The delegated coding model produced this body, not the voice model, and
+		// exports read these fields. `codingModel` is the same resolved override
+		// the turn ran on; it cannot be unset here, because the bridge that emits
+		// this callback is only constructed after the override resolves.
+		const model = session.codingModel;
+		if (!model) {
+			logger.warn("Live worker artifact arrived before the coding model resolved; dropping it");
+			return;
+		}
+		this.#ctx.present(
+			createLiveWorkerArtifact(this.#ctx, { text, api: model.api, provider: model.provider, model: model.id }),
+		);
 	}
 
 	#finalizeAssistantTranscript(): void {
@@ -218,10 +332,31 @@ export class LiveCommandController {
 		this.#ctx.ui.requestRender();
 	}
 
+	/**
+	 * Releases a session.
+	 *
+	 * A call that failed before ever going active keeps its visualizer mounted in
+	 * the error state so `r retry` / `esc back` are reachable — restoring the
+	 * editor here is what made the failed-start controls unreachable. Everything
+	 * else (user stop, mid-call terminal error) returns to the editor as before.
+	 */
 	#finish(session: LiveSessionController, error?: Error): void {
 		if (this.#session !== session) return;
 		this.#session = undefined;
-		this.#restoreEditor();
+		this.#ctx.turnPresentationOwned = undefined;
+		const holdForRetry = error !== undefined && !this.#everActive && this.#visualizer !== undefined;
+		if (holdForRetry) {
+			this.#visualizer?.setState({
+				connection: "error",
+				voice: "listening",
+				worker: "idle",
+				inputMuted: false,
+				outputMuted: false,
+			});
+			if (this.#visualizer) this.#ctx.ui.requestComponentRender(this.#visualizer);
+		} else {
+			this.#restoreEditor();
+		}
 		if (error) this.#ctx.showError(error.message);
 		const settling = session.stop().catch(cause => {
 			logger.debug("Live session cleanup failed", { error: errorFrom(cause).message });
@@ -229,10 +364,23 @@ export class LiveCommandController {
 		this.#settling = settling;
 		void settling.finally(() => {
 			if (this.#settling === settling) this.#settling = undefined;
+			this.#releaseLease?.();
+			this.#releaseLease = undefined;
 		});
 	}
 
+	/** Restarts after a failed start; the held visualizer is replaced by a fresh one. */
+	async #retry(): Promise<void> {
+		if (this.#session) return;
+		if (this.#settling) await this.#settling;
+		// Back to the editor first so `#start` mounts a clean surface and the
+		// detached-editor bookkeeping stays paired.
+		this.#restoreEditor();
+		await this.#start();
+	}
+
 	#restoreEditor(): void {
+		this.#ctx.turnPresentationOwned = undefined;
 		this.#finalizeAssistantTranscript();
 		if (this.#animationInterval) {
 			clearInterval(this.#animationInterval);

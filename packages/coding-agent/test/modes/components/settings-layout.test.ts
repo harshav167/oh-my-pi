@@ -150,4 +150,32 @@ describe("settings layout", () => {
 			group: "Available Tools",
 		});
 	});
+
+	it("groups live and speech configuration under the Voice tab", () => {
+		const defs = getSettingsForTab("voice");
+		const paths = defs.map(def => def.path);
+
+		expect(paths).toContain("live.model");
+		expect(paths).toContain("live.voice");
+		expect(paths).toContain("live.vadStartRms");
+		expect(paths).toContain("live.inputDeviceId");
+		expect(paths).toContain("stt.enabled");
+		expect(paths).toContain("speech.enabled");
+		expect(paths).toContain("providers.tts");
+
+		expect(SETTINGS_SCHEMA["live.model"].default).toBe("gpt-live-1-codex");
+		expect(SETTINGS_SCHEMA["live.voice"].default).toBe("sol");
+		expect([...SETTINGS_SCHEMA["live.voice"].values]).toEqual([
+			"juniper",
+			"maple",
+			"spruce",
+			"ember",
+			"vale",
+			"breeze",
+			"arbor",
+			"sol",
+			"cove",
+		]);
+		expect([...SETTINGS_SCHEMA["computer.backend"].values]).toEqual(["auto", "native", "cua"]);
+	});
 });
