@@ -3,7 +3,8 @@ import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { resetSettingsForTest, Settings } from "../config/settings";
 import type { AgentSession } from "../session/agent-session";
-import { type CustomMessagePayload, LIVE_TRANSCRIPT_MESSAGE_TYPE } from "../session/messages";
+import type { AgentSessionEvent } from "../session/agent-session-events";
+import { type CustomMessagePayload, LIVE_TRANSCRIPT_MESSAGE_TYPE, LIVE_WORKER_MESSAGE_TYPE } from "../session/messages";
 import { type LiveConfig, resolveLiveConfig } from "./config";
 import {
 	type LiveSessionCallbacks,
@@ -31,7 +32,12 @@ interface SessionRecorder {
 	isStreaming: boolean;
 	/** When set, the session log rejects every append. */
 	appendFails?: boolean;
+	/** The controller's session subscriber, so a test can drive agent events. */
+	sessionListener?: (event: AgentSessionEvent) => void;
 }
+
+/** Keeps a delegated turn in flight, the way a real backend turn does. */
+type TurnGate = { holdTurn: boolean; readonly turn: PromiseWithResolvers<boolean> };
 
 function callbacks(): LiveSessionCallbacks {
 	return {
@@ -40,6 +46,17 @@ function callbacks(): LiveSessionCallbacks {
 		onTranscript: () => {},
 		onTerminal: () => {},
 	};
+}
+
+/** Minimal assistant message carrying one text part. */
+function assistantText(text: string): AssistantMessage {
+	return { role: "assistant", content: text ? [{ type: "text", text }] : [] } as unknown as AssistantMessage;
+}
+
+/** Drains microtasks until `predicate` holds, so tests never count ticks. */
+async function until(predicate: () => boolean, ticks = 100): Promise<void> {
+	for (let index = 0; index < ticks && !predicate(); index += 1) await Promise.resolve();
+	if (!predicate()) throw new Error("condition was never reached");
 }
 
 /**
@@ -78,9 +95,13 @@ function fakeSession(recorder: SessionRecorder): AgentSession {
 		},
 		buildDisplaySessionContext: () => ({ messages: [] }),
 		getActiveToolNames: () => [],
-		subscribe: () => {
+		subscribe: (listener: (event: AgentSessionEvent) => void) => {
 			recorder.order.push("subscribe");
-			return () => recorder.order.push("unsubscribe");
+			recorder.sessionListener = listener;
+			return () => {
+				recorder.sessionListener = undefined;
+				recorder.order.push("unsubscribe");
+			};
 		},
 		// The canonical log-only boundary the controller uses. Mirrors the real
 		// method's contract: it swallows a rejected write and reports it, so the
@@ -96,9 +117,14 @@ function fakeSession(recorder: SessionRecorder): AgentSession {
 				throw new Error("transcript rows must use appendLogOnlyCustomMessage");
 			},
 		},
-		sendCustomMessage: async (message: PersistedMessage) => {
+		sendCustomMessage: async (message: PersistedMessage, options?: { onAccepted?: () => void }) => {
 			recorder.delivered.push(message);
-			return true;
+			options?.onAccepted?.();
+			// A real `triggerTurn` delivery resolves only when the whole backend turn
+			// ends. A fake that resolves at once closes the range immediately, which
+			// hides every teardown-time contract.
+			const gate = recorder as Partial<TurnGate>;
+			return gate.holdTurn && gate.turn ? gate.turn.promise : true;
 		},
 		abort: async () => {},
 	} as unknown as AgentSession;
@@ -110,6 +136,9 @@ class LifecycleHarness implements SessionRecorder {
 	readonly delivered: PersistedMessage[] = [];
 	isStreaming = false;
 	appendFails = false;
+	holdTurn = false;
+	readonly turn = Promise.withResolvers<boolean>();
+	sessionListener: ((event: AgentSessionEvent) => void) | undefined;
 	readonly inputMute: boolean[] = [];
 	readonly outputMute: boolean[] = [];
 	readonly states: LiveState[] = [];
@@ -330,6 +359,41 @@ describe("LiveSessionController lifecycle", () => {
 
 		expect(controller.state).toMatchObject({ voice: "speaking", worker: "working" });
 		await controller.stop();
+	});
+
+	it("persists the durable row for a turn still open when the call stops", async () => {
+		const harness = new LifecycleHarness();
+		const controller = harness.controller();
+		// The delegated turn stays in flight, so the range is still open at stop.
+		harness.holdTurn = true;
+		await controller.start();
+		harness.transportOptions?.callbacks.onEvent({
+			type: "delegation.created",
+			item: { type: "delegation", target: "client", id: "d1", content: [{ type: "input_text", text: "go" }] },
+		});
+		// The delegation envelope reaching the session is what proves the bridge
+		// activated a generation; counting ticks would race it.
+		await until(() => harness.delivered.length > 0);
+		const body = "The branch carries three committed themes.";
+		const partial = assistantText(body);
+		harness.sessionListener?.({ type: "message_start", message: assistantText("") } as AgentSessionEvent);
+		harness.sessionListener?.({
+			type: "message_update",
+			message: partial,
+			assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: body, partial },
+		} as AgentSessionEvent);
+
+		// The turn never ended, so its range closes during teardown. That close is
+		// the only thing that writes the row, and it is the delegated answer's one
+		// durable record: the ordinary transcript is suppressed while the turn is
+		// owned, so losing the row loses the answer from a resumed session.
+		await controller.stop();
+		const rows = harness.persisted.filter(message => message.customType === LIVE_WORKER_MESSAGE_TYPE);
+		expect(rows).toHaveLength(1);
+		const details = rows[0]?.details as { screen?: string; delegationId?: string } | undefined;
+		expect(details?.screen).toBe(body);
+		// Names the range it closes, so rebuild pairs it with its own opener.
+		expect(details?.delegationId).toBe("d1");
 	});
 
 	it("refreshes the microphone without reconnecting", async () => {

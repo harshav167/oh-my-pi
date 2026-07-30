@@ -46,6 +46,7 @@ import {
 	LIVE_DELEGATION_MESSAGE_TYPE,
 	LIVE_TRANSCRIPT_MESSAGE_TYPE,
 	LIVE_WORKER_MESSAGE_TYPE,
+	type LiveDelegationDetails,
 	type LiveTranscriptDetails,
 	type LiveWorkerDetails,
 	LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE,
@@ -106,15 +107,23 @@ function imageLinksForMessage(
 /**
  * Identity of the delegated turn a `live-worker` row closes.
  *
- * Walks back from the boundary to the last assistant record inside the range so
- * the projected artifact is credited to the model that actually produced it,
- * not to the voice model that requested it.
+ * Walks back from the boundary to the last assistant record inside the matched
+ * range so the projected artifact is credited to the model that actually
+ * produced it, not to the voice model that requested it.
+ *
+ * `openedAt` is the row this boundary actually paired with, not "the nearest
+ * opener": a steered correction persists its own opener while the turn it
+ * replaces is still streaming, so the row before a boundary can belong to a
+ * later range. Stopping there credited nothing and dropped the artifact.
  */
-function lastOwnedAssistant(messages: readonly AgentMessage[], boundary: number): AssistantMessage | undefined {
-	for (let i = boundary - 1; i >= 0; i -= 1) {
+function lastOwnedAssistant(
+	messages: readonly AgentMessage[],
+	boundary: number,
+	openedAt: number,
+): AssistantMessage | undefined {
+	for (let i = boundary - 1; i > openedAt; i -= 1) {
 		const message = messages[i];
 		if (message?.role === "assistant") return message;
-		if (message?.role === "custom" && message.customType === LIVE_DELEGATION_MESSAGE_TYPE) return undefined;
 	}
 	return undefined;
 }
@@ -447,40 +456,90 @@ export class UiHelpers {
 		// renders normally. The records themselves stay in the log and in provider
 		// context; this only decides what is drawn.
 		const liveOwned = new Set<number>();
-		const liveClosed = new Set<number>();
+		/** Close row index → the opener it paired with, for per-range attribution. */
+		const liveClosed = new Map<number, number>();
 		/**
-		 * Voice rows inside a range closed by a row from BEFORE `withheld` existed.
+		 * Spoken assistant rows inside a closed range that replays its own body.
 		 *
-		 * Such a row only knows the full body, so that range replays the way it used
-		 * to — one artifact carrying everything. Replaying its spoken turns on top
-		 * would put the same answer on screen twice, which is the defect the newer
-		 * rows avoid by recording what the call actually drew.
+		 * One carrier per range. A resumed session has no audio, so the range's
+		 * artifact is the precise answer and the voice model's paraphrase of it
+		 * would be the same reply twice — the two-colour duplicate this projection
+		 * exists to remove. The user's own utterances are never suppressed: nothing
+		 * else carries them.
 		 */
-		const liveLegacyVoice = new Set<number>();
-		let openedAt: number | undefined;
+		const liveOwnedVoice = new Set<number>();
+		/**
+		 * Openers awaiting their close, keyed by the range they name.
+		 *
+		 * Never positional. A steered correction sends through the same
+		 * `live-delegation` type, and the session persists that opener BEFORE the
+		 * turn it replaces closes, so the rows read open(A) open(B) close(A)
+		 * close(B). Position alone either loses A (one mutable slot) or lets a
+		 * stale opener from a crashed call swallow a later range's close (a queue).
+		 */
+		const openerById = new Map<string, number>();
+		/**
+		 * The single unmatched opener from before ids existed.
+		 *
+		 * Ambiguity here is unsolvable, so it is refused rather than guessed: from a
+		 * bare sequence of id-less rows there is no way to tell which close belongs
+		 * to which opener, and guessing suppresses the wrong turn's history.
+		 */
+		let legacyOpener: number | undefined;
+		/**
+		 * Latched, permanently, the first time two id-less openers appear with no
+		 * close between them.
+		 *
+		 * Never cleared: a close cannot tell you the ambiguous group is exhausted.
+		 * `open open close open close close` would otherwise resume pairing after the
+		 * first close and match the second one to the wrong opener. Every later
+		 * id-less range in the transcript therefore replays as raw history — the
+		 * conservative loss, and only for sessions recorded before ids existed.
+		 */
+		let legacyAmbiguous = false;
 		for (let i = 0; i < count; i++) {
 			const message = messages[i]!;
 			if (message.role !== "custom") continue;
 			if (message.customType === LIVE_DELEGATION_MESSAGE_TYPE) {
-				openedAt = i;
+				const id = (message.details as LiveDelegationDetails | undefined)?.delegationId;
+				if (id) openerById.set(id, i);
+				else if (legacyOpener === undefined && !legacyAmbiguous) legacyOpener = i;
+				else {
+					legacyOpener = undefined;
+					legacyAmbiguous = true;
+				}
 				continue;
 			}
-			if (message.customType !== LIVE_WORKER_MESSAGE_TYPE || openedAt === undefined) continue;
-			const legacy = (message.details as LiveWorkerDetails | undefined)?.withheld === undefined;
+			if (message.customType !== LIVE_WORKER_MESSAGE_TYPE) continue;
+			const details = message.details as LiveWorkerDetails | undefined;
+			let openedAt: number | undefined;
+			if (details?.delegationId) {
+				openedAt = openerById.get(details.delegationId);
+				openerById.delete(details.delegationId);
+			} else {
+				openedAt = legacyAmbiguous ? undefined : legacyOpener;
+				legacyOpener = undefined;
+			}
+			// Only a close that actually paired with an opener projects: an orphan
+			// row has no range behind it, so crediting it to whatever assistant
+			// happens to precede it would attribute a report to an unrelated turn.
+			if (openedAt === undefined) continue;
+			const body = details?.screen?.trim();
 			for (let owned = openedAt; owned < i; owned += 1) {
 				const inner = messages[owned]!;
 				// Assistant records only: a `toolResult` carries no prose, and
 				// suppressing it would leave its tool box hanging unsettled forever.
 				if (inner.role === "assistant") liveOwned.add(owned);
-				if (legacy && inner.role === "custom" && inner.customType === LIVE_TRANSCRIPT_MESSAGE_TYPE) {
-					liveLegacyVoice.add(owned);
+				if (
+					body &&
+					inner.role === "custom" &&
+					inner.customType === LIVE_TRANSCRIPT_MESSAGE_TYPE &&
+					(inner.details as LiveTranscriptDetails | undefined)?.role === "assistant"
+				) {
+					liveOwnedVoice.add(owned);
 				}
 			}
-			// Only a close that actually paired with an opener projects: an orphan
-			// row has no range behind it, so crediting it to whatever assistant
-			// happens to precede it would attribute a report to an unrelated turn.
-			liveClosed.add(i);
-			openedAt = undefined;
+			liveClosed.set(i, openedAt);
 		}
 		for (let i = 0; i < count; i++) {
 			const message = messages[i]!;
@@ -488,8 +547,8 @@ export class UiHelpers {
 			// artifact, so only its tool calls are drawn from here.
 			const owned = liveOwned.has(i);
 			if (message.role === "custom" && message.customType === LIVE_TRANSCRIPT_MESSAGE_TYPE) {
-				// Already carried by a legacy range's full-body artifact below.
-				if (liveLegacyVoice.has(i)) continue;
+				// The range's artifact carries this answer already.
+				if (liveOwnedVoice.has(i)) continue;
 				// The voice half of the conversation. Replayed because a resumed session
 				// has no visualizer and no audio: without these rows a call's turns are
 				// invisible whenever the voice delivered the whole answer, which is the
@@ -517,14 +576,16 @@ export class UiHelpers {
 				continue;
 			}
 			if (message.role === "custom" && message.customType === LIVE_WORKER_MESSAGE_TYPE) {
-				if (!liveClosed.has(i)) continue;
+				const openedAt = liveClosed.get(i);
+				if (openedAt === undefined) continue;
 				const details = message.details as LiveWorkerDetails | undefined;
-				// What the CALL drew, not the whole body: `undefined` predates the field
-				// so the full body is the best available replay, while an empty string
-				// means the voice delivered everything and the call drew nothing — so
-				// nothing is drawn here either, and the voice rows above carry the turn.
-				const drawn = (details?.withheld ?? details?.screen)?.trim();
-				const source = lastOwnedAssistant(messages, i);
+				// The whole body, not what the call drew. `withheld` is a live-only
+				// signal: during a call the voice carries the prose, so only the part
+				// audio never took is drawn. A reload has no voice at all, so the
+				// artifact is the turn's answer and the spoken rows above it are
+				// suppressed instead.
+				const drawn = details?.screen?.trim();
+				const source = lastOwnedAssistant(messages, i, openedAt);
 				// No owned assistant record means nothing ran under this delegation,
 				// so there is no identity to credit and nothing worth drawing.
 				if (!drawn || !source) continue;

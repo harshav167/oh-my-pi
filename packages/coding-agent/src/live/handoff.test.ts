@@ -73,6 +73,7 @@ type SentMessage = {
 	triggerTurn?: boolean;
 	display?: boolean;
 	customType?: string;
+	details?: unknown;
 };
 
 function createFixture(
@@ -93,6 +94,8 @@ function createFixture(
 	/** Withheld remainders: what the live surface actually draws. */
 	const drawn: string[] = [];
 	let closes = 0;
+	/** Range ids the bridge named as it closed them. */
+	const closedIds: string[] = [];
 	const working: boolean[] = [];
 	const errors: Error[] = [];
 	let remainingFailures = options.failSends ?? 0;
@@ -118,6 +121,7 @@ function createFixture(
 				triggerTurn: sendOptions?.triggerTurn,
 				display: typeof message === "string" ? undefined : message.display,
 				customType: typeof message === "string" ? undefined : message.customType,
+				details: typeof message === "string" ? undefined : message.details,
 			});
 			// A steer delivery that never settles, exercising the bounded await on
 			// the FIFO chain without stalling turn-starting sends too.
@@ -183,8 +187,9 @@ function createFixture(
 			screen.push(body);
 			if (withheld) drawn.push(withheld);
 		},
-		onTurnClosed: () => {
+		onTurnClosed: (delegationId: string) => {
 			closes += 1;
+			closedIds.push(delegationId);
 		},
 		timeouts: options.timeouts,
 	});
@@ -195,6 +200,7 @@ function createFixture(
 		screen,
 		drawn,
 		closes: () => closes,
+		closedIds,
 		working,
 		errors,
 		text: () =>
@@ -226,8 +232,10 @@ describe("LiveHandoffBridge delegation envelope", () => {
 				"</realtime_delegation>",
 		);
 		// A delegation opens a presentation range on rebuild, so it must be filed as
-		// one — and only actual delegations may be.
+		// one — and only actual delegations may be. It also names the range, which is
+		// what pairs it with its own close when a correction interleaves the rows.
 		expect(fixture.customMessages[0]?.customType).toBe(LIVE_DELEGATION_MESSAGE_TYPE);
+		expect(fixture.customMessages[0]?.details).toEqual({ delegationId: "d1" });
 	});
 
 	it("omits transcript_delta when no new turns were spoken", async () => {
@@ -349,6 +357,96 @@ describe("LiveHandoffBridge generation ownership", () => {
 		await fixture.bridge.flush();
 
 		expect(fixture.working).toEqual([true, false]);
+	});
+
+	it("projects an answer whose turn has not ended, without closing the range", async () => {
+		const fixture = createFixture();
+		// Queued work — an advisory aside, a follow-up — keeps the turn alive past
+		// its answer. The answer still has to reach the user: prose stays
+		// suppressed while the turn is owned, so dropping it here leaves the reply
+		// neither spoken in full nor drawn anywhere.
+		const body = "Prefix caching is server-side; the breakpoint sits after `tools`.";
+		await fixture.bridge.handleDelegation(delegation("d1", "how does caching work"));
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent(textDelta(body, "final_answer"));
+		fixture.bridge.handleSessionEvent({ type: "agent_end", messages: [assistant(body)], isTerminal: false });
+		await fixture.bridge.flush();
+
+		expect(fixture.text()).toContain("Prefix caching is server-side");
+		expect(fixture.screen).toEqual([body]);
+		// The continuation belongs to the same delegation, so the range stays open.
+		expect(fixture.closes()).toBe(0);
+		expect(fixture.bridge.owningPresentation).toBe(true);
+		expect(fixture.bridge.working).toBe(true);
+	});
+
+	it("aggregates a continued turn's answers into one durable range", async () => {
+		const fixture = createFixture();
+		const first = "Short answer: it is prefix caching.";
+		const second = "Correction: retention is `1h` only when advertised.";
+		await fixture.bridge.handleDelegation(delegation("d1", "how does caching work"));
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent(textDelta(first, "final_answer"));
+		fixture.bridge.handleSessionEvent({ type: "agent_end", messages: [assistant(first)], isTerminal: false });
+		await fixture.bridge.flush();
+		// The advisory's follow-up runs on the same delegation.
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent(textDelta(second, "final_answer"));
+		fixture.bridge.handleSessionEvent({
+			type: "agent_end",
+			messages: [assistant(first), assistant(second)],
+			isTerminal: true,
+		});
+		await fixture.bridge.flush();
+
+		// Two bodies, one boundary: the durable row carries the whole turn.
+		expect(fixture.screen).toEqual([first, second]);
+		expect(fixture.closes()).toBe(1);
+		expect(fixture.bridge.owningPresentation).toBe(false);
+	});
+
+	it("keeps a second message whose answer repeats the first verbatim", async () => {
+		const fixture = createFixture();
+		// Dedupe has to key on the message, not its bytes: a continued turn may
+		// legitimately answer with the same words twice, and comparing content
+		// would silence the second one.
+		const body = "Done.";
+		await fixture.bridge.handleDelegation(delegation("d1", "twice?"));
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent(textDelta(body, "final_answer"));
+		fixture.bridge.handleSessionEvent({ type: "agent_end", messages: [assistant(body)], isTerminal: false });
+		await fixture.bridge.flush();
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent(textDelta(body, "final_answer"));
+		fixture.bridge.handleSessionEvent({
+			type: "agent_end",
+			messages: [assistant(body), assistant(body)],
+			isTerminal: true,
+		});
+		await fixture.bridge.flush();
+
+		expect(fixture.screen).toEqual([body, body]);
+		expect(fixture.closes()).toBe(1);
+	});
+
+	it("does not repeat one message's answer when the terminal event echoes it", async () => {
+		const fixture = createFixture();
+		const body = "Retention is long when the endpoint advertises it.";
+		await fixture.bridge.handleDelegation(delegation("d1", "retention?"));
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent(textDelta(body, "final_answer"));
+		fixture.bridge.handleSessionEvent({ type: "agent_end", messages: [assistant(body)], isTerminal: false });
+		await fixture.bridge.flush();
+		// No new message started, so this terminal event is the same answer again:
+		// it closes the range without projecting a second time.
+		fixture.bridge.handleSessionEvent({ type: "agent_end", messages: [assistant(body)], isTerminal: true });
+		await fixture.bridge.flush();
+
+		expect(fixture.screen).toEqual([body]);
+		expect(fixture.text()).toBe(body);
+		expect(fixture.closes()).toBe(1);
+		// The close names the range it ends, which is what rebuild pairs on.
+		expect(fixture.closedIds).toEqual(["d1"]);
 	});
 
 	it("steers the same backend turn and promotes the correction on the next message", async () => {
