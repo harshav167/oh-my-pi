@@ -13,6 +13,9 @@ repository = "https://github.com/can1357/oh-my-pi"
 [patch.crates-io]
 brush-core = { path = "crates/vendor/brush-core" }
 brush-builtins = { path = "crates/vendor/brush-builtins" }
+# Vendored to patch `build.rs::get_defined_symbols`, which hardcodes GNU `nm`
+# long options that Apple's `nm` rejects. See crates/vendor/README-webrtc-apm.md.
+webrtc-audio-processing-sys = { path = "crates/vendor/webrtc-audio-processing-sys" }
 
 [profile.release]
 opt-level = 3
@@ -245,8 +248,13 @@ audiopus_sys = { version = "0.2.2", features = ["static"] }
 # Pregenerated bindings (crate default): keeps bindgen/libclang out of the
 # build graph so Bazel actions stay hermetic.
 maudio = "0.1.6"
+# Raw miniaudio FFI, for reading the device id out of `ma_device_info`.
+maudio-sys = "0.1.3"
 opus = "0.3.1"
 webrtc = "0.17.2"
+# Echo cancellation, noise suppression and gain control for live capture.
+# `bundled` compiles the vendored C++ rather than linking a system copy.
+webrtc-audio-processing = { version = "=2.1.0", features = ["bundled"] }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # System & Platform
