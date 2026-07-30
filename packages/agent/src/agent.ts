@@ -337,6 +337,18 @@ export interface AgentOptions {
 
 export interface AgentPromptOptions {
 	toolChoice?: ToolChoice;
+	/**
+	 * Extra system-prompt fragments for this turn only.
+	 *
+	 * Appended after `AgentState.systemPrompt` on every model call in the turn,
+	 * including refreshes. `AgentState` is untouched, so a caller can run one
+	 * turn under a different contract without leaking it into the session.
+	 */
+	systemPromptAppend?: readonly string[];
+	/** Model for this turn only; leaves `AgentState.model` alone. */
+	model?: Model;
+	/** Reasoning effort for this turn only; leaves `AgentState.thinkingLevel` alone. */
+	thinkingLevel?: Effort;
 }
 
 /** Buffered Cursor exec-channel tool result waiting to be emitted after the assistant message. */
@@ -1190,8 +1202,20 @@ export class Agent {
 	 * Otherwise, continues from existing context.
 	 */
 	async #runLoop(messages?: AgentMessage[], options?: AgentPromptOptions & { skipInitialSteeringPoll?: boolean }) {
-		const model = this.#state.model;
+		// A per-turn override satisfies the requirement on its own: the caller
+		// supplied a model even if session state has none.
+		const model = options?.model ?? this.#state.model;
 		if (!model) throw new Error("No model configured");
+
+		// Captured once for the whole turn. When an override is present it is
+		// pinned, so a terminal-side model/effort switch mid-turn cannot bleed
+		// into this turn; with no override the existing dynamic state reads are
+		// preserved, which is how interactive model switching keeps working.
+		const overrideModel = options?.model;
+		const overrideReasoning = options?.thinkingLevel;
+		const promptAppend = options?.systemPromptAppend;
+		const systemPromptFor = (base: string[]): string[] =>
+			promptAppend && promptAppend.length > 0 ? [...base, ...promptAppend] : base;
 
 		let skipInitialSteeringPoll = options?.skipInitialSteeringPoll === true;
 		using _ = new EventLoopKeepalive();
@@ -1207,10 +1231,10 @@ export class Agent {
 		// Clear Cursor tool result buffer at start of each run
 		this.#cursorToolResultBuffer = [];
 
-		const reasoning = this.#state.thinkingLevel;
+		const reasoning = overrideReasoning ?? this.#state.thinkingLevel;
 
 		const context: AgentContext = {
-			systemPrompt: this.#state.systemPrompt,
+			systemPrompt: systemPromptFor(this.#state.systemPrompt),
 			messages: this.#state.messages.slice(),
 			tools: this.#state.tools,
 		};
@@ -1322,8 +1346,8 @@ export class Agent {
 				if (this.#listeners.size > 0) {
 					await Bun.sleep(0);
 				}
-				context.systemPrompt = this.#state.systemPrompt;
-				context.tools = this.#toolsForModel(this.#state.model ?? model);
+				context.systemPrompt = systemPromptFor(this.#state.systemPrompt);
+				context.tools = this.#toolsForModel(overrideModel ?? this.#state.model ?? model);
 			},
 			beforeModelCall:
 				this.#beforeModelCall || this.#additionalBeforeModelCalls.size > 0
@@ -1361,8 +1385,8 @@ export class Agent {
 			onToolChoiceRejected: () => {
 				if (claimedToolChoice !== undefined) this.#deferredToolChoice = claimedToolChoice;
 			},
-			getModel: () => this.#state.model ?? model,
-			getReasoning: () => this.#state.thinkingLevel,
+			getModel: () => overrideModel ?? this.#state.model ?? model,
+			getReasoning: () => overrideReasoning ?? this.#state.thinkingLevel,
 			getDisableReasoning: () => this.#state.disableReasoning,
 			getServiceTier: this.#serviceTierResolver,
 			getSteeringMessages: async () => {
@@ -1441,8 +1465,8 @@ export class Agent {
 						break;
 
 					case "turn_end":
-						if (event.message.role === "assistant" && (event.message as any).errorMessage) {
-							this.#state.error = (event.message as any).errorMessage;
+						if (event.message.role === "assistant" && event.message.errorMessage) {
+							this.#state.error = event.message.errorMessage;
 						}
 						break;
 
