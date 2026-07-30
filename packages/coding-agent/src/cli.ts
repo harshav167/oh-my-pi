@@ -36,6 +36,7 @@ import { TERMINAL_OUTPUT_WORKER_ARG } from "./launch/terminal-output-worker-prot
 import { COMPUTER_WORKER_ARG } from "./tools/computer/protocol";
 import { smokeTestComputerWorker } from "./tools/computer/supervisor";
 import { startComputerWorker } from "./tools/computer/worker-entry";
+import { smokeTestCuaRuntime } from "./tools/computer/cua-controller";
 
 if (Bun.semver.order(Bun.version, MIN_BUN_VERSION) < 0) {
 	process.stderr.write(
@@ -108,6 +109,7 @@ async function runSmokeTest(): Promise<void> {
 	await smokeTestSttWorker();
 	await smokeTestJsEvalWorker();
 	await smokeTestComputerWorker();
+	await smokeTestCuaRuntime();
 	await smokeTestTtsWorker();
 	await smokeTestMnemopiEmbedWorker();
 	await smokeTestDaemonBroker();

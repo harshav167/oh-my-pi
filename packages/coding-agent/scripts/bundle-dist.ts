@@ -3,6 +3,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";
+import { CUA_EXTERNAL_PACKAGES } from "../src/tools/computer/cua-packages";
 import { buildDocsIndexPayload } from "./generate-docs-index";
 
 const packageDir = path.join(import.meta.dir, "..");
@@ -17,6 +18,7 @@ const legacyHtmlExportAssetPattern = /^(?:template-[^.]+\.(?:css|html|js)|tool-v
 const ALWAYS_EXTERNAL = [
 	"mupdf",
 	"@oh-my-pi/pi-natives",
+	...CUA_EXTERNAL_PACKAGES,
 	"@huggingface/transformers",
 	"fastembed",
 	"onnxruntime-node",
