@@ -2,6 +2,7 @@ import { dlopen, FFIType, ptr } from "bun:ffi";
 import * as fs from "node:fs";
 import {
 	$env,
+	chunkByUtf8Bytes,
 	isBunTestRuntime,
 	isTerminalHeadless,
 	logger,
@@ -67,77 +68,22 @@ const MAX_CONPTY_WRITE_CHUNK_BYTES = 16 * 1024;
 
 /**
  * Split `data` into chunks whose encoded UTF-8 byte length is no greater than
- * `maxChunkBytes`, preferring a line boundary (`\n`) as the cut point so
- * escape sequences (which never contain `\n`) stay intact. The TUI's
- * full-paint buffers are line-structured (`buffer += "\r\n"` between rows),
- * so a newline almost always exists within the window. The fallback for a
- * buffer with no newline in range is a hard cut at the last UTF-8 code-point
- * boundary that still fits — the ConPTY viewport bug from a single oversized
- * write is strictly worse than a one-frame escape-sequence glitch on a
- * buffer the renderer effectively never produces.
+ * `maxChunkBytes`, preferring a line boundary (`\n`) as the cut point so escape
+ * sequences (which never contain `\n`) stay intact. The TUI's full-paint buffers
+ * are line-structured (`buffer += "\r\n"` between rows), so a newline almost
+ * always exists within the window. The fallback for a buffer with no newline in
+ * range is a hard cut at the last UTF-8 code-point boundary that still fits —
+ * the ConPTY viewport bug from a single oversized write is strictly worse than a
+ * one-frame escape-sequence glitch on a buffer the renderer effectively never
+ * produces.
  *
- * UTF-16 code units are walked manually rather than measuring with
- * `Buffer.byteLength` per slice candidate: each code unit's UTF-8 width is
- * known from its value (BMP `<0x80` → 1, `<0x800` → 2, surrogate pair → 4
- * bytes across two units, other BMP → 3), and surrogate pairs are kept
- * together so the chunker never splits a non-BMP character.
- *
- * Exported for unit testing of the chunking contract; `#safeWrite` is the
- * sole production caller.
+ * The byte-safe walk itself lives in `@oh-my-pi/pi-utils`; this wrapper supplies
+ * the ConPTY-specific policy (newline-preferred cuts, 16 KiB default) and exists
+ * so the chunking contract can be unit-tested at that policy. `#safeWrite` is
+ * the sole production caller.
  */
 export function chunkForConPTY(data: string, maxChunkBytes: number = MAX_CONPTY_WRITE_CHUNK_BYTES): string[] {
-	// Fast path: whole buffer fits in one write.
-	if (Buffer.byteLength(data, "utf8") <= maxChunkBytes) return [data];
-	const chunks: string[] = [];
-	const len = data.length;
-	let pos = 0;
-	while (pos < len) {
-		let bytes = 0;
-		// Index just past the most recent `\n` we've consumed inside [pos, i):
-		// the natural cut point that leaves escape sequences intact.
-		let lastNewlineEnd = -1;
-		let i = pos;
-		while (i < len) {
-			const cu = data.charCodeAt(i);
-			let cuLen = 1;
-			let cuBytes: number;
-			if (cu < 0x80) {
-				cuBytes = 1;
-			} else if (cu < 0x800) {
-				cuBytes = 2;
-			} else if (cu >= 0xd800 && cu < 0xdc00) {
-				// High surrogate: pair with the following low surrogate (4 bytes
-				// across two code units); an unpaired surrogate UTF-8-encodes as
-				// the 3-byte U+FFFD replacement character.
-				const next = i + 1 < len ? data.charCodeAt(i + 1) : 0;
-				if (next >= 0xdc00 && next < 0xe000) {
-					cuBytes = 4;
-					cuLen = 2;
-				} else {
-					cuBytes = 3;
-				}
-			} else {
-				// BMP non-surrogate or unpaired low surrogate → 3 bytes.
-				cuBytes = 3;
-			}
-			if (bytes + cuBytes > maxChunkBytes && i > pos) {
-				// Would overflow the cap. Cut at the last newline if we found one,
-				// otherwise hard-cut at the current code-point boundary.
-				const cut = lastNewlineEnd > pos ? lastNewlineEnd : i;
-				chunks.push(data.slice(pos, cut));
-				pos = cut;
-				break;
-			}
-			bytes += cuBytes;
-			i += cuLen;
-			if (cu === 0x0a) lastNewlineEnd = i;
-		}
-		if (i >= len) {
-			chunks.push(data.slice(pos));
-			pos = len;
-		}
-	}
-	return chunks;
+	return chunkByUtf8Bytes(data, maxChunkBytes, { preferNewline: true });
 }
 
 /**
