@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Agent, type AgentEvent, type AgentTool, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type SimpleStreamOptions, type ToolResultMessage, z } from "@oh-my-pi/pi-ai";
-import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
+import { createMockModel, streamMock } from "@oh-my-pi/pi-ai/providers/mock";
 import { kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
 import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
 import { createAssistantMessage } from "./helpers";
@@ -787,6 +787,104 @@ describe("Agent", () => {
 
 		const reasoningPerCall: Array<SimpleStreamOptions["reasoning"]> = mock.calls.map(call => call.options?.reasoning);
 		expect(reasoningPerCall).toEqual([ThinkingLevel.Low, ThinkingLevel.High]);
+	});
+
+	it("applies per-turn overrides to every model call without mutating agent state", async () => {
+		const toolSchema = z.object({ value: z.string() });
+		type Details = { value: string };
+		const alphaTool: AgentTool<typeof toolSchema, Details> = {
+			name: "alpha",
+			label: "Alpha",
+			description: "Alpha tool",
+			parameters: toolSchema,
+			async execute(_toolCallId, params) {
+				return { content: [{ type: "text", text: `alpha:${params.value}` }], details: { value: params.value } };
+			},
+		};
+
+		const base = createMockModel({ responses: [] });
+		const override = createMockModel({
+			responses: [
+				{ content: [{ type: "toolCall", id: "tool-1", name: "alpha", arguments: { value: "hello" } }] },
+				{ content: ["done"] },
+			],
+		});
+
+		const agent = new Agent({
+			initialState: {
+				model: base.model,
+				systemPrompt: ["session-prompt"],
+				thinkingLevel: ThinkingLevel.Low,
+				tools: [alphaTool],
+				messages: [],
+			},
+			// Dispatches on the model it is handed, unlike `mock.stream`, which
+			// always answers as its own instance.
+			streamFn: streamMock,
+		});
+
+		await agent.prompt("run", {
+			model: override.model,
+			thinkingLevel: ThinkingLevel.High,
+			systemPromptAppend: ["turn-contract"],
+		});
+
+		// The override model served the whole turn; the session model never ran.
+		expect(base.calls).toHaveLength(0);
+		expect(override.calls).toHaveLength(2);
+		// Both calls, so the append survives `syncContextBeforeModelCall` and is
+		// not just applied to the initial context.
+		expect(override.calls.map(call => call.context.systemPrompt)).toEqual([
+			["session-prompt", "turn-contract"],
+			["session-prompt", "turn-contract"],
+		]);
+		expect(override.calls.map(call => call.options?.reasoning)).toEqual([ThinkingLevel.High, ThinkingLevel.High]);
+
+		// The point of the API: the session is exactly as it was.
+		expect(agent.state.model).toBe(base.model);
+		expect(agent.state.systemPrompt).toEqual(["session-prompt"]);
+		expect(agent.state.thinkingLevel).toBe(ThinkingLevel.Low);
+	});
+
+	it("pins an overridden thinking level against a mid-turn session change", async () => {
+		const toolSchema = z.object({ value: z.string() });
+		type Details = { value: string };
+		const alphaTool: AgentTool<typeof toolSchema, Details> = {
+			name: "alpha",
+			label: "Alpha",
+			description: "Alpha tool",
+			parameters: toolSchema,
+			async execute(_toolCallId, params) {
+				return { content: [{ type: "text", text: `alpha:${params.value}` }], details: { value: params.value } };
+			},
+		};
+
+		const mock = createMockModel({
+			responses: [
+				{ content: [{ type: "toolCall", id: "tool-1", name: "alpha", arguments: { value: "hello" } }] },
+				{ content: ["done"] },
+			],
+		});
+
+		const agent = new Agent({
+			initialState: { model: mock.model, thinkingLevel: ThinkingLevel.Low, tools: [alphaTool], messages: [] },
+			streamFn: mock.stream,
+		});
+
+		// Without an override this same edit changes the second call — see
+		// "re-reads thinking level for each model call within a run". An
+		// overridden turn must be immune, or a terminal-side switch would
+		// silently reconfigure a delegated voice turn mid-flight.
+		const unsubscribe = agent.subscribe(event => {
+			if (event.type === "message_end" && event.message.role === "toolResult") {
+				agent.setThinkingLevel(ThinkingLevel.Minimal);
+			}
+		});
+
+		await agent.prompt("run", { thinkingLevel: ThinkingLevel.High });
+		unsubscribe();
+
+		expect(mock.calls.map(call => call.options?.reasoning)).toEqual([ThinkingLevel.High, ThinkingLevel.High]);
 	});
 
 	it("forwards explicit reasoning disablement to the stream", async () => {
