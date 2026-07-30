@@ -373,7 +373,7 @@ export class LiveSessionController {
 				// Persist both: the full body for a reload, and the part the voice lane
 				// never took, which is the only part drawn now.
 				onScreen: (body, withheld) =>
-					this.#guardEvent(() => {
+					this.#guardOutput(() => {
 						this.#screenBody.push(body);
 						if (!withheld) return;
 						this.#drawnBody.push(withheld);
@@ -383,7 +383,7 @@ export class LiveSessionController {
 				// teardown reports not-working before the final output is flushed, so
 				// keying persistence off the indicator would write an empty boundary
 				// and strand the body.
-				onTurnClosed: () => this.#guardEvent(() => this.#persistWorkerArtifact()),
+				onTurnClosed: delegationId => this.#guardOutput(() => this.#persistWorkerArtifact(delegationId)),
 				turnOverrides: this.#turnOverrides(),
 			});
 			this.#unsubscribeSession = this.#host.turnSession.subscribe(event =>
@@ -505,6 +505,35 @@ export class LiveSessionController {
 			handler();
 		} catch (cause) {
 			this.#reportFailure(errorFrom(cause));
+		}
+	}
+
+	/**
+	 * Runs one of the bridge's own output callbacks, which stay live through
+	 * teardown.
+	 *
+	 * `#guardEvent` drops everything once `#stopped`, and that is right for
+	 * transport and session events: they must not act on a call that is gone.
+	 * The bridge's drained output is the opposite case. `dispose()` runs AFTER
+	 * `#stopped` is set, and that is exactly when a turn still open gets its
+	 * final projection and its durable close — so routing these through
+	 * `#guardEvent` silently dropped the delegated answer's only record, since
+	 * the ordinary transcript stays suppressed for an owned turn.
+	 *
+	 * While the call is live these are ordinary failures and escalate like every
+	 * other callback. Only during teardown is a throw logged instead: the call is
+	 * already ending, and `#reportFailure` would turn a persistence bug into a
+	 * terminal error for a session that otherwise closed cleanly.
+	 */
+	#guardOutput(handler: () => void): void {
+		if (!this.#stopped) {
+			this.#guardEvent(handler);
+			return;
+		}
+		try {
+			handler();
+		} catch (cause) {
+			logger.error("Live output handling failed during teardown", { error: errorFrom(cause).message });
 		}
 	}
 
@@ -671,7 +700,7 @@ export class LiveSessionController {
 	 * main-agent output. Log-only for the same reason as
 	 * {@link #persistTranscriptTurn}, and best-effort for the same reason.
 	 */
-	#persistWorkerArtifact(): void {
+	#persistWorkerArtifact(delegationId: string): void {
 		const screen = this.#screenBody.join("\n\n").trim();
 		const withheld = this.#drawnBody.join("\n\n").trim();
 		this.#screenBody.length = 0;
@@ -685,7 +714,9 @@ export class LiveSessionController {
 			// transcript builder) do not, so they drew the report a second time beside
 			// the prose it was meant to replace.
 			display: false,
-			details: { screen, withheld },
+			// The id is what rebuild pairs on: a steered correction opens its own
+			// range before the turn it replaces closes, so positions interleave.
+			details: { screen, withheld, delegationId },
 			attribution: "agent",
 		});
 	}

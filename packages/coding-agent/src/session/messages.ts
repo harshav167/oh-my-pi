@@ -323,6 +323,12 @@ export const LIVE_TRANSCRIPT_MESSAGE_TYPE = "live-transcript";
  */
 export const LIVE_TAIL_MESSAGE_TYPE = "live-tail";
 
+/** Persisted details of a `live-delegation` custom message. */
+export interface LiveDelegationDetails {
+	/** Names the range this opener starts, so its own close can be matched. */
+	delegationId?: string;
+}
+
 /** Persisted details of a `live-transcript` custom message. */
 export interface LiveTranscriptDetails {
 	role: "user" | "assistant";
@@ -350,12 +356,20 @@ export interface LiveWorkerDetails {
 	/**
 	 * The part of `screen` audio never took, which is all the live call drew.
 	 *
-	 * Rebuild draws this rather than `screen` so a resumed session shows what the
-	 * call showed. An empty string means the voice delivered the whole answer and
-	 * the call drew nothing; `undefined` means the row predates this field, so
-	 * rebuild falls back to `screen`.
+	 * A live-only signal: during a call the voice carries the prose, so only this
+	 * part is drawn. A reload has no voice, so rebuild draws the whole `screen`
+	 * and suppresses that range's spoken paraphrase instead.
 	 */
 	withheld?: string;
+	/**
+	 * The range this row closes.
+	 *
+	 * Rebuild pairs openers to closes by this id, never by position: a steered
+	 * correction persists its own opener while the turn it replaces is still
+	 * streaming, so the rows interleave as open(A) open(B) close(A) close(B).
+	 * `undefined` means the row predates the field.
+	 */
+	delegationId?: string;
 }
 
 /** Content shape accepted for extension-injected messages. */

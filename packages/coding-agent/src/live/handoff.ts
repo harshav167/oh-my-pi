@@ -79,7 +79,7 @@ export interface LiveHandoffBridgeOptions {
 	 * early during teardown, while this marks the durable end of the delegation's
 	 * presentation range and must observe every screen body first.
 	 */
-	readonly onTurnClosed?: () => void;
+	readonly onTurnClosed?: (delegationId: string) => void;
 	/**
 	 * Per-turn model, effort, and voice contract for delegated coding turns.
 	 * Resolved once at `/live` startup so a failure surfaces there rather than
@@ -136,6 +136,17 @@ type Generation = {
 	 * explicit leading marker, since only their first delta carries it.
 	 */
 	commentaryParts: Set<number>;
+	/**
+	 * Whether the currently open assistant message has already been projected.
+	 *
+	 * A turn can end its answer message without ending the turn — a queued
+	 * advisory or follow-up runs on the same delegation — and the later terminal
+	 * event then repeats that same answer. Reset by `message_start`, so this
+	 * tracks the message rather than its bytes: two messages in one turn may
+	 * legitimately carry identical text, and comparing content would silence the
+	 * second.
+	 */
+	answerProjected: boolean;
 };
 
 /**
@@ -149,7 +160,8 @@ type Generation = {
 type TurnState =
 	| { readonly kind: "idle"; readonly debt: number }
 	| { readonly kind: "running"; readonly generation: Generation; readonly debt: number }
-	| { readonly kind: "closing"; readonly debt: number };
+	| { readonly kind: "closing"; readonly debt: number; readonly delegationId: string };
+
 /** Whether this generation may still accept assistant text. */
 function acceptsText(generation: Generation): boolean {
 	return generation.phase === "streaming";
@@ -219,7 +231,7 @@ export class LiveHandoffBridge {
 	 * what keeps the boundary exactly one-per-delegation either way: only a
 	 * transition out of `running` produces it, and `#closeTurn` consumes it.
 	 */
-	readonly #onTurnClosed: () => void;
+	readonly #onTurnClosed: (delegationId: string) => void;
 
 	constructor(options: LiveHandoffBridgeOptions) {
 		this.#session = options.session;
@@ -254,14 +266,19 @@ export class LiveHandoffBridge {
 			this.#turn = { kind: "running", generation, debt };
 			return;
 		}
-		// Leaving `running` owes a close; any other exit has nothing pending.
-		this.#turn = this.#turn.kind === "running" ? { kind: "closing", debt } : { kind: "idle", debt };
+		// Leaving `running` owes a close; any other exit has nothing pending. The
+		// delegation id rides along so the close can name the range it ends.
+		this.#turn =
+			this.#turn.kind === "running"
+				? { kind: "closing", debt, delegationId: this.#turn.generation.delegationId }
+				: { kind: "idle", debt };
 	}
 
 	#closeTurn(): void {
 		if (this.#turn.kind !== "closing") return;
+		const { delegationId } = this.#turn;
 		this.#turn = { kind: "idle", debt: this.#turn.debt };
-		this.#onTurnClosed();
+		this.#onTurnClosed(delegationId);
 	}
 
 	/** Whether a delegated backend turn is currently owned by this bridge. */
@@ -342,15 +359,20 @@ export class LiveHandoffBridge {
 		// Flush while `#active` is still set, since `#emitText` is gated on it.
 		if (drained) this.#output.endMessage();
 		this.#setActive(undefined);
-		// Only a drained shutdown closes the durable range. On a stalled drain the
-		// screen body was never flushed, so writing the boundary here would mark a
-		// matched range with an empty artifact and hide that turn's real history on
-		// rebuild — strictly worse than replaying the raw turn. The abandoned
-		// handler can still resume and close it properly.
+		// Only a drained shutdown closes the durable range. An abandoned handler may
+		// still produce output — a projection, a remainder, another message — so
+		// closing here would make an incomplete artifact authoritative for the whole
+		// range. The range simply stays unclosed and rebuild replays that turn's raw
+		// history, which is strictly better. Nothing reopens it: `#active` is cleared
+		// above, so a resumed `#complete` fails its generation guard and returns.
+		//
+		// Note this is NOT "no body has been flushed yet": a turn whose answer ended
+		// non-terminally has already projected one, so the controller can be holding
+		// a partial body at this point.
 		if (drained) this.#closeTurn();
 		if (!drained) {
-			// The abandoned handler can still resume, so do no further flushing
-			// or sending here — controller teardown owns closing the transport.
+			// Nothing further is flushed or sent from here: the abandoned handler may
+			// still be mid-flight, and controller teardown owns closing the transport.
 			logger.warn("Live event chain did not drain before shutdown; abandoning it", {
 				timeoutMs: this.#drainTimeoutMs,
 			});
@@ -417,7 +439,7 @@ export class LiveHandoffBridge {
 		// rather than continue against a turn that may or may not have been
 		// corrected.
 		const steered = await this.#bounded(
-			this.#sendToSession(this.#buildRequest(request), { deliverAs: "steer" }),
+			this.#sendToSession(this.#buildRequest(request), { deliverAs: "steer", delegationId: id }),
 			this.#sendTimeoutMs,
 		);
 		if (!steered) {
@@ -507,6 +529,8 @@ export class LiveHandoffBridge {
 					return;
 				}
 				active.phase = "streaming";
+				// A new message is a new answer, whatever it says.
+				active.answerProjected = false;
 				// A tool-use turn emits several assistant messages; each one gets
 				// its own lane, speech budget, and final-text reconciliation.
 				active.commentaryParts.clear();
@@ -553,7 +577,15 @@ export class LiveHandoffBridge {
 				this.#emitStatusRecord(TOOL_FAILED_STATUS);
 				return;
 			case "agent_end":
-				if (event.isTerminal === false) return;
+				if (event.isTerminal === false) {
+					// The turn continues on this same delegation, so ownership, the
+					// working indicator and the durable range all stay put. The message
+					// that just ended is still this turn's answer though: prose is
+					// suppressed while the turn is owned, so leaving it unprojected is
+					// the reply reaching neither the voice lane in full nor the screen.
+					if (this.#projectAnswer(active, event.messages)) this.#output.endMessage();
+					return;
+				}
 				// No debt check here: the guard at the top of this method already
 				// consumes an owed terminal and returns, so this line is only reached
 				// when the count is zero.
@@ -605,7 +637,7 @@ export class LiveHandoffBridge {
 		// turn against a session that is already gone.
 		if (this.#disposed) return;
 		this.#activate(id);
-		await this.#sendToSession(this.#buildRequest(request), { triggerTurn: true });
+		await this.#sendToSession(this.#buildRequest(request), { triggerTurn: true, delegationId: id });
 	}
 
 	/**
@@ -631,6 +663,7 @@ export class LiveHandoffBridge {
 			commentaryEmitted: false,
 			toolFailureReported: false,
 			commentaryParts: new Set(),
+			answerProjected: false,
 		});
 		this.#messageText = "";
 		this.#output.reset();
@@ -657,7 +690,15 @@ export class LiveHandoffBridge {
 		if (status) void this.#sendStatus(generation.delegationId, status);
 	}
 
-	async #finish(generation: Generation, messages: readonly AgentMessage[]): Promise<void> {
+	/**
+	 * Reconciles the answer message that just ended against what the stream
+	 * already carried, so the visible final text is what crosses.
+	 *
+	 * Returns whether this answer is new. A turn can end its answer without
+	 * ending the turn, and the later terminal event repeats that same answer;
+	 * projecting it again would speak the reply twice and draw it twice.
+	 */
+	#projectAnswer(generation: Generation, messages: readonly AgentMessage[]): boolean {
 		let finalText = "";
 		for (let index = messages.length - 1; index >= 0; index -= 1) {
 			const message = messages[index];
@@ -665,6 +706,11 @@ export class LiveHandoffBridge {
 			finalText = this.#extractAssistantText(message);
 			if (finalText) break;
 		}
+		if (generation.answerProjected) return false;
+		// Nothing to project yet. Marking the message done here would suppress a
+		// later terminal event that carries the real answer.
+		if (!finalText && !this.#messageText) return false;
+		generation.answerProjected = true;
 		const remainder = finalText.startsWith(this.#messageText)
 			? finalText.slice(this.#messageText.length)
 			: this.#messageText
@@ -675,6 +721,11 @@ export class LiveHandoffBridge {
 			// stream did not already carry is spoken, never commentary.
 			this.#output.append(remainder, "speakable", REMAINDER_PART);
 		}
+		return true;
+	}
+
+	async #finish(generation: Generation, messages: readonly AgentMessage[]): Promise<void> {
+		this.#projectAnswer(generation, messages);
 		const pending = generation.pending;
 		generation.pending = undefined;
 		await this.#complete(generation);
@@ -784,7 +835,13 @@ export class LiveHandoffBridge {
 	 */
 	#sendToSession(
 		content: string,
-		options: { deliverAs?: "steer" | "followUp"; triggerTurn?: boolean; customType?: string },
+		options: {
+			deliverAs?: "steer" | "followUp";
+			triggerTurn?: boolean;
+			customType?: string;
+			/** Stamped on the row so rebuild pairs this opener with its own close. */
+			delegationId?: string;
+		},
 	): Promise<void> {
 		const boundary = this.#transcript.length;
 		const generation = options.triggerTurn ? this.#active : undefined;
@@ -802,6 +859,7 @@ export class LiveHandoffBridge {
 				// Internal protocol envelopes stay persisted for provenance but
 				// never render as framed transcript boxes.
 				display: false,
+				...(options.delegationId ? { details: { delegationId: options.delegationId } } : {}),
 				attribution: "agent",
 			},
 			{

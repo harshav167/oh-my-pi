@@ -154,10 +154,11 @@ describe("UiHelpers.renderSessionContext projects a live-owned delegation", () =
 		// The report itself survives the reload, exactly once.
 		expect(rendered).toContain("Branch report");
 		expect(rendered.split("Branch report").length - 1).toBe(1);
-		// Both halves of the voice conversation replay: a resumed session has no
-		// visualizer and no audio, so these rows are the only record of what was said.
+		// The user's own speech replays: a resumed session has no visualizer and no
+		// audio, and nothing else carries it. The agent's spoken paraphrase does not,
+		// because the artifact below is the same answer said precisely.
 		expect(rendered).toContain(VOICE_USER);
-		expect(rendered).toContain(VOICE_ASSISTANT);
+		expect(rendered).not.toContain(VOICE_ASSISTANT);
 	});
 
 	it("keeps records that are not part of the delegated turn", () => {
@@ -171,11 +172,12 @@ describe("UiHelpers.renderSessionContext projects a live-owned delegation", () =
 		expect(rendered).toContain(OUTSIDE_TEXT);
 	});
 
-	it("draws what the call drew, not the full body the voice already delivered", () => {
+	it("replays the whole body even when the call itself drew nothing", () => {
 		const { ctx, helpers } = makeHarness();
 		const messages = ownedSession();
 		// The common shape: the voice lane took the whole answer, so the call drew
-		// nothing and a reload must not invent a block the call never showed.
+		// nothing. `withheld` is a live-only signal — a reload has no voice, so the
+		// body is the turn's answer and must still appear.
 		messages[messages.length - 2] = custom(LIVE_WORKER_MESSAGE_TYPE, SCREEN_BODY, {
 			screen: SCREEN_BODY,
 			withheld: "",
@@ -183,16 +185,17 @@ describe("UiHelpers.renderSessionContext projects a live-owned delegation", () =
 		helpers.renderSessionContext({ messages } as SessionContext);
 		const rendered = transcriptText(ctx);
 
-		expect(rendered).not.toContain("Branch report");
-		// The turn is still visible — as what was actually said.
-		expect(rendered).toContain(VOICE_ASSISTANT);
+		expect(rendered).toContain("Branch report");
+		expect(rendered.split("Branch report").length - 1).toBe(1);
+		// One carrier per range: the paraphrase would be the same reply twice.
+		expect(rendered).not.toContain(VOICE_ASSISTANT);
+		expect(rendered).toContain(VOICE_USER);
 	});
 
-	it("replays a pre-withheld row the old way, without doubling it with voice", () => {
+	it("replays a row written before the drawn projection existed", () => {
 		const { ctx, helpers } = makeHarness();
 		const messages = ownedSession();
-		// Rows written before `withheld` existed know only the full body. Replaying
-		// the spoken turns on top of that artifact is the two-colour duplicate.
+		// Rows predating `withheld` know only the full body, and take the same path.
 		messages[messages.length - 2] = custom(LIVE_WORKER_MESSAGE_TYPE, SCREEN_BODY, { screen: SCREEN_BODY });
 		helpers.renderSessionContext({ messages } as SessionContext);
 		const rendered = transcriptText(ctx);
@@ -200,9 +203,96 @@ describe("UiHelpers.renderSessionContext projects a live-owned delegation", () =
 		expect(rendered).toContain("Branch report");
 		expect(rendered.split("Branch report").length - 1).toBe(1);
 		expect(rendered).not.toContain(VOICE_ASSISTANT);
-		expect(rendered).not.toContain(VOICE_USER);
 		// The tool timeline is not prose and still replays.
 		expect(rendered).toContain("git log");
+	});
+
+	it("pairs interleaved boundaries left by a steered correction", () => {
+		const { ctx, helpers } = makeHarness();
+		// A correction sends through the same `live-delegation` type, and the session
+		// persists its opener while the turn it replaces is still streaming: the rows
+		// read open(A) open(B) close(A) close(B). Pairing by position either loses A
+		// or orphans B, dropping an artifact and leaving a range unsuppressed.
+		const messages = [
+			custom(LIVE_DELEGATION_MESSAGE_TYPE, "<realtime_delegation><input>first</input></realtime_delegation>", {
+				delegationId: "a",
+			}),
+			assistant(`${SPOKEN_TEXT}First report.`, "gpt-5.6-terra"),
+			custom(LIVE_DELEGATION_MESSAGE_TYPE, "<realtime_delegation><input>correction</input></realtime_delegation>", {
+				delegationId: "b",
+			}),
+			custom(LIVE_WORKER_MESSAGE_TYPE, "First report.", {
+				screen: "First report.",
+				withheld: "",
+				delegationId: "a",
+			}),
+			assistant(`${SPOKEN_TEXT}Second report.`, "gpt-5.6-sol"),
+			custom(LIVE_WORKER_MESSAGE_TYPE, "Second report.", {
+				screen: "Second report.",
+				withheld: "",
+				delegationId: "b",
+			}),
+		] as AgentMessage[];
+		helpers.renderSessionContext({ messages } as SessionContext);
+		const rendered = transcriptText(ctx);
+
+		// Both artifacts survive, each exactly once, and each range hid its own prose.
+		expect(rendered).toContain("First report.");
+		expect(rendered).toContain("Second report.");
+		expect(rendered.split("First report.").length - 1).toBe(1);
+		expect(rendered.split("Second report.").length - 1).toBe(1);
+		expect(rendered).not.toContain(SPOKEN_TEXT);
+	});
+
+	it("refuses to pair a later close with a crashed call's opener", () => {
+		const { ctx, helpers } = makeHarness();
+		// The crash case: `a` never closed. Its opener must not swallow `b`'s close,
+		// which would suppress history belonging to a range that did finish.
+		const messages = [
+			custom(LIVE_DELEGATION_MESSAGE_TYPE, "<realtime_delegation><input>crashed</input></realtime_delegation>", {
+				delegationId: "a",
+			}),
+			assistant(`${SPOKEN_TEXT}Lost work.`, "gpt-5.6-terra"),
+			custom(LIVE_DELEGATION_MESSAGE_TYPE, "<realtime_delegation><input>later</input></realtime_delegation>", {
+				delegationId: "b",
+			}),
+			assistant("Later report.", "gpt-5.6-sol"),
+			custom(LIVE_WORKER_MESSAGE_TYPE, "Later report.", {
+				screen: "Later report.",
+				withheld: "",
+				delegationId: "b",
+			}),
+		] as AgentMessage[];
+		helpers.renderSessionContext({ messages } as SessionContext);
+		const rendered = transcriptText(ctx);
+
+		// `b` projects normally; `a` degrades to replaying its raw turn.
+		expect(rendered).toContain("Later report.");
+		expect(rendered).toContain(SPOKEN_TEXT);
+	});
+
+	it("refuses every id-less pairing once legacy rows become ambiguous", () => {
+		const { ctx, helpers } = makeHarness();
+		// `open open close open close close`, all from before ids existed. Resuming
+		// legacy pairing after the first close matched the second one to the wrong
+		// opener and suppressed a turn that range never owned, so ambiguity latches
+		// for the rest of the transcript and these ranges replay raw instead.
+		const messages = [
+			custom(LIVE_DELEGATION_MESSAGE_TYPE, "<realtime_delegation><input>a</input></realtime_delegation>"),
+			assistant(`${SPOKEN_TEXT}A.`, "gpt-5.6-terra"),
+			custom(LIVE_DELEGATION_MESSAGE_TYPE, "<realtime_delegation><input>b</input></realtime_delegation>"),
+			custom(LIVE_WORKER_MESSAGE_TYPE, "A.", { screen: "A." }),
+			custom(LIVE_DELEGATION_MESSAGE_TYPE, "<realtime_delegation><input>c</input></realtime_delegation>"),
+			assistant(`${OUTSIDE_TEXT}`, "gpt-5.6-sol"),
+			custom(LIVE_WORKER_MESSAGE_TYPE, "B.", { screen: "B." }),
+			custom(LIVE_WORKER_MESSAGE_TYPE, "C.", { screen: "C." }),
+		] as AgentMessage[];
+		helpers.renderSessionContext({ messages } as SessionContext);
+		const rendered = transcriptText(ctx);
+
+		// Nothing is suppressed on a guess: both turns' own prose still replays.
+		expect(rendered).toContain(SPOKEN_TEXT);
+		expect(rendered).toContain(OUTSIDE_TEXT);
 	});
 
 	it("keeps a transcript-tail row from opening an ownership range", () => {
