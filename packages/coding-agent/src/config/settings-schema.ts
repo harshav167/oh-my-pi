@@ -2096,17 +2096,14 @@ export const SETTINGS_SCHEMA = {
 	},
 	"live.voice": {
 		type: "enum",
-		values: ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove"] as const,
-		default: "sol",
+		values: LIVE_VOICE_VALUES,
+		default: DEFAULT_LIVE_VOICE,
 		ui: {
 			tab: "voice",
 			group: "Live Session",
 			label: "Live Voice",
 			description: "Voice used by the private realtime session",
-			options: ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove"].map(value => ({
-				value,
-				label: value,
-			})),
+			options: LIVE_VOICE_OPTIONS,
 		},
 	},
 	"live.connectTimeoutMs": {
@@ -5238,18 +5235,6 @@ export const SETTINGS_SCHEMA = {
 					description: "Priority serving path: higher reliability, premium per-token pricing",
 				},
 			],
-		},
-	},
-	"live.voice": {
-		type: "enum",
-		values: LIVE_VOICE_VALUES,
-		default: DEFAULT_LIVE_VOICE,
-		ui: {
-			tab: "providers",
-			group: "Services",
-			label: "Live Voice",
-			description: "Voice used by Codex-backed realtime voice sessions",
-			options: LIVE_VOICE_OPTIONS,
 		},
 	},
 	"providers.tts": {

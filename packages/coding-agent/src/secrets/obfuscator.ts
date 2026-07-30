@@ -1891,7 +1891,7 @@ export function deobfuscateAgentMessages(obfuscator: SecretObfuscator, messages:
 				const blocks =
 					message.blocks === undefined
 						? undefined
-						: (deobfuscateTextBlocks(obfuscator, message.blocks, allowLegacyAliases) as typeof message.blocks);
+						: (deobfuscateTextBlocks(obfuscator, message.blocks) as typeof message.blocks);
 				if (summary === message.summary && shortSummary === message.shortSummary && blocks === message.blocks) {
 					return message;
 				}
@@ -1989,10 +1989,7 @@ function obfuscateTextBlocks(
 function deobfuscateTextBlocks(
 	obfuscator: SecretObfuscator,
 	content: (TextContent | UserMediaContent)[],
-	allowLegacyAliases = false,
 ): (TextContent | UserMediaContent)[] {
-	const deob = (text: string): string =>
-		allowLegacyAliases ? obfuscator.deobfuscateStored(text) : obfuscator.deobfuscate(text);
 	let changed = false;
 	const result = content.map((block): TextContent | UserMediaContent => {
 		if (block.type !== "text") return block;
