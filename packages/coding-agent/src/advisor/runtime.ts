@@ -225,6 +225,9 @@ export function buildAdvisorQuarantineSourceText(currentInput: string, messages:
  */
 const MAX_COALESCE_ROUNDS = 3;
 
+/** Stand-in for a consult that carries no caller signal; `maintainContext` requires one. */
+const NEVER_ABORTED: AbortSignal = new AbortController().signal;
+
 /**
  * Consecutive quarantined advisor turns tolerated before the failure is surfaced
  * to the host UI. A quarantine discards the advisor's whole turn before dispatch,
@@ -867,7 +870,7 @@ export class AdvisorRuntime {
 			let shouldReprime = false;
 			if (this.host.maintainContext) {
 				try {
-					shouldReprime = await this.host.maintainContext(incomingTokens);
+					shouldReprime = await this.host.maintainContext(incomingTokens, job.signal ?? NEVER_ABORTED);
 				} catch (err) {
 					logger.debug("advisor context maintenance failed", { err: String(err) });
 				}

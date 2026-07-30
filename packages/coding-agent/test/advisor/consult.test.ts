@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { SecretObfuscator } from "../../secrets/obfuscator";
-import { type AdvisorAgent, AdvisorRuntime, type AdvisorRuntimeHost, resolveAdvisorDeliveryChannel } from "..";
+import { resolveAdvisorDeliveryChannel } from "@oh-my-pi/pi-coding-agent/advisor/advise-tool";
+import type { AdvisorAgent, AdvisorRuntimeHost } from "@oh-my-pi/pi-coding-agent/advisor/runtime";
+import { AdvisorRuntime } from "@oh-my-pi/pi-coding-agent/advisor/runtime";
+import { SecretObfuscator } from "@oh-my-pi/pi-coding-agent/secrets/obfuscator";
 
 async function flushMicrotasksUntil(predicate: () => boolean, limit = 20): Promise<void> {
 	for (let i = 0; i < limit && !predicate(); i++) {
