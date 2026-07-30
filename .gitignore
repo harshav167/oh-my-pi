@@ -87,3 +87,8 @@ packages/coding-agent/bench/boot-baseline.json
 /bazel-testlogs
 /bazel-pi
 /.bazelrc.user
+# Agent tool caches — local indexes, rebuilt on demand, never source.
+# Unanchored so they match at any depth (e.g. packages/coding-agent/.atl/).
+.atl/
+.codegraph/
+.serena/
