@@ -1,4 +1,6 @@
 [toolchain]
 channel = "nightly-2026-07-28"
-components = ["rustfmt", "clippy", "rust-analyzer"]
+# `llvm-tools` supplies llvm-objcopy/llvm-nm for the vendored
+# webrtc-audio-processing-sys build, whose script shells out to both.
+components = ["rustfmt", "clippy", "rust-analyzer", "llvm-tools"]
 targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
