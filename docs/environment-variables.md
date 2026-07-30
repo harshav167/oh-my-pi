@@ -254,6 +254,8 @@ OAuth host chain: `KIMI_CODE_OAUTH_HOST` → `KIMI_OAUTH_HOST` → `https://auth
 | `PI_CODEX_WEB_SEARCH_MODEL`                         | Codex search provider model override                          |
 | `MOONSHOT_SEARCH_API_KEY` / `KIMI_SEARCH_API_KEY`   | Kimi/Moonshot search provider env auth                        |
 | `MOONSHOT_SEARCH_BASE_URL` / `KIMI_SEARCH_BASE_URL` | Kimi/Moonshot search endpoint override                        |
+| `FIRECRAWL_API_KEY`                                 | Firecrawl search provider                                     |
+| `FIRECRAWL_BASE_URL`                                | Firecrawl API origin override (appends `/v2/search`)          |
 | `KAGI_API_KEY`                                      | Kagi search provider                                          |
 | `JINA_API_KEY`                                      | Jina search provider                                          |
 | `PARALLEL_API_KEY`                                  | Parallel search provider                                      |

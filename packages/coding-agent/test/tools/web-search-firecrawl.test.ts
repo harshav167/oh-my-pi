@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { AuthStorage, FetchImpl } from "@oh-my-pi/pi-ai";
-import { FirecrawlProvider, searchFirecrawl } from "@oh-my-pi/pi-coding-agent/web/search/providers/firecrawl";
+import { FirecrawlProvider, resolveFirecrawlSearchUrl, searchFirecrawl } from "@oh-my-pi/pi-coding-agent/web/search/providers/firecrawl";
 import { SearchProviderError } from "@oh-my-pi/pi-coding-agent/web/search/types";
 
 const TEST_KEY = "test-firecrawl-key";
@@ -247,6 +247,34 @@ describe("Firecrawl web search provider", () => {
 		} finally {
 			if (originalApiKey === undefined) delete process.env.FIRECRAWL_API_KEY;
 			else process.env.FIRECRAWL_API_KEY = originalApiKey;
+		}
+	});
+
+
+	it("respects FIRECRAWL_BASE_URL as the API origin (appends /v2/search)", async () => {
+		const originalBaseUrl = process.env.FIRECRAWL_BASE_URL;
+		process.env.FIRECRAWL_BASE_URL = "http://localhost:3002/";
+		try {
+			expect(resolveFirecrawlSearchUrl()).toBe("http://localhost:3002/v2/search");
+
+			const captured: { url?: string } = {};
+			const fetchMock: FetchImpl = async (input) => {
+				captured.url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+				return new Response(JSON.stringify({ id: "custom-base-url", data: { web: [] } }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			};
+
+			await searchFirecrawl({
+				...makeParams("custom base url"),
+				fetch: fetchMock,
+			});
+
+			expect(captured.url).toBe("http://localhost:3002/v2/search");
+		} finally {
+			if (originalBaseUrl === undefined) delete process.env.FIRECRAWL_BASE_URL;
+			else process.env.FIRECRAWL_BASE_URL = originalBaseUrl;
 		}
 	});
 

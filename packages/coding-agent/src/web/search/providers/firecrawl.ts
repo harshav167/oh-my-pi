@@ -12,6 +12,7 @@ import {
 	seedApiKeyResolver,
 	withAuth,
 } from "@oh-my-pi/pi-ai";
+import { $env } from "@oh-my-pi/pi-utils";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { formatQuery, GOOGLE_QUERY_SYNTAX, parseSearchQuery, type StructuredQuery } from "../query";
@@ -20,9 +21,22 @@ import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
 import { classifyProviderHttpError, withHardTimeout } from "./utils";
 
-const FIRECRAWL_SEARCH_URL = "https://api.firecrawl.dev/v2/search";
+const DEFAULT_FIRECRAWL_BASE_URL = "https://api.firecrawl.dev";
+const FIRECRAWL_SEARCH_PATH = "/v2/search";
 const DEFAULT_NUM_RESULTS = 10;
 const MAX_NUM_RESULTS = 100;
+
+function asTrimmed(value: string | undefined): string | undefined {
+	if (!value) return undefined;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** Resolve Firecrawl search URL from `FIRECRAWL_BASE_URL` (origin) or the SaaS default. */
+export function resolveFirecrawlSearchUrl(): string {
+	const base = (asTrimmed($env.FIRECRAWL_BASE_URL) ?? DEFAULT_FIRECRAWL_BASE_URL).replace(/\/+$/, "");
+	return `${base}${FIRECRAWL_SEARCH_PATH}`;
+}
 
 const RECENCY_TBS: Record<NonNullable<SearchParams["recency"]>, string> = {
 	day: "qdr:d",
@@ -87,7 +101,7 @@ async function callFirecrawlSearch(
 	if (apiKey) {
 		headers.Authorization = `Bearer ${apiKey}`;
 	}
-	const response = await (params.fetch ?? fetch)(FIRECRAWL_SEARCH_URL, {
+	const response = await (params.fetch ?? fetch)(resolveFirecrawlSearchUrl(), {
 		method: "POST",
 		headers,
 		body: JSON.stringify(buildRequestBody(params)),

@@ -173,9 +173,9 @@ Streaming: none. `WebSearchTool.execute()` forwards its `AbortSignal` into `exec
     - `limit` / `num_search_results`: adapter uses `params.numSearchResults ?? params.limit`, clamped to `5..20` with default `5`.
     - Output: `answer`, `sources`, `requestId`, `authMode: "api_key"`.
   - **Firecrawl** — `packages/coding-agent/src/web/search/providers/firecrawl.ts`
-    - Availability: `FIRECRAWL_API_KEY` or `agent.db` credential for `firecrawl`.
-    - Querying: POST `https://api.firecrawl.dev/v2/search` with `sources: [{ type: "web" }]`; `recency` maps to Google-style `tbs`.
-    - `limit` / `num_search_results`: collapsed and clamped to `1..100`, default `10`; output `sources`, `requestId`, `authMode: "api_key"`.
+    - Availability: `FIRECRAWL_API_KEY` or `agent.db` credential for `firecrawl`; explicit `webSearch: firecrawl` also allows keyless mode.
+    - Querying: POST `${FIRECRAWL_BASE_URL:-https://api.firecrawl.dev}/v2/search` with `sources: [{ type: "web" }]`; `recency` maps to Google-style `tbs`.
+    - `limit` / `num_search_results`: collapsed and clamped to `1..100`, default `10`; output `sources`, `requestId`, `authMode: "api_key"` or `"keyless"`.
   - **Brave** — `packages/coding-agent/src/web/search/providers/brave.ts`
     - Availability: `BRAVE_API_KEY` only.
     - Querying: GET `https://api.search.brave.com/res/v1/web/search` with `count`, `extra_snippets=true`, and `freshness=pd|pw|pm|py` for `recency`.
