@@ -70,6 +70,7 @@ import { adaptSchemaForStrict, NO_STRICT, sanitizeSchemaForOpenAIResponses, tool
 import { notifyRawSseEvent } from "../utils/sse-debug";
 import { compactGrammarDefinition } from "./grammar";
 import {
+	type CodexLiteShapedBody,
 	type CodexReasoningContext,
 	type CodexRequestOptions,
 	type InputItem,
@@ -165,6 +166,17 @@ export interface OpenAICodexResponsesOptions extends StreamOptions {
 	 * swallowed and must not alter the stream.
 	 */
 	onModerationMetadata?: (metadata: unknown) => void;
+}
+
+/** Raw V2 compaction body accepted by the Codex transport selector. */
+export interface OpenAICodexCompactionBody extends CodexLiteShapedBody {
+	model: string;
+	[key: string]: unknown;
+}
+
+/** Transport controls for a provider-native Codex V2 compaction stream. */
+export interface OpenAICodexCompactionStreamOptions extends OpenAICodexResponsesOptions {
+	apiKey: string;
 }
 
 /** Inputs for synthesizing Codex request identity outside the normal stream path. */
@@ -1383,12 +1395,16 @@ function createRequestSetup(options: OpenAICodexResponsesOptions | undefined): C
 	};
 }
 
-async function buildCodexRequestContext(
+function createCodexRequestContext(
 	model: Model<"openai-codex-responses">,
-	context: Context,
+	transformedBody: RequestBody,
 	options: OpenAICodexResponsesOptions | undefined,
-	output: AssistantMessage,
-): Promise<CodexRequestContext> {
+	contextOptions: {
+		isolateCompactionTransport: boolean;
+		startNewTurn?: boolean;
+		turnStartedAtUnixMs?: number;
+	},
+): CodexRequestContext {
 	const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
 	if (!apiKey) {
 		throw new AIError.MissingApiKeyError(model.provider);
@@ -1397,15 +1413,13 @@ async function buildCodexRequestContext(
 	const accountId = getCodexAccountId(apiKey);
 	const baseUrl = model.baseUrl || CODEX_BASE_URL;
 	const url = resolveCodexResponsesUrl(baseUrl);
-	const promptCacheKey = getOpenAIPromptCacheKey(options);
+
 	const transportSessionId = normalizeOpenAIPromptCacheKey(options?.sessionId);
 	const codexClientVersion = CODEX_CLIENT_VERSION;
-	const transformedBody = await buildTransformedCodexRequestBody(model, context, options, promptCacheKey);
-
 	const requestHeaders = { ...(model.headers ?? {}), ...(options?.headers ?? {}) };
 	const rawRequestDump: RawHttpRequestDump = {
 		provider: model.provider,
-		api: output.api,
+		api: model.api,
 		model: model.id,
 		method: "POST",
 		url,
@@ -1413,7 +1427,10 @@ async function buildCodexRequestContext(
 	};
 
 	const providerSessionState = getCodexProviderSessionState(options?.providerSessionState);
-	const isolatedTransportState = options?.codexCompaction ? createCodexProviderSessionState() : undefined;
+	const isolatedTransportState =
+		contextOptions.isolateCompactionTransport && options?.codexCompaction
+			? createCodexProviderSessionState()
+			: undefined;
 	const transportProviderSessionState = isolatedTransportState ?? providerSessionState;
 	const responsesLite = resolveCodexResponsesLite(model, options?.responsesLite);
 	const sessionKey = getCodexWebSocketSessionKey(transportSessionId, model, accountId, apiKey, baseUrl, responsesLite);
@@ -1436,20 +1453,14 @@ async function buildCodexRequestContext(
 		websocketState.turnState = sharedWebsocketState.turnState;
 		websocketState.modelsEtag = sharedWebsocketState.modelsEtag;
 	}
-	const withinTurnContinuation = isCodexWithinTurnContinuation(context);
 	const metadataSessionId = transportSessionId ?? crypto.randomUUID();
 	const metadataSession = getOrCreateCodexMetadataSessionState(metadataSessionId, providerSessionState);
 	const compaction = options?.codexCompaction;
 	const requestKind: OpenAICodexRequestKind = compaction ? "compaction" : "turn";
-	const startNewTurn = resolveCodexStartNewTurn(
-		metadataSession,
-		requestKind,
-		compaction,
-		compaction ? undefined : !withinTurnContinuation,
-	);
+	const startNewTurn = resolveCodexStartNewTurn(metadataSession, requestKind, compaction, contextOptions.startNewTurn);
 	if (websocketState && startNewTurn) {
-		// Codex scopes turn-state to one turn. Mid-turn compaction and tool-loop
-		// follow-ups preserve it; new user or compaction turns start without it.
+		// Codex scopes turn-state to one turn. Mid-turn compaction preserves it;
+		// a pre-turn or standalone compaction starts without it.
 		websocketState.turnState = undefined;
 	}
 	const requestMetadata = createCodexRequestMetadata(metadataSession, requestKind, {
@@ -1458,7 +1469,7 @@ async function buildCodexRequestContext(
 			? startNewTurn || !metadataSession.turnId
 				? Date.now()
 				: undefined
-			: getCodexTurnStartedAtUnixMs(context),
+			: contextOptions.turnStartedAtUnixMs,
 		clientMetadata: transformedBody.client_metadata,
 		parentTurnId: options?.parentTurnId,
 		compaction,
@@ -1482,6 +1493,20 @@ async function buildCodexRequestContext(
 		transformedBody,
 		rawRequestDump,
 	};
+}
+
+async function buildCodexRequestContext(
+	model: Model<"openai-codex-responses">,
+	context: Context,
+	options: OpenAICodexResponsesOptions | undefined,
+): Promise<CodexRequestContext> {
+	const promptCacheKey = normalizeOpenAIPromptCacheKey(options?.promptCacheKey ?? options?.sessionId);
+	const transformedBody = await buildTransformedCodexRequestBody(model, context, options, promptCacheKey);
+	return createCodexRequestContext(model, transformedBody, options, {
+		isolateCompactionTransport: true,
+		startNewTurn: options?.codexCompaction ? undefined : !isCodexWithinTurnContinuation(context),
+		turnStartedAtUnixMs: options?.codexCompaction ? undefined : getCodexTurnStartedAtUnixMs(context),
+	});
 }
 
 /** @internal Exported for tests. */
@@ -1690,6 +1715,84 @@ function captureCodexPreparedInstructions(requestContext: CodexRequestContext, w
 	session.lastPreparedTurnId = session.turnId;
 }
 
+
+function toCodexRequestBody(body: OpenAICodexCompactionBody): RequestBody {
+	const request: RequestBody = { model: body.model };
+	for (const key in body) {
+		if (key !== "model") request[key] = body[key];
+	}
+	return request;
+}
+
+/**
+ * Open a provider-native V2 compaction stream through Codex's WebSocket-first
+ * transport, replaying WebSocket transport failures over SSE.
+ */
+export async function openCodexCompactionEventStream(
+	model: Model<"openai-codex-responses">,
+	body: OpenAICodexCompactionBody,
+	options: OpenAICodexCompactionStreamOptions,
+): Promise<AsyncGenerator<Record<string, unknown>>> {
+	const requestSetup = createRequestSetup(options);
+	let requestContext: CodexRequestContext;
+	let initial: {
+		eventStream: AsyncGenerator<Record<string, unknown>>;
+		requestBodyForState: RequestBody;
+		transport: CodexTransport;
+	};
+	try {
+		requestContext = createCodexRequestContext(model, toCodexRequestBody(body), options, {
+			isolateCompactionTransport: false,
+		});
+		initial = await openInitialCodexEventStream(model, options, requestSetup, requestContext);
+	} catch (error) {
+		requestSetup.requestAbortController.abort();
+		throw error;
+	}
+
+	if (requestContext.websocketState) {
+		requestContext.websocketState.lastTransport = initial.transport;
+		// The compaction request may use the existing append baseline, but the
+		// replacement history makes that baseline stale for the next normal turn.
+		resetCodexWebSocketAppendState(requestContext.websocketState);
+	}
+	return streamCodexCompactionEvents(model, options, requestSetup, requestContext, initial);
+}
+
+async function* streamCodexCompactionEvents(
+	model: Model<"openai-codex-responses">,
+	options: OpenAICodexCompactionStreamOptions,
+	requestSetup: CodexRequestSetup,
+	requestContext: CodexRequestContext,
+	initial: {
+		eventStream: AsyncGenerator<Record<string, unknown>>;
+		requestBodyForState: RequestBody;
+		transport: CodexTransport;
+	},
+): AsyncGenerator<Record<string, unknown>> {
+	let completed = false;
+	try {
+		try {
+			yield* initial.eventStream;
+		} catch (error) {
+			if (
+				options.signal?.aborted ||
+				initial.transport !== "websocket" ||
+				!(error instanceof CodexWebSocketTransportError)
+			) {
+				throw error;
+			}
+			const state = requestContext.websocketState;
+			if (state) recordCodexWebSocketFailure(state, true);
+			const fallback = await openCodexSseTransport(model, requestContext, requestSetup, options, state);
+			if (state) state.lastTransport = fallback.transport;
+			yield* fallback.eventStream;
+		}
+		completed = true;
+	} finally {
+		if (!completed) requestSetup.requestAbortController.abort();
+	}
+}
 async function openCodexWebSocketTransport(
 	model: Model<"openai-codex-responses">,
 	options: OpenAICodexResponsesOptions | undefined,
@@ -2840,7 +2943,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 		let requestContext: CodexRequestContext | undefined;
 
 		try {
-			requestContext = await buildCodexRequestContext(model, context, options, output);
+			requestContext = await buildCodexRequestContext(model, context, options);
 			const initialTransport = await openInitialCodexEventStream(model, options, requestSetup, requestContext);
 			const runtime = new CodexStreamRuntime({
 				...initialTransport,

@@ -102,6 +102,87 @@ function sseResponse(events: Array<Record<string, unknown>>): Response {
 	return new Response(body, { headers: { "content-type": "text/event-stream" } });
 }
 
+interface CodexCompactionTestSocket {
+	readyState: number;
+	readonly sent: Array<Record<string, unknown>>;
+	emit(event: Record<string, unknown>): void;
+}
+
+function installCodexCompactionWebSocket(options?: {
+	failConnect?: boolean;
+	respond?: (socket: CodexCompactionTestSocket, request: Record<string, unknown>) => void;
+}): {
+	sockets: CodexCompactionTestSocket[];
+	restore(): void;
+} {
+	const originalWebSocket = globalThis.WebSocket;
+	const sockets: CodexCompactionTestSocket[] = [];
+
+	class CodexCompactionWebSocket implements CodexCompactionTestSocket {
+		static readonly CONNECTING = 0;
+		static readonly OPEN = 1;
+		static readonly CLOSING = 2;
+		static readonly CLOSED = 3;
+
+		readyState = CodexCompactionWebSocket.CONNECTING;
+		binaryType: "blob" | "arraybuffer" | "nodebuffer" = "blob";
+		onopen: ((event: Event) => void) | null = null;
+		onmessage: ((event: MessageEvent) => void) | null = null;
+		onerror: ((event: Event) => void) | null = null;
+		onclose: ((event: Event) => void) | null = null;
+		readonly sent: Array<Record<string, unknown>> = [];
+		readonly handshakeHeaders = { "x-codex-turn-state": `compaction-state-${sockets.length}` };
+
+		constructor(
+			readonly url: string,
+			readonly socketOptions?: { headers?: Record<string, string> },
+		) {
+			sockets.push(this);
+			queueMicrotask(() => {
+				if (options?.failConnect) {
+					this.readyState = CodexCompactionWebSocket.CLOSED;
+					this.onerror?.(new Event("error"));
+					this.onclose?.(new Event("close"));
+					return;
+				}
+				this.readyState = CodexCompactionWebSocket.OPEN;
+				this.onopen?.(new Event("open"));
+			});
+		}
+
+		send(data: string): void {
+			const parsed: unknown = JSON.parse(data);
+			if (!isRecord(parsed)) throw new Error("Expected Codex WebSocket request object");
+			this.sent.push(parsed);
+			options?.respond?.(this, parsed);
+		}
+
+		emit(event: Record<string, unknown>): void {
+			this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(event) }));
+		}
+
+		close(): void {
+			this.readyState = CodexCompactionWebSocket.CLOSED;
+		}
+	}
+
+	Object.defineProperty(globalThis, "WebSocket", {
+		configurable: true,
+		writable: true,
+		value: CodexCompactionWebSocket,
+	});
+	return {
+		sockets,
+		restore: () => {
+			Object.defineProperty(globalThis, "WebSocket", {
+				configurable: true,
+				writable: true,
+				value: originalWebSocket,
+			});
+		},
+	};
+}
+
 describe("buildOpenAiNativeHistory custom tool calls", () => {
 	test("serializes customWireName tool calls as custom_tool_call + custom_tool_call_output", () => {
 		const patch = "*** Begin Patch\n*** End Patch\n";
@@ -832,6 +913,23 @@ describe("Responses Lite remote compaction", () => {
 		};
 	}
 
+	function compactionV2Events(encryptedContent: string): Array<Record<string, unknown>> {
+		return [
+			{
+				type: "response.output_item.done",
+				output_index: 0,
+				item: { type: "compaction", encrypted_content: encryptedContent },
+			},
+			{
+				type: "response.done",
+				response: {
+					id: `response-${encryptedContent}`,
+					usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+				},
+			},
+		];
+	}
+
 	test("V1 compaction sends the lite header and input-item instructions", async () => {
 		const model = makeCodexLiteModel();
 		let captured: CapturedLiteExchange | undefined;
@@ -888,15 +986,8 @@ describe("Responses Lite remote compaction", () => {
 		);
 		let captured: CapturedLiteExchange | undefined;
 		const fetchMock: FetchImpl = async (_input, init) => {
-			captured = captureLite(init);
-			return sseResponse([
-				{
-					type: "response.output_item.done",
-					output_index: 0,
-					item: { type: "compaction", encrypted_content: "enc" },
-				},
-				{ type: "response.completed", response: { usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
-			]);
+			captured = captureStreamLite(init);
+			return sseResponse(compactionV2Events("enc"));
 		};
 
 		expect(shouldUseCompactionV2Streaming(model)).toBe(true);
@@ -932,6 +1023,139 @@ describe("Responses Lite remote compaction", () => {
 			content: [{ type: "input_text", text: "compact instructions" }],
 		});
 		expect(captured?.body.input?.at(-1)).toEqual({ type: "compaction_trigger" });
+	});
+
+	test("V2 compaction reuses the live Codex WebSocket transport when preferred", async () => {
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const webSocket = installCodexCompactionWebSocket({
+			respond: (socket, outbound) => {
+				const input = outbound.input;
+				const isCompaction =
+					Array.isArray(input) && input.some(item => isRecord(item) && item.type === "compaction_trigger");
+				const events = isCompaction
+					? compactionV2Events("enc-websocket")
+					: [
+							{
+								type: "response.output_item.done",
+								item: {
+									type: "message",
+									id: "message-live-turn",
+									role: "assistant",
+									status: "completed",
+									content: [{ type: "output_text", text: "live response" }],
+								},
+							},
+							{
+								type: "response.done",
+								response: {
+									id: "response-live-turn",
+									status: "completed",
+									usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+								},
+							},
+						];
+				for (const event of events) socket.emit(event);
+			},
+		});
+		try {
+			const model = makeCodexLiteModel({ preferWebsockets: true });
+			const sessionId = "codex-websocket-compaction";
+			const fetchMock = vi.fn(async () => {
+				throw new Error("WebSocket-first V2 compaction unexpectedly used SSE");
+			});
+			const liveTurn = await ai
+				.streamSimple(
+					model,
+					{
+						systemPrompt: ["You are a helpful assistant."],
+						messages: [{ role: "user", content: "Start the turn", timestamp: Date.now() }],
+					},
+					{
+						apiKey: "test-key",
+						fetch: fetchMock,
+						sessionId,
+						preferWebsockets: true,
+						providerSessionState,
+					},
+				)
+				.result();
+			expect(liveTurn.stopReason).toBe("stop");
+
+			const request = buildCompactionV2Request(
+				model,
+				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+				"compact instructions",
+				{ sessionId },
+			);
+			const result = await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+				fetch: fetchMock,
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: TEST_CODEX_COMPACTION,
+			});
+
+			const sentRequest = webSocket.sockets[0]?.sent[1];
+			const sentInput = sentRequest?.input;
+			expect(fetchMock).not.toHaveBeenCalled();
+			expect(webSocket.sockets).toHaveLength(1);
+			expect(webSocket.sockets[0]?.sent).toHaveLength(2);
+			expect(sentRequest?.type).toBe("response.create");
+			expect(Array.isArray(sentInput) ? sentInput.at(-1) : undefined).toEqual({ type: "compaction_trigger" });
+			expect(result.compactionItem).toEqual({ type: "compaction", encrypted_content: "enc-websocket" });
+			expect(
+				getOpenAICodexTransportDetails(model, {
+					sessionId,
+					providerSessionState,
+				}),
+			).toMatchObject({
+				lastTransport: "websocket",
+				websocketConnected: true,
+				canAppend: false,
+			});
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
+	});
+
+	test("V2 compaction falls back from a failed Codex WebSocket connection to SSE", async () => {
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const webSocket = installCodexCompactionWebSocket({ failConnect: true });
+		try {
+			const model = makeCodexLiteModel({ preferWebsockets: true });
+			const request = buildCompactionV2Request(
+				model,
+				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+				"compact instructions",
+				{ sessionId: "codex-websocket-fallback" },
+			);
+			const fetchMock = vi.fn(async () => sseResponse(compactionV2Events("enc-sse")));
+
+			const result = await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+				fetch: fetchMock,
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: TEST_CODEX_COMPACTION,
+			});
+
+			expect(webSocket.sockets).toHaveLength(1);
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			expect(result.compactionItem).toEqual({ type: "compaction", encrypted_content: "enc-sse" });
+			expect(
+				getOpenAICodexTransportDetails(model, {
+					sessionId: "codex-websocket-fallback",
+					providerSessionState,
+				}),
+			).toMatchObject({
+				lastTransport: "sse",
+				websocketDisabled: true,
+			});
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
 	});
 
 	test("compact fan-out keeps local Codex summaries on one classified turn", async () => {
@@ -1023,42 +1247,13 @@ describe("Responses Lite remote compaction", () => {
 	});
 
 	test("local Codex compaction isolates and closes transient websocket sessions", async () => {
-		const originalWebSocket = global.WebSocket;
-		const sockets: AgentCompactionWebSocket[] = [];
 		let responseCount = 0;
-
-		class AgentCompactionWebSocket {
-			static readonly CONNECTING = 0;
-			static readonly OPEN = 1;
-			static readonly CLOSING = 2;
-			static readonly CLOSED = 3;
-
-			readyState = AgentCompactionWebSocket.CONNECTING;
-			binaryType: "blob" | "arraybuffer" | "nodebuffer" = "blob";
-			onopen: ((event: Event) => void) | null = null;
-			onmessage: ((event: MessageEvent) => void) | null = null;
-			onerror: ((event: Event) => void) | null = null;
-			onclose: ((event: Event) => void) | null = null;
-			readonly handshakeHeaders = {
-				"x-codex-turn-state": `agent-compaction-state-${sockets.length}`,
-			};
-
-			constructor(
-				readonly url: string,
-				readonly options?: { headers?: Record<string, string> },
-			) {
-				sockets.push(this);
-				queueMicrotask(() => {
-					this.readyState = AgentCompactionWebSocket.OPEN;
-					this.onopen?.(new Event("open"));
-				});
-			}
-
-			send(_data: string): void {
+		const webSocket = installCodexCompactionWebSocket({
+			respond: socket => {
 				responseCount += 1;
 				const responseId = `response-${responseCount}`;
 				const messageId = `message-${responseCount}`;
-				const text = sockets[0] === this ? "main response" : "local summary";
+				const text = responseCount === 1 ? "main response" : "local summary";
 				const events: Record<string, unknown>[] = [
 					{
 						type: "response.output_item.added",
@@ -1090,19 +1285,12 @@ describe("Responses Lite remote compaction", () => {
 						},
 					},
 				];
-				for (const event of events) {
-					this.onmessage?.({ data: JSON.stringify(event) } as MessageEvent);
-				}
-			}
-
-			close(): void {
-				this.readyState = AgentCompactionWebSocket.CLOSED;
-			}
-		}
+				for (const event of events) socket.emit(event);
+			},
+		});
 
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		try {
-			global.WebSocket = AgentCompactionWebSocket as unknown as typeof WebSocket;
 			const model = makeCodexLiteModel({ preferWebsockets: true });
 			const sessionId = "agent-compaction-isolation";
 			const fetchMock: FetchImpl = async () => {
@@ -1119,8 +1307,8 @@ describe("Responses Lite remote compaction", () => {
 				)
 				.result();
 			expect(main.stopReason).toBe("stop");
-			expect(sockets).toHaveLength(1);
-			expect(sockets[0]?.readyState).toBe(AgentCompactionWebSocket.OPEN);
+			expect(webSocket.sockets).toHaveLength(1);
+			expect(webSocket.sockets[0]?.readyState).toBe(globalThis.WebSocket.OPEN);
 
 			const preparation: CompactionPreparation = {
 				firstKeptEntryId: "kept-1",
@@ -1144,10 +1332,10 @@ describe("Responses Lite remote compaction", () => {
 			});
 
 			expect(result.summary).toContain("local summary");
-			expect(sockets).toHaveLength(3);
-			expect(sockets[0]?.readyState).toBe(AgentCompactionWebSocket.OPEN);
-			expect(sockets[1]?.readyState).toBe(AgentCompactionWebSocket.CLOSED);
-			expect(sockets[2]?.readyState).toBe(AgentCompactionWebSocket.CLOSED);
+			expect(webSocket.sockets).toHaveLength(3);
+			expect(webSocket.sockets[0]?.readyState).toBe(globalThis.WebSocket.OPEN);
+			expect(webSocket.sockets[1]?.readyState).toBe(globalThis.WebSocket.CLOSED);
+			expect(webSocket.sockets[2]?.readyState).toBe(globalThis.WebSocket.CLOSED);
 			expect(
 				getOpenAICodexTransportDetails(model, {
 					sessionId,
@@ -1160,7 +1348,7 @@ describe("Responses Lite remote compaction", () => {
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();
-			global.WebSocket = originalWebSocket;
+			webSocket.restore();
 		}
 	});
 });

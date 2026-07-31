@@ -1500,6 +1500,7 @@ export class SessionAdvisors {
 						promptCacheKey: advisorProviderSessionId,
 						metadata: advisorMetadata,
 						providerSessionState: this.#host.providerSessionState,
+						preferWebsockets: this.#host.preferWebsockets,
 						codexCompaction,
 					},
 				);
