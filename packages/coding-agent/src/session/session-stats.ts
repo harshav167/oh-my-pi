@@ -127,7 +127,12 @@ export class SessionStatsTracker {
 			const entry = branchEntries[index];
 			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
 			const assistant = entry.message;
-			if (assistant.stopReason !== "aborted" && assistant.stopReason !== "error" && assistant.usage) {
+			if (
+				assistant.stopReason !== "aborted" &&
+				assistant.stopReason !== "error" &&
+				assistant.usage &&
+				assistant.usage.input + assistant.usage.cacheRead + assistant.usage.cacheWrite > 0
+			) {
 				anchorEntry = entry;
 				break;
 			}
@@ -184,7 +189,8 @@ export class SessionStatsTracker {
 					message.role !== "assistant" ||
 					message.stopReason === "aborted" ||
 					message.stopReason === "error" ||
-					!message.usage
+					!message.usage ||
+					message.usage.input + message.usage.cacheRead + message.usage.cacheWrite === 0
 				) {
 					continue;
 				}

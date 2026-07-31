@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, UserMessage } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage, Message, UserMessage } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
@@ -90,5 +90,93 @@ describe("AgentSession session stats", () => {
 			percent: (10 / model.contextWindow) * 100,
 		});
 		expect(stats.contextUsage).toEqual(directUsage);
+	});
+
+	it("reconstructs tool-loop context when provider prompt usage is unavailable", () => {
+		const model = modelRegistry.getAll().find(candidate => candidate.contextWindow && candidate.contextWindow > 0);
+		if (!model?.contextWindow) {
+			throw new Error("Expected bundled model with a context window");
+		}
+
+		const outputOnlyUsage = {
+			input: 0,
+			output: 29,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 29,
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				total: 0,
+			},
+		};
+		const messages: Message[] = [
+			{
+				role: "user",
+				content: "Map the repository architecture before making changes.",
+				timestamp: 1,
+			},
+			{
+				role: "assistant",
+				content: [
+					{ type: "text", text: "I will inspect the relevant files." },
+					{
+						type: "toolCall",
+						id: "read-architecture",
+						name: "read",
+						arguments: { path: "docs/architecture.md" },
+					},
+				],
+				api: model.api,
+				provider: model.provider,
+				model: model.id,
+				usage: outputOnlyUsage,
+				stopReason: "toolUse",
+				timestamp: 2,
+			},
+			{
+				role: "toolResult",
+				toolCallId: "read-architecture",
+				toolName: "read",
+				content: [{ type: "text", text: "architecture findings\n".repeat(2_000) }],
+				isError: false,
+				timestamp: 3,
+			},
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "Done." }],
+				api: model.api,
+				provider: model.provider,
+				model: model.id,
+				usage: outputOnlyUsage,
+				contextSnapshot: { promptTokens: 29, nonMessageTokens: 0 },
+				stopReason: "stop",
+				timestamp: 4,
+			},
+		];
+		const sessionManager = SessionManager.inMemory();
+		for (const message of messages) {
+			sessionManager.appendMessage(message);
+		}
+		const agent = new Agent({
+			initialState: {
+				model,
+				systemPrompt: ["Test"],
+				tools: [],
+				messages,
+			},
+		});
+		session = new AgentSession({
+			agent,
+			sessionManager,
+			settings: Settings.isolated({ "compaction.enabled": false }),
+			modelRegistry,
+		});
+
+		const usage = session.getContextUsage();
+
+		expect(usage?.tokens).toBeGreaterThan(1_000);
 	});
 });
