@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { StreamFn } from "@oh-my-pi/pi-agent-core";
 import type { Model, ToolResultMessage } from "@oh-my-pi/pi-ai";
+import { buildCursorSystemPromptJsons } from "@oh-my-pi/pi-ai/providers/cursor";
 import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
@@ -171,6 +172,62 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			const context = await session.agent.buildSideRequestContext([]);
 			const providerToolNames = context.tools?.map(tool => tool.name);
 			expect(providerToolNames).toEqual(expect.arrayContaining(["ast_edit", "mcp__fixture_report"]));
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	it("injects Cursor tool-surface guidance into Cursor sessions and provider-facing prompt packing", async () => {
+		const tempDir = makeTempDir();
+		const cursorModel = getBundledModel("cursor", "composer-1.5");
+		if (!cursorModel) throw new Error("expected bundled Cursor model");
+
+		const { session: cursorSession } = await createAgentSession({
+			...baseOptions(tempDir),
+			model: cursorModel,
+		});
+		const { session: otherSession } = await createAgentSession(baseOptions(makeTempDir()));
+
+		try {
+			const cursorPrompt = cursorSession.systemPrompt.join("\n");
+			expect(cursorPrompt).toContain("Cursor Transport Tool Surface");
+			expect(cursorPrompt).toContain("StrReplace");
+			expect(cursorPrompt).toContain("Prefer `grep` / `glob` / `read`");
+			expect(cursorPrompt).toContain("Mutate: `write`");
+			expect(cursorPrompt).toContain("Shell: `bash`");
+
+			const packed = buildCursorSystemPromptJsons(cursorSession.systemPrompt);
+			expect(packed.some(json => json.includes("Cursor Transport Tool Surface"))).toBe(true);
+			expect(packed.some(json => json.includes("StrReplace"))).toBe(true);
+
+			const otherPrompt = otherSession.systemPrompt.join("\n");
+			expect(otherPrompt).not.toContain("Cursor Transport Tool Surface");
+		} finally {
+			await cursorSession.dispose();
+			await otherSession.dispose();
+		}
+	});
+
+	it("scopes Cursor tool-surface guidance to the session's active tools", async () => {
+		const tempDir = makeTempDir();
+		const cursorModel = getBundledModel("cursor", "composer-1.5");
+		if (!cursorModel) throw new Error("expected bundled Cursor model");
+
+		const { session } = await createAgentSession({
+			...baseOptions(tempDir),
+			model: cursorModel,
+			toolNames: ["read"],
+			restrictToolNames: true,
+		});
+
+		try {
+			const promptText = session.systemPrompt.join("\n");
+			expect(promptText).toContain("Cursor Transport Tool Surface");
+			expect(promptText).toContain("StrReplace");
+			expect(promptText).toContain("Read: `read`");
+			expect(promptText).not.toContain("Mutate: `write`");
+			expect(promptText).not.toContain("Shell: `bash`");
+			expect(promptText).not.toContain("Prefer `grep`");
 		} finally {
 			await session.dispose();
 		}

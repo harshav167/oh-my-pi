@@ -118,6 +118,7 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
+import cursorToolSurfacePrompt from "./prompts/system/cursor-tool-surface.md" with { type: "text" };
 import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
@@ -2851,6 +2852,23 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			const appendParts: string[] = [];
 			if (memoryInstructions) appendParts.push(memoryInstructions);
 			if (autoLearnInstructions) appendParts.push(autoLearnInstructions);
+			if ((agent?.state.model ?? model)?.provider === "cursor") {
+				const hasGrep = toolNames.includes("grep");
+				const hasGlob = toolNames.includes("glob");
+				appendParts.push(
+					prompt
+						.render(cursorToolSurfacePrompt, {
+							hasAnyHarness: toolNames.some(name => ["read", "grep", "glob", "write", "bash"].includes(name)),
+							hasRead: toolNames.includes("read"),
+							hasGrep,
+							hasGlob,
+							hasWrite: toolNames.includes("write"),
+							hasBash: toolNames.includes("bash"),
+							hasSearch: hasGrep || hasGlob,
+						})
+						.trim(),
+				);
+			}
 			const projection = projectMountedMCPXdevGuidance(
 				collectMountedMCPToolRoutes(toolSession.xdev ? listXdevTools(toolSession.xdev) : []),
 			);
