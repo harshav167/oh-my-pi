@@ -106,10 +106,10 @@ interface CodexCompactionTestSocket {
 	readyState: number;
 	readonly sent: Array<Record<string, unknown>>;
 	emit(event: Record<string, unknown>): void;
+	fail(): void;
 }
 
 function installCodexCompactionWebSocket(options?: {
-	failConnect?: boolean;
 	respond?: (socket: CodexCompactionTestSocket, request: Record<string, unknown>) => void;
 }): {
 	sockets: CodexCompactionTestSocket[];
@@ -139,12 +139,6 @@ function installCodexCompactionWebSocket(options?: {
 		) {
 			sockets.push(this);
 			queueMicrotask(() => {
-				if (options?.failConnect) {
-					this.readyState = CodexCompactionWebSocket.CLOSED;
-					this.onerror?.(new Event("error"));
-					this.onclose?.(new Event("close"));
-					return;
-				}
 				this.readyState = CodexCompactionWebSocket.OPEN;
 				this.onopen?.(new Event("open"));
 			});
@@ -159,6 +153,12 @@ function installCodexCompactionWebSocket(options?: {
 
 		emit(event: Record<string, unknown>): void {
 			this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(event) }));
+		}
+
+		fail(): void {
+			this.readyState = CodexCompactionWebSocket.CLOSED;
+			this.onerror?.(new Event("error"));
+			this.onclose?.(new Event("close"));
 		}
 
 		close(): void {
@@ -1119,9 +1119,18 @@ describe("Responses Lite remote compaction", () => {
 		}
 	});
 
-	test("V2 compaction falls back from a failed Codex WebSocket connection to SSE", async () => {
+	test("V2 compaction discards partial WebSocket output before SSE replay", async () => {
 		const providerSessionState = new Map<string, ProviderSessionState>();
-		const webSocket = installCodexCompactionWebSocket({ failConnect: true });
+		const webSocket = installCodexCompactionWebSocket({
+			respond: socket => {
+				socket.emit({
+					type: "response.output_item.done",
+					output_index: 0,
+					item: { type: "compaction", encrypted_content: "enc-partial-websocket" },
+				});
+				queueMicrotask(() => socket.fail());
+			},
+		});
 		try {
 			const model = makeCodexLiteModel({ preferWebsockets: true });
 			const request = buildCompactionV2Request(

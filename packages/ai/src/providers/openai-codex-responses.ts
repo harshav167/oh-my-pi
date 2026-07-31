@@ -1772,21 +1772,27 @@ async function* streamCodexCompactionEvents(
 ): AsyncGenerator<Record<string, unknown>> {
 	let completed = false;
 	try {
-		try {
-			yield* initial.eventStream;
-		} catch (error) {
-			if (
-				options.signal?.aborted ||
-				initial.transport !== "websocket" ||
-				!(error instanceof CodexWebSocketTransportError)
-			) {
-				throw error;
+		if (initial.transport === "websocket") {
+			// Do not expose a WebSocket attempt until it finishes: an SSE replay
+			// must replace, not extend, any partial compaction output.
+			const bufferedEvents: Array<Record<string, unknown>> = [];
+			try {
+				for await (const event of initial.eventStream) bufferedEvents.push(event);
+			} catch (error) {
+				if (options.signal?.aborted || !(error instanceof CodexWebSocketTransportError)) {
+					throw error;
+				}
+				const state = requestContext.websocketState;
+				if (state) recordCodexWebSocketFailure(state, true);
+				const fallback = await openCodexSseTransport(model, requestContext, requestSetup, options, state);
+				if (state) state.lastTransport = fallback.transport;
+				yield* fallback.eventStream;
+				completed = true;
+				return;
 			}
-			const state = requestContext.websocketState;
-			if (state) recordCodexWebSocketFailure(state, true);
-			const fallback = await openCodexSseTransport(model, requestContext, requestSetup, options, state);
-			if (state) state.lastTransport = fallback.transport;
-			yield* fallback.eventStream;
+			for (const event of bufferedEvents) yield event;
+		} else {
+			yield* initial.eventStream;
 		}
 		completed = true;
 	} finally {
