@@ -46,6 +46,12 @@ export async function compileCodingAgent(options: CodingAgentCompileOptions): Pr
 				keepNames: true,
 			},
 			plugins: [await createLegacyPiVirtualModulePlugin()],
+			// Parse and compile at build time rather than on every launch: this is
+			// ~130 MB of bundled JavaScript, and that parse is otherwise paid at each
+			// start. `format` is explicit because bytecode defaults to CJS output,
+			// which forbids the top-level await in `mupdf/dist/mupdf.js`.
+			format: "esm",
+			bytecode: true,
 			compile: {
 				...(options.target ? { target: options.target } : {}),
 				outfile: options.outfile,

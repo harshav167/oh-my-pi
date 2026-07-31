@@ -154,6 +154,9 @@
 - Fixed the Python RPC client dropping context, compaction, OAuth URL, and terminal-settlement fields.
 - Fixed the browser tool ignoring the url parameter when opening a new tab on an attached browser.
 - Fixed browser automation disrupting attached browsers by adopting the active foreground tab and avoiding raising new tabs during screenshots.
+- Moved the display-reset default chord (`app.display.reset`) from `Ctrl+L` to `Alt+L` to make room for the live-mode toggle.
+- Updated the hashline edit tool, streaming preview, and plan-mode guidance for the unified `PUT`/`CUT` grammar, `.=` ranges, and named registers.
+- Added Cursor-provider system guidance that keeps Cursor-transport sessions on the OMP harness tool surface (`read`/`grep`/`glob`/`write`/`bash`) and forbids unbridged IDE tool names such as `StrReplace`.
 
 ## [17.2.1] - 2026-07-30
 
