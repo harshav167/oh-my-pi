@@ -222,4 +222,19 @@ process.stdout.write(JSON.stringify([
 		const overrides = __buildLegacyPiPackageRootOverrides(true, bundledModuleKeys);
 		expect(overrides).not.toHaveProperty("typebox");
 	});
+
+	it("bundles nested wildcard subpaths so a compiled extension can import them", async () => {
+		// Node matches `*` in an `exports` pattern across `/`, so
+		// `./slash-commands/*` genuinely serves
+		// `slash-commands/helpers/active-oauth-account`. Enumerating only the
+		// top level left every nested key out of the compiled registry, so the
+		// import resolved from source and failed inside a binary — which is how
+		// a real extension (`quota-hud.ts`) broke on this exact specifier.
+		const entries = await collectBundledPiEntries();
+		const keys = new Set(entries.map(entry => entry.key));
+		expect(keys.has("@oh-my-pi/pi-coding-agent/slash-commands/helpers/active-oauth-account")).toBe(true);
+		// Directory index modules stay excluded: `./x/*` must not serve `x/y`
+		// from `y/index.ts`, which Node would not resolve either.
+		expect([...keys].some(key => key.endsWith("/index"))).toBe(false);
+	});
 });
