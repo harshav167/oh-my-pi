@@ -1167,6 +1167,51 @@ describe("Responses Lite remote compaction", () => {
 		}
 	});
 
+	test("V2 compaction over WebSocket captures a refreshed mid-turn x-codex-turn-state", async () => {
+		const midTurnCompaction = { ...TEST_CODEX_COMPACTION, phase: "mid_turn" as const };
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		let responseCount = 0;
+		const webSocket = installCodexCompactionWebSocket({
+			respond: socket => {
+				responseCount += 1;
+				socket.emit({ type: "response.metadata", headers: { "x-codex-turn-state": "refreshed-turn-state" } });
+				for (const event of compactionV2Events(`enc-metadata-${responseCount}`)) socket.emit(event);
+			},
+		});
+		try {
+			const model = makeCodexLiteModel({ preferWebsockets: true });
+			const sessionId = "codex-websocket-turn-state";
+			const buildRequest = () =>
+				buildCompactionV2Request(
+					model,
+					[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+					"compact instructions",
+					{ sessionId },
+				);
+			const streamOptions = {
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: midTurnCompaction,
+			} as const;
+
+			await requestCompactionV2Streaming(model, "test-key", buildRequest(), undefined, streamOptions);
+			await requestCompactionV2Streaming(model, "test-key", buildRequest(), undefined, streamOptions);
+
+			const secondRequest = webSocket.sockets[0]?.sent[1];
+			const clientMetadata = isRecord(secondRequest?.client_metadata) ? secondRequest.client_metadata : undefined;
+			expect(webSocket.sockets).toHaveLength(1);
+			expect(webSocket.sockets[0]?.sent).toHaveLength(2);
+			expect(clientMetadata?.["x-codex-turn-state"]).toBe("refreshed-turn-state");
+			expect(getOpenAICodexTransportDetails(model, { sessionId, providerSessionState })).toMatchObject({
+				hasTurnState: true,
+			});
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
+	});
+
 	test("compact fan-out keeps local Codex summaries on one classified turn", async () => {
 		const model = makeCodexLiteModel();
 		const captured: CapturedLiteExchange[] = [];

@@ -1786,17 +1786,45 @@ async function* streamCodexCompactionEvents(
 				if (state) recordCodexWebSocketFailure(state, true);
 				const fallback = await openCodexSseTransport(model, requestContext, requestSetup, options, state);
 				if (state) state.lastTransport = fallback.transport;
-				yield* fallback.eventStream;
+				yield* drainCodexCompactionEvents(fallback.eventStream, requestContext.websocketState);
 				completed = true;
 				return;
 			}
-			for (const event of bufferedEvents) yield event;
+			// Apply metadata only once the WebSocket attempt succeeded: a discarded
+			// attempt must not leak its `x-codex-turn-state` into the session.
+			for (const event of bufferedEvents) {
+				applyCodexCompactionResponseMetadata(requestContext.websocketState, event);
+				yield event;
+			}
 		} else {
-			yield* initial.eventStream;
+			yield* drainCodexCompactionEvents(initial.eventStream, requestContext.websocketState);
 		}
 		completed = true;
 	} finally {
 		if (!completed) requestSetup.requestAbortController.abort();
+	}
+}
+
+/**
+ * Capture `x-codex-turn-state`/`x-models-etag` refreshes carried by a
+ * `response.metadata` frame so a mid-turn compaction leaves the live session on
+ * the latest turn state, matching the normal Codex stream processor.
+ */
+function applyCodexCompactionResponseMetadata(
+	state: CodexWebSocketSessionState | undefined,
+	event: Record<string, unknown>,
+): void {
+	if (!state || event.type !== "response.metadata") return;
+	updateCodexSessionMetadataFromHeaders(state, toCodexHeaders(event.headers));
+}
+
+async function* drainCodexCompactionEvents(
+	events: AsyncGenerator<Record<string, unknown>>,
+	state: CodexWebSocketSessionState | undefined,
+): AsyncGenerator<Record<string, unknown>> {
+	for await (const event of events) {
+		applyCodexCompactionResponseMetadata(state, event);
+		yield event;
 	}
 }
 async function openCodexWebSocketTransport(
