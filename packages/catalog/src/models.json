@@ -154,7 +154,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 3,
@@ -2911,7 +2912,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -2940,7 +2942,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -2998,7 +3001,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -3028,7 +3032,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -3058,7 +3063,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -3088,7 +3094,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -3118,7 +3125,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -3146,7 +3154,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -6743,7 +6752,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -8007,7 +8017,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -9193,7 +9204,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.33,
@@ -10714,7 +10726,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.06,
@@ -10782,7 +10795,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.8,
@@ -14459,7 +14473,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 3,
@@ -17962,7 +17977,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -18025,7 +18041,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -18056,7 +18073,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -20495,7 +20513,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -20526,7 +20545,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -21586,7 +21606,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.4,
@@ -22080,7 +22101,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -23456,7 +23478,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -23485,7 +23508,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -23574,7 +23598,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.1,
@@ -23594,7 +23619,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.075,
@@ -23643,7 +23669,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -23672,7 +23699,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.1,
@@ -23846,7 +23874,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.25,
@@ -23936,7 +23965,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.5,
@@ -23966,7 +23996,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -23994,7 +24025,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -24054,7 +24086,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -24084,7 +24117,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.75,
@@ -24114,7 +24148,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -24142,7 +24177,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -24170,7 +24206,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -24200,7 +24237,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -24230,7 +24268,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -24260,7 +24299,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -24289,7 +24329,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -24375,7 +24416,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1,
@@ -24762,7 +24804,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -24798,7 +24841,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -24827,7 +24871,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -24857,7 +24902,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -24954,7 +25000,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -24984,7 +25031,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25022,7 +25070,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25066,7 +25115,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25172,7 +25222,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25192,7 +25243,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25228,7 +25280,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25258,7 +25311,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25288,7 +25342,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25316,7 +25371,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25346,7 +25402,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -25647,7 +25704,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -25676,7 +25734,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.1,
@@ -25705,7 +25764,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.25,
@@ -25735,7 +25795,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.5,
@@ -25765,7 +25826,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -25795,7 +25857,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -25823,7 +25886,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -25851,7 +25915,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -25881,7 +25946,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -25911,7 +25977,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -25941,7 +26008,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -25970,7 +26038,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -28730,26 +28799,6 @@
 			},
 			"contextWindow": 8192,
 			"maxTokens": 32000,
-			"supportsComputerUse": false
-		},
-		"speakleash/Bielik-11B-v3.0-Instruct": {
-			"id": "speakleash/Bielik-11B-v3.0-Instruct",
-			"name": "speakleash/Bielik-11B-v3.0-Instruct",
-			"api": "openai-completions",
-			"provider": "huggingface",
-			"baseUrl": "https://router.huggingface.co/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": null,
-			"maxTokens": null,
 			"supportsComputerUse": false
 		},
 		"stepfun-ai/Step-3.5-Flash": {
@@ -35106,7 +35155,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -41900,7 +41950,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -42166,7 +42217,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -48151,7 +48203,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.075,
@@ -48257,7 +48310,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -48288,7 +48342,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.1,
@@ -48505,7 +48560,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.25,
@@ -48650,7 +48706,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -54217,7 +54274,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -58935,7 +58993,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -64667,7 +64726,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 3,
@@ -70156,7 +70216,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -70794,7 +70855,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -73708,7 +73770,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.4,
@@ -74226,7 +74289,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.5,
@@ -74284,7 +74348,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -74312,7 +74377,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -74342,7 +74408,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -74372,7 +74439,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -75865,7 +75933,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.2,
@@ -75895,7 +75964,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.5,
@@ -76127,7 +76197,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -76158,7 +76229,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -76475,7 +76547,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -77858,7 +77931,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -77889,7 +77963,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.075,
@@ -77920,7 +77995,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -77951,7 +78027,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78414,7 +78491,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78436,7 +78514,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.075,
@@ -78458,7 +78537,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -78489,7 +78569,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78520,7 +78601,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78644,7 +78726,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.25,
@@ -78708,7 +78791,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.25,
@@ -78896,7 +78980,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -78928,7 +79013,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -79072,7 +79158,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -79330,7 +79417,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.07,
@@ -79392,7 +79480,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -80271,7 +80360,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -81034,7 +81124,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.6,
@@ -81096,7 +81187,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.73,
@@ -81127,7 +81219,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 3,
@@ -81447,7 +81540,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -81541,9 +81635,9 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.5,
-				"output": 2.2,
-				"cacheRead": 0.09999999999999999,
+				"input": 0.6,
+				"output": 3.5999999999999996,
+				"cacheRead": 0.19999999999999998,
 				"cacheWrite": 0
 			},
 			"contextWindow": 512288,
@@ -83842,7 +83936,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": -1000000,
@@ -85268,7 +85363,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.26,
@@ -85299,7 +85395,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.195,
@@ -85330,7 +85427,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.14,
@@ -85361,7 +85459,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.39,
@@ -85392,7 +85491,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -85423,7 +85523,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.065,
@@ -85454,7 +85555,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.26,
@@ -85485,7 +85587,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -85516,7 +85619,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -85578,7 +85682,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.1875,
@@ -85792,7 +85897,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.32,
@@ -85875,7 +85981,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -86057,7 +86164,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.19999999999999998,
@@ -86841,7 +86949,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.39999999999999997,
@@ -86900,7 +87009,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.14,
@@ -87161,7 +87271,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -90337,7 +90448,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0,
@@ -94554,7 +94666,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -94584,7 +94697,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -94614,7 +94728,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -94676,7 +94791,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.25,
@@ -94768,7 +94884,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -94799,7 +94916,8 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.25,
@@ -94850,7 +94968,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.5,
@@ -94943,7 +95062,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.15,
@@ -94974,7 +95094,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.14,
@@ -95719,7 +95840,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -96263,7 +96385,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.95,
@@ -96294,7 +96417,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.95,
@@ -96356,7 +96480,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 3,
@@ -96508,7 +96633,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.19999999999999998,
@@ -97992,7 +98118,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.19999999999999998,
@@ -98759,7 +98886,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.14,
@@ -101450,7 +101578,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.6,
@@ -101509,7 +101638,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 0.3,
@@ -101739,7 +101869,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.2,
