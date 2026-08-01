@@ -1,3 +1,4 @@
+import type { Model } from "@oh-my-pi/pi-ai";
 import { logger, prompt } from "@oh-my-pi/pi-utils";
 import { resolveModelOverride } from "../../config/model-resolver";
 import type { LiveConfig } from "../../live/config";
@@ -13,6 +14,7 @@ import { acquireLiveSessionLease } from "../../live/lease";
 import liveCodingInstructions from "../../live/prompts/live-coding-instructions.md" with { type: "text" };
 import { LIVE_MODEL } from "../../live/protocol";
 import { LiveVisualizer } from "../../live/visualizer";
+import type { AgentSession } from "../../session/agent-session";
 import { resolveThinkingLevelForModel, toReasoningEffort } from "../../thinking";
 import { vocalizer } from "../../tts/vocalizer";
 import type { AssistantMessageComponent } from "../components/assistant-message";
@@ -254,22 +256,27 @@ export class LiveCommandController {
 			contextMessages: () => session.buildDisplaySessionContext().messages,
 			activeToolNames: () => session.getActiveToolNames(),
 			resolveCodingOverrides: () => {
-				const { model, warning } = resolveModelOverride(
-					[config.codingModel],
-					session.modelRegistry,
-					session.settings,
-				);
+				// An empty `live.codingModel` means "whatever the session is already
+				// on". Forcing a model here silently swapped the user's chat model
+				// mid-call, and made /live fail outright when the pinned provider had
+				// no credentials even though the session had a working model. The
+				// voice contract below is what constrains the turn, not the model id.
+				const model = config.codingModel
+					? resolveConfiguredCodingModel(config.codingModel, session)
+					: session.model;
 				if (!model) {
 					// MUST NOT degrade to undefined: a delegated turn with no contract is
 					// the unrestrained, terminal-shaped agent this whole path prevents.
-					throw new Error(
-						`live.codingModel "${config.codingModel}" did not match an available model${warning ? `: ${warning}` : ""}`,
-					);
+					throw new Error("live coding turns need a model: the session has none and live.codingModel is unset");
 				}
+				// Effort inherits the session's current level unless the user pinned
+				// one for voice. Forcing a level here overrode a deliberate choice —
+				// someone who sets high already knows it costs latency.
+				const effort = config.codingThinkingLevel ?? session.thinkingLevel;
 				return {
 					systemPromptAppend: [prompt.render(liveCodingInstructions, {})],
 					model,
-					thinkingLevel: toReasoningEffort(resolveThinkingLevelForModel(model, config.codingThinkingLevel)),
+					thinkingLevel: toReasoningEffort(resolveThinkingLevelForModel(model, effort)),
 				};
 			},
 			appendLogOnly: message => session.appendLogOnlyCustomMessage(message),
@@ -406,4 +413,19 @@ export class LiveCommandController {
 		this.#ctx.ui.setFocus(editor);
 		this.#ctx.ui.requestRender();
 	}
+}
+
+/**
+ * Resolves an explicitly configured `live.codingModel`.
+ *
+ * Only reached when the setting is non-empty, so a miss is a real
+ * misconfiguration and must fail the command with a readable reason rather
+ * than quietly running the turn on a model the user did not choose.
+ */
+function resolveConfiguredCodingModel(pattern: string, session: AgentSession): Model {
+	const { model, warning } = resolveModelOverride([pattern], session.modelRegistry, session.settings);
+	if (!model) {
+		throw new Error(`live.codingModel "${pattern}" did not match an available model${warning ? `: ${warning}` : ""}`);
+	}
+	return model;
 }

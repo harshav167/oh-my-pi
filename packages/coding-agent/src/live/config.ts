@@ -10,11 +10,27 @@ export type LiveVoice = (typeof LIVE_VOICES)[number];
 // layer could express silently disable a processing stage in Rust.
 export { LiveAgcMode, LiveEchoCancellationMode, LiveNoiseSuppressionLevel };
 
+/**
+ * Sentinel for "use whatever effort the session is already on". Lives here
+ * rather than beside `AUTO_THINKING` because it is a live-only selector:
+ * `auto` asks the agent to pick an effort per prompt, `inherit` never overrides
+ * the user's own current choice.
+ */
+export const INHERIT_THINKING = "inherit" as const;
+
+/** Display metadata for {@link INHERIT_THINKING} in the settings UI. */
+export const INHERIT_THINKING_METADATA = {
+	value: INHERIT_THINKING,
+	label: "inherit",
+	description: "Use the session's current effort",
+} as const;
+
 export interface LiveConfig {
 	readonly model: string;
-	/** Model for delegated coding turns; resolved at `/live` startup. */
+	/** Model for delegated coding turns; empty inherits the session's model. */
 	readonly codingModel: string;
-	readonly codingThinkingLevel: Effort;
+	/** Effort for delegated coding turns; `undefined` inherits the session's. */
+	readonly codingThinkingLevel: Effort | undefined;
 	readonly voice: LiveVoice;
 	readonly connectTimeoutMs: number;
 	readonly sidebandConnectAttempts: number;
@@ -57,6 +73,11 @@ function parseMode<T extends string>(value: string, allowed: Readonly<Record<str
 	return mode;
 }
 
+/** Maps the `inherit` sentinel to `undefined`; concrete efforts pass through. */
+function concreteLiveEffort(level: string): Effort | undefined {
+	return level === INHERIT_THINKING ? undefined : (level as Effort);
+}
+
 export function resolveLiveConfig(settings: Settings): LiveConfig {
 	const echoCancellationMode = parseMode(
 		settings.get("live.echoCancellationMode"),
@@ -69,8 +90,8 @@ export function resolveLiveConfig(settings: Settings): LiveConfig {
 	}
 	return {
 		model: (settings.get("live.model") ?? "").trim() || "gpt-live-1-codex",
-		codingModel: (settings.get("live.codingModel") ?? "").trim() || "openai-codex/gpt-5.6-terra",
-		codingThinkingLevel: settings.get("live.codingThinkingLevel"),
+		codingModel: (settings.get("live.codingModel") ?? "").trim(),
+		codingThinkingLevel: concreteLiveEffort(settings.get("live.codingThinkingLevel")),
 		voice: settings.get("live.voice"),
 		connectTimeoutMs: clamp(settings.get("live.connectTimeoutMs"), 1, 60_000),
 		sidebandConnectAttempts: clamp(settings.get("live.sidebandConnectAttempts"), 1, 8),

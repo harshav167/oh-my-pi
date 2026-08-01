@@ -2,6 +2,7 @@ import { THINKING_EFFORTS } from "@oh-my-pi/pi-ai";
 import { DEFAULT_SHARE_URL } from "@oh-my-pi/pi-wire";
 import { SHAPE_VARIANT_NAMES } from "@oh-my-pi/snapcompact";
 import { DEFAULT_RELAY_URL } from "../collab/protocol";
+import { INHERIT_THINKING, INHERIT_THINKING_METADATA } from "../live/config";
 import { DEFAULT_LIVE_VOICE, LIVE_VOICE_OPTIONS, LIVE_VOICE_VALUES } from "../live/voices";
 import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS, STT_MODEL_VALUES } from "../stt/models";
 import { STT_SUBMIT_TRIGGER_OPTIONS, STT_SUBMIT_TRIGGER_VALUES } from "../stt/submit-trigger";
@@ -2074,24 +2075,24 @@ export const SETTINGS_SCHEMA = {
 	},
 	"live.codingModel": {
 		type: "string",
-		default: "openai-codex/gpt-5.6-terra",
+		default: "",
 		ui: {
 			tab: "voice",
 			group: "Live Session",
 			label: "Coding Model",
-			description: "Model that runs delegated voice coding turns",
+			description: "Model for delegated voice coding turns. Empty uses the session's current model.",
 		},
 	},
 	"live.codingThinkingLevel": {
 		type: "enum",
-		values: THINKING_EFFORTS,
-		default: "low",
+		values: [...THINKING_EFFORTS, INHERIT_THINKING],
+		default: INHERIT_THINKING,
 		ui: {
 			tab: "voice",
 			group: "Live Session",
 			label: "Coding Thinking Level",
-			description: "Reasoning depth for delegated voice coding turns",
-			options: THINKING_EFFORTS.map(getThinkingLevelMetadata),
+			description: "Reasoning depth for delegated voice coding turns. Inherit uses the session's current effort.",
+			options: [INHERIT_THINKING_METADATA, ...THINKING_EFFORTS.map(getThinkingLevelMetadata)],
 		},
 	},
 	"live.voice": {
