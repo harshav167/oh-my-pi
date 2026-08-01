@@ -154,8 +154,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 3,
@@ -2912,8 +2911,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -2942,8 +2940,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -3001,8 +2998,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -3032,8 +3028,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -3063,8 +3058,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -3094,8 +3088,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -3125,8 +3118,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -3154,8 +3146,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -6752,8 +6743,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -8017,8 +8007,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -9204,8 +9193,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.33,
@@ -10726,8 +10714,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.06,
@@ -10795,8 +10782,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.8,
@@ -14473,8 +14459,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 3,
@@ -17977,8 +17962,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -18041,8 +18025,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -18073,8 +18056,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -20513,8 +20495,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -20545,8 +20526,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -21229,7 +21209,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 2,
@@ -21299,7 +21280,8 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image"
+				"image",
+				"video"
 			],
 			"cost": {
 				"input": 1.9,
@@ -21606,8 +21588,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.4,
@@ -22101,8 +22082,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -23478,8 +23458,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -23508,8 +23487,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -23598,8 +23576,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.1,
@@ -23619,8 +23596,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.075,
@@ -23669,8 +23645,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -23699,8 +23674,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.1,
@@ -23874,8 +23848,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.25,
@@ -23965,8 +23938,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.5,
@@ -23996,8 +23968,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -24025,8 +23996,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -24086,8 +24056,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -24117,8 +24086,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.75,
@@ -24148,8 +24116,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -24177,8 +24144,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -24206,8 +24172,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -24237,8 +24202,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -24268,8 +24232,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -24299,8 +24262,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -24329,8 +24291,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -24416,8 +24377,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1,
@@ -24804,8 +24764,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -24841,8 +24800,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -24871,8 +24829,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -24902,8 +24859,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25000,8 +24956,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25031,8 +24986,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25070,8 +25024,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25115,8 +25068,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25222,8 +25174,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25243,8 +25194,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25280,8 +25230,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25311,8 +25260,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25342,8 +25290,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25371,8 +25318,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25402,8 +25348,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -25704,8 +25649,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -25734,8 +25678,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.1,
@@ -25764,8 +25707,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.25,
@@ -25795,8 +25737,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.5,
@@ -25826,8 +25767,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -25857,8 +25797,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -25886,8 +25825,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -25915,8 +25853,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -25946,8 +25883,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -25977,8 +25913,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -26008,8 +25943,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -26038,8 +25972,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -26547,7 +26480,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"aisingapore/Qwen-SEA-LION-v4-32B-IT": {
 			"id": "aisingapore/Qwen-SEA-LION-v4-32B-IT",
@@ -26567,7 +26501,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"allenai/Olmo-3-7B-Instruct": {
 			"id": "allenai/Olmo-3-7B-Instruct",
@@ -26587,7 +26522,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"alpindale/WizardLM-2-8x22B": {
 			"id": "alpindale/WizardLM-2-8x22B",
@@ -26607,7 +26543,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"baidu/ERNIE-4.5-VL-424B-A47B-Base-PT": {
 			"id": "baidu/ERNIE-4.5-VL-424B-A47B-Base-PT",
@@ -26627,7 +26564,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/aya-expanse-32b": {
 			"id": "CohereLabs/aya-expanse-32b",
@@ -26647,7 +26585,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/aya-vision-32b": {
 			"id": "CohereLabs/aya-vision-32b",
@@ -26667,7 +26606,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/c4ai-command-a-03-2025": {
 			"id": "CohereLabs/c4ai-command-a-03-2025",
@@ -26687,7 +26627,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/c4ai-command-r-08-2024": {
 			"id": "CohereLabs/c4ai-command-r-08-2024",
@@ -26707,7 +26648,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4000,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/c4ai-command-r7b-12-2024": {
 			"id": "CohereLabs/c4ai-command-r7b-12-2024",
@@ -26727,7 +26669,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4000,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/c4ai-command-r7b-arabic-02-2025": {
 			"id": "CohereLabs/c4ai-command-r7b-arabic-02-2025",
@@ -26747,7 +26690,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/command-a-reasoning-08-2025": {
 			"id": "CohereLabs/command-a-reasoning-08-2025",
@@ -26767,7 +26711,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/command-a-translate-08-2025": {
 			"id": "CohereLabs/command-a-translate-08-2025",
@@ -26787,7 +26732,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/tiny-aya-earth": {
 			"id": "CohereLabs/tiny-aya-earth",
@@ -26807,7 +26753,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/tiny-aya-fire": {
 			"id": "CohereLabs/tiny-aya-fire",
@@ -26827,7 +26774,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/tiny-aya-global": {
 			"id": "CohereLabs/tiny-aya-global",
@@ -26847,7 +26795,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"CohereLabs/tiny-aya-water": {
 			"id": "CohereLabs/tiny-aya-water",
@@ -26867,7 +26816,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepcogito/cogito-671b-v2.1": {
 			"id": "deepcogito/cogito-671b-v2.1",
@@ -26887,7 +26837,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepcogito/cogito-671b-v2.1-FP8": {
 			"id": "deepcogito/cogito-671b-v2.1-FP8",
@@ -26907,7 +26858,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepreinforce-ai/Ornith-1.0-35B": {
 			"id": "deepreinforce-ai/Ornith-1.0-35B",
@@ -26927,7 +26879,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepreinforce-ai/Ornith-1.0-35B-FP8": {
 			"id": "deepreinforce-ai/Ornith-1.0-35B-FP8",
@@ -26947,7 +26900,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-R1": {
 			"id": "deepseek-ai/DeepSeek-R1",
@@ -27019,7 +26973,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-R1-Distill-Llama-8B": {
 			"id": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
@@ -27039,7 +26994,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-R1-Distill-Qwen-14B": {
 			"id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
@@ -27059,7 +27015,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": {
 			"id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
@@ -27079,7 +27036,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-V3": {
 			"id": "deepseek-ai/DeepSeek-V3",
@@ -27099,7 +27057,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 131072,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-V3-0324": {
 			"id": "deepseek-ai/DeepSeek-V3-0324",
@@ -27119,7 +27078,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-V3.1": {
 			"id": "deepseek-ai/DeepSeek-V3.1",
@@ -27139,7 +27099,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-V3.1-Terminus": {
 			"id": "deepseek-ai/DeepSeek-V3.1-Terminus",
@@ -27159,7 +27120,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 65536,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-V3.2": {
 			"id": "deepseek-ai/DeepSeek-V3.2",
@@ -27205,7 +27167,8 @@
 			},
 			"contextWindow": 163840,
 			"maxTokens": 65536,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/DeepSeek-V4-Flash": {
 			"id": "deepseek-ai/DeepSeek-V4-Flash",
@@ -27278,7 +27241,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 16384,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-3-27b-it": {
 			"id": "google/gemma-3-27b-it",
@@ -27299,7 +27263,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 65536,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-3-4b-it": {
 			"id": "google/gemma-3-4b-it",
@@ -27320,7 +27285,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 16384,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-3n-E4B-it": {
 			"id": "google/gemma-3n-E4B-it",
@@ -27340,7 +27306,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-4-26B-A4B-it": {
 			"id": "google/gemma-4-26B-A4B-it",
@@ -27420,7 +27387,8 @@
 			},
 			"contextWindow": 262144,
 			"maxTokens": 32768,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta-llama/Llama-3.1-8B-Instruct": {
 			"id": "meta-llama/Llama-3.1-8B-Instruct",
@@ -27440,7 +27408,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 128000,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta-llama/Llama-3.3-70B-Instruct": {
 			"id": "meta-llama/Llama-3.3-70B-Instruct",
@@ -27479,7 +27448,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": {
 			"id": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
@@ -27499,7 +27469,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta-llama/Llama-4-Scout-17B-16E-Instruct": {
 			"id": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
@@ -27519,7 +27490,8 @@
 			},
 			"contextWindow": 10000000,
 			"maxTokens": 32768,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta-llama/Llama-Guard-4-12B": {
 			"id": "meta-llama/Llama-Guard-4-12B",
@@ -27539,7 +27511,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-4": {
 			"id": "microsoft/phi-4",
@@ -27559,7 +27532,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"MiniMaxAI/MiniMax-M1-80k": {
 			"id": "MiniMaxAI/MiniMax-M1-80k",
@@ -27579,7 +27553,8 @@
 			},
 			"contextWindow": 1000000,
 			"maxTokens": 40000,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"MiniMaxAI/MiniMax-M2": {
 			"id": "MiniMaxAI/MiniMax-M2",
@@ -27934,7 +27909,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4": {
 			"id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4",
@@ -27954,7 +27930,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"openai/gpt-oss-120b": {
 			"id": "openai/gpt-oss-120b",
@@ -28036,7 +28013,8 @@
 					"high"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"pearl-ai/Gemma-4-31B-it-pearl": {
 			"id": "pearl-ai/Gemma-4-31B-it-pearl",
@@ -28056,7 +28034,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"prism-ml/Ternary-Bonsai-27B-AWQ-4bit": {
 			"id": "prism-ml/Ternary-Bonsai-27B-AWQ-4bit",
@@ -28076,7 +28055,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"prism-ml/Ternary-Bonsai-27B-gguf": {
 			"id": "prism-ml/Ternary-Bonsai-27B-gguf",
@@ -28096,7 +28076,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen2.5-72B-Instruct": {
 			"id": "Qwen/Qwen2.5-72B-Instruct",
@@ -28116,7 +28097,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen2.5-7B-Instruct": {
 			"id": "Qwen/Qwen2.5-7B-Instruct",
@@ -28136,7 +28118,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen2.5-Coder-32B-Instruct": {
 			"id": "Qwen/Qwen2.5-Coder-32B-Instruct",
@@ -28156,7 +28139,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen2.5-Coder-3B-Instruct": {
 			"id": "Qwen/Qwen2.5-Coder-3B-Instruct",
@@ -28176,7 +28160,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen2.5-Coder-7B-Instruct": {
 			"id": "Qwen/Qwen2.5-Coder-7B-Instruct",
@@ -28196,7 +28181,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen2.5-VL-72B-Instruct": {
 			"id": "Qwen/Qwen2.5-VL-72B-Instruct",
@@ -28216,7 +28202,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-14B": {
 			"id": "Qwen/Qwen3-14B",
@@ -28236,7 +28223,8 @@
 			},
 			"contextWindow": 131702,
 			"maxTokens": 40960,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-235B-A22B": {
 			"id": "Qwen/Qwen3-235B-A22B",
@@ -28284,7 +28272,8 @@
 			},
 			"contextWindow": 262144,
 			"maxTokens": 262144,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-235B-A22B-Thinking-2507": {
 			"id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
@@ -28361,7 +28350,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-4B-Thinking-2507": {
 			"id": "Qwen/Qwen3-4B-Thinking-2507",
@@ -28381,7 +28371,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-8B": {
 			"id": "Qwen/Qwen3-8B",
@@ -28401,7 +28392,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-Coder-30B-A3B-Instruct": {
 			"id": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
@@ -28516,7 +28508,8 @@
 			},
 			"contextWindow": 262144,
 			"maxTokens": 52429,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-VL-235B-A22B-Thinking": {
 			"id": "Qwen/Qwen3-VL-235B-A22B-Thinking",
@@ -28536,7 +28529,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 16384,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3-VL-30B-A3B-Instruct": {
 			"id": "Qwen/Qwen3-VL-30B-A3B-Instruct",
@@ -28556,7 +28550,8 @@
 			},
 			"contextWindow": 262144,
 			"maxTokens": 32768,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Qwen/Qwen3.5-122B-A10B": {
 			"id": "Qwen/Qwen3.5-122B-A10B",
@@ -28779,7 +28774,8 @@
 			},
 			"contextWindow": 8192,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"Sao10K/L3-8B-Stheno-v3.2": {
 			"id": "Sao10K/L3-8B-Stheno-v3.2",
@@ -28799,6 +28795,27 @@
 			},
 			"contextWindow": 8192,
 			"maxTokens": 32000,
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
+		},
+		"speakleash/Bielik-11B-v3.0-Instruct": {
+			"id": "speakleash/Bielik-11B-v3.0-Instruct",
+			"name": "speakleash/Bielik-11B-v3.0-Instruct",
+			"api": "openai-completions",
+			"provider": "huggingface",
+			"baseUrl": "https://router.huggingface.co/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": null,
+			"maxTokens": null,
 			"supportsComputerUse": false
 		},
 		"stepfun-ai/Step-3.5-Flash": {
@@ -28879,7 +28896,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"swiss-ai/Apertus-8B-Instruct-2509": {
 			"id": "swiss-ai/Apertus-8B-Instruct-2509",
@@ -28899,7 +28917,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"swiss-ai/Apertus-v1.5-70B": {
 			"id": "swiss-ai/Apertus-v1.5-70B",
@@ -28919,7 +28938,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"swiss-ai/Apertus-v1.5-8B": {
 			"id": "swiss-ai/Apertus-v1.5-8B",
@@ -28939,7 +28959,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"tencent/Hy3": {
 			"id": "tencent/Hy3",
@@ -29018,7 +29039,8 @@
 			},
 			"contextWindow": 1048576,
 			"maxTokens": 32768,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"utter-project/EuroLLM-22B-Instruct-2512": {
 			"id": "utter-project/EuroLLM-22B-Instruct-2512",
@@ -29038,7 +29060,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"XiaomiMiMo/MiMo-V2-Flash": {
 			"id": "XiaomiMiMo/MiMo-V2-Flash",
@@ -29139,7 +29162,8 @@
 			},
 			"contextWindow": 65536,
 			"maxTokens": 65536,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-4-32B-0414": {
 			"id": "zai-org/GLM-4-32B-0414",
@@ -29159,7 +29183,8 @@
 			},
 			"contextWindow": 32000,
 			"maxTokens": 32000,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-4.5": {
 			"id": "zai-org/GLM-4.5",
@@ -29267,7 +29292,8 @@
 			},
 			"contextWindow": 64000,
 			"maxTokens": 16384,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-4.6": {
 			"id": "zai-org/GLM-4.6",
@@ -29316,7 +29342,8 @@
 			},
 			"contextWindow": 204800,
 			"maxTokens": 131072,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-4.6V": {
 			"id": "zai-org/GLM-4.6V",
@@ -29336,7 +29363,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 32768,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-4.6V-Flash": {
 			"id": "zai-org/GLM-4.6V-Flash",
@@ -29356,7 +29384,8 @@
 			},
 			"contextWindow": 200000,
 			"maxTokens": 64000,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-4.6V-FP8": {
 			"id": "zai-org/GLM-4.6V-FP8",
@@ -29376,7 +29405,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 32768,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-4.7": {
 			"id": "zai-org/GLM-4.7",
@@ -29454,7 +29484,8 @@
 			},
 			"contextWindow": 204800,
 			"maxTokens": 131072,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zai-org/GLM-5": {
 			"id": "zai-org/GLM-5",
@@ -29561,7 +29592,8 @@
 			},
 			"contextWindow": 1048576,
 			"maxTokens": 131072,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		}
 	},
 	"kilo": {
@@ -35155,8 +35187,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -41950,8 +41981,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -42217,8 +42247,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -48203,8 +48232,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.075,
@@ -48310,8 +48338,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -48342,8 +48369,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.1,
@@ -48560,8 +48586,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.25,
@@ -48706,8 +48731,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -54274,8 +54298,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -58993,8 +59016,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -64726,8 +64748,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 3,
@@ -66241,7 +66262,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"abacusai/dracarys-llama-3_1-70b-instruct": {
 			"id": "abacusai/dracarys-llama-3_1-70b-instruct",
@@ -66261,7 +66283,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"abacusai/dracarys-llama-3.1-70b-instruct": {
 			"id": "abacusai/dracarys-llama-3.1-70b-instruct",
@@ -66300,7 +66323,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"ai21labs/jamba-1.5-large-instruct": {
 			"id": "ai21labs/jamba-1.5-large-instruct",
@@ -66320,7 +66344,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"aisingapore/sea-lion-7b-instruct": {
 			"id": "aisingapore/sea-lion-7b-instruct",
@@ -66340,7 +66365,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"baai/bge-m3": {
 			"id": "baai/bge-m3",
@@ -66360,7 +66386,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"bigcode/starcoder2-15b": {
 			"id": "bigcode/starcoder2-15b",
@@ -66380,7 +66407,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"bytedance/seed-oss-36b-instruct": {
 			"id": "bytedance/seed-oss-36b-instruct",
@@ -66419,7 +66447,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/deepseek-coder-6.7b-instruct": {
 			"id": "deepseek-ai/deepseek-coder-6.7b-instruct",
@@ -66439,7 +66468,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/deepseek-r1-0528": {
 			"id": "deepseek-ai/deepseek-r1-0528",
@@ -66466,7 +66496,8 @@
 					"max"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/deepseek-v3.1": {
 			"id": "deepseek-ai/deepseek-v3.1",
@@ -66493,7 +66524,8 @@
 					"max"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/deepseek-v3.1-terminus": {
 			"id": "deepseek-ai/deepseek-v3.1-terminus",
@@ -66520,7 +66552,8 @@
 					"max"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/deepseek-v3.2": {
 			"id": "deepseek-ai/deepseek-v3.2",
@@ -66547,7 +66580,8 @@
 					"max"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"deepseek-ai/deepseek-v4-flash": {
 			"id": "deepseek-ai/deepseek-v4-flash",
@@ -66619,7 +66653,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/codegemma-7b": {
 			"id": "google/codegemma-7b",
@@ -66639,7 +66674,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/deplot": {
 			"id": "google/deplot",
@@ -66659,7 +66695,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/diffusiongemma-26b-a4b-it": {
 			"id": "google/diffusiongemma-26b-a4b-it",
@@ -66679,7 +66716,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-2-27b-it": {
 			"id": "google/gemma-2-27b-it",
@@ -66699,7 +66737,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-2-2b-it": {
 			"id": "google/gemma-2-2b-it",
@@ -66738,7 +66777,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-3-12b-it": {
 			"id": "google/gemma-3-12b-it",
@@ -66779,7 +66819,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-3-27b-it": {
 			"id": "google/gemma-3-27b-it",
@@ -66800,7 +66841,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"google/gemma-3-4b-it": {
 			"id": "google/gemma-3-4b-it",
@@ -66911,7 +66953,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"ibm/granite-3.0-3b-a800m-instruct": {
 			"id": "ibm/granite-3.0-3b-a800m-instruct",
@@ -66931,7 +66974,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"ibm/granite-3.0-8b-instruct": {
 			"id": "ibm/granite-3.0-8b-instruct",
@@ -66951,7 +66995,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"ibm/granite-34b-code-instruct": {
 			"id": "ibm/granite-34b-code-instruct",
@@ -66971,7 +67016,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"ibm/granite-8b-code-instruct": {
 			"id": "ibm/granite-8b-code-instruct",
@@ -66991,7 +67037,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/codellama-70b": {
 			"id": "meta/codellama-70b",
@@ -67011,7 +67058,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/llama-3.1-405b-instruct": {
 			"id": "meta/llama-3.1-405b-instruct",
@@ -67031,7 +67079,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/llama-3.1-70b-instruct": {
 			"id": "meta/llama-3.1-70b-instruct",
@@ -67128,7 +67177,8 @@
 			},
 			"contextWindow": 32768,
 			"maxTokens": 32000,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/llama-3.2-90b-vision-instruct": {
 			"id": "meta/llama-3.2-90b-vision-instruct",
@@ -67208,7 +67258,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/llama-guard-4-12b": {
 			"id": "meta/llama-guard-4-12b",
@@ -67228,7 +67279,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/llama2-70b": {
 			"id": "meta/llama2-70b",
@@ -67248,7 +67300,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/llama3-70b-instruct": {
 			"id": "meta/llama3-70b-instruct",
@@ -67268,7 +67321,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"meta/llama3-8b-instruct": {
 			"id": "meta/llama3-8b-instruct",
@@ -67288,7 +67342,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/kosmos-2": {
 			"id": "microsoft/kosmos-2",
@@ -67308,7 +67363,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-3-medium-128k-instruct": {
 			"id": "microsoft/phi-3-medium-128k-instruct",
@@ -67329,7 +67385,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-3-medium-4k-instruct": {
 			"id": "microsoft/phi-3-medium-4k-instruct",
@@ -67350,7 +67407,8 @@
 			},
 			"contextWindow": 4000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-3-small-128k-instruct": {
 			"id": "microsoft/phi-3-small-128k-instruct",
@@ -67371,7 +67429,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-3-small-8k-instruct": {
 			"id": "microsoft/phi-3-small-8k-instruct",
@@ -67392,7 +67451,8 @@
 			},
 			"contextWindow": 8000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-3-vision-128k-instruct": {
 			"id": "microsoft/phi-3-vision-128k-instruct",
@@ -67413,7 +67473,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-3.5-moe-instruct": {
 			"id": "microsoft/phi-3.5-moe-instruct",
@@ -67433,7 +67494,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-3.5-vision-instruct": {
 			"id": "microsoft/phi-3.5-vision-instruct",
@@ -67454,7 +67516,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"microsoft/phi-4-mini-instruct": {
 			"id": "microsoft/phi-4-mini-instruct",
@@ -67493,7 +67556,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"minimaxai/minimax-m2": {
 			"id": "minimaxai/minimax-m2",
@@ -67522,7 +67586,8 @@
 				],
 				"requiresEffort": true
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"minimaxai/minimax-m2.1": {
 			"id": "minimaxai/minimax-m2.1",
@@ -67551,7 +67616,8 @@
 				],
 				"requiresEffort": true
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"minimaxai/minimax-m2.5": {
 			"id": "minimaxai/minimax-m2.5",
@@ -67580,7 +67646,8 @@
 				],
 				"requiresEffort": true
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"minimaxai/minimax-m2.7": {
 			"id": "minimaxai/minimax-m2.7",
@@ -67659,7 +67726,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"mistralai/devstral-2-123b-instruct-2512": {
 			"id": "mistralai/devstral-2-123b-instruct-2512",
@@ -67689,7 +67757,8 @@
 					"xhigh"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"mistralai/ministral-14b-instruct-2512": {
 			"id": "mistralai/ministral-14b-instruct-2512",
@@ -67748,7 +67817,8 @@
 			},
 			"contextWindow": 65536,
 			"maxTokens": 65536,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"mistralai/mistral-large": {
 			"id": "mistralai/mistral-large",
@@ -67768,7 +67838,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 25600,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"mistralai/mistral-large-2-instruct": {
 			"id": "mistralai/mistral-large-2-instruct",
@@ -67788,7 +67859,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"mistralai/mistral-large-3-675b-instruct-2512": {
 			"id": "mistralai/mistral-large-3-675b-instruct-2512",
@@ -67877,7 +67949,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"mistralai/mistral-small-4-119b-2603": {
 			"id": "mistralai/mistral-small-4-119b-2603",
@@ -67946,7 +68019,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"mistralai/mixtral-8x7b-instruct": {
 			"id": "mistralai/mixtral-8x7b-instruct",
@@ -67985,7 +68059,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"moonshotai/kimi-k2-instruct": {
 			"id": "moonshotai/kimi-k2-instruct",
@@ -68005,7 +68080,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"moonshotai/kimi-k2-instruct-0905": {
 			"id": "moonshotai/kimi-k2-instruct-0905",
@@ -68055,7 +68131,8 @@
 				],
 				"requiresEffort": true
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"moonshotai/kimi-k2.5": {
 			"id": "moonshotai/kimi-k2.5",
@@ -68086,7 +68163,8 @@
 					"xhigh"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"moonshotai/kimi-k2.6": {
 			"id": "moonshotai/kimi-k2.6",
@@ -68137,7 +68215,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/ai-synthetic-video-detector": {
 			"id": "nvidia/ai-synthetic-video-detector",
@@ -68157,7 +68236,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/cosmos-reason2-8b": {
 			"id": "nvidia/cosmos-reason2-8b",
@@ -68208,7 +68288,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/gliner-pii": {
 			"id": "nvidia/gliner-pii",
@@ -68228,7 +68309,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/ising-calibration-1-35b-a3b": {
 			"id": "nvidia/ising-calibration-1-35b-a3b",
@@ -68248,7 +68330,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/ising-calibration-1.5-31b": {
 			"id": "nvidia/ising-calibration-1.5-31b",
@@ -68268,7 +68351,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3_3-nemotron-super-49b-v1": {
 			"id": "nvidia/llama-3_3-nemotron-super-49b-v1",
@@ -68298,7 +68382,8 @@
 					"xhigh"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3_3-nemotron-super-49b-v1_5": {
 			"id": "nvidia/llama-3_3-nemotron-super-49b-v1_5",
@@ -68328,7 +68413,8 @@
 					"xhigh"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3.1-nemoguard-8b-content-safety": {
 			"id": "nvidia/llama-3.1-nemoguard-8b-content-safety",
@@ -68348,7 +68434,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3.1-nemoguard-8b-topic-control": {
 			"id": "nvidia/llama-3.1-nemoguard-8b-topic-control",
@@ -68368,7 +68455,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3.1-nemotron-51b-instruct": {
 			"id": "nvidia/llama-3.1-nemotron-51b-instruct",
@@ -68388,7 +68476,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3.1-nemotron-70b-instruct": {
 			"id": "nvidia/llama-3.1-nemotron-70b-instruct",
@@ -68486,7 +68575,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3.1-nemotron-ultra-253b-v1": {
 			"id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
@@ -68535,7 +68625,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3.2-nv-embedqa-1b-v1": {
 			"id": "nvidia/llama-3.2-nv-embedqa-1b-v1",
@@ -68555,7 +68646,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-3.3-nemotron-super-49b-v1": {
 			"id": "nvidia/llama-3.3-nemotron-super-49b-v1",
@@ -68633,7 +68725,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama-nemotron-embed-vl-1b-v2": {
 			"id": "nvidia/llama-nemotron-embed-vl-1b-v2",
@@ -68653,7 +68746,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/llama3-chatqa-1.5-70b": {
 			"id": "nvidia/llama3-chatqa-1.5-70b",
@@ -68673,7 +68767,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/mistral-nemo-minitron-8b-8k-instruct": {
 			"id": "nvidia/mistral-nemo-minitron-8b-8k-instruct",
@@ -68693,7 +68788,8 @@
 			},
 			"contextWindow": 131072,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemoretriever-parse": {
 			"id": "nvidia/nemoretriever-parse",
@@ -68713,7 +68809,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-3-content-safety": {
 			"id": "nvidia/nemotron-3-content-safety",
@@ -68733,7 +68830,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-3-embed-1b": {
 			"id": "nvidia/nemotron-3-embed-1b",
@@ -68753,7 +68851,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-3-nano-30b-a3b": {
 			"id": "nvidia/nemotron-3-nano-30b-a3b",
@@ -68892,7 +68991,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-4-340b-instruct": {
 			"id": "nvidia/nemotron-4-340b-instruct",
@@ -68912,7 +69012,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-4-340b-reward": {
 			"id": "nvidia/nemotron-4-340b-reward",
@@ -68932,7 +69033,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-content-safety-reasoning-4b": {
 			"id": "nvidia/nemotron-content-safety-reasoning-4b",
@@ -68952,7 +69054,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-mini-4b-instruct": {
 			"id": "nvidia/nemotron-mini-4b-instruct",
@@ -69022,7 +69125,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-parse": {
 			"id": "nvidia/nemotron-parse",
@@ -69042,7 +69146,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nemotron-voicechat": {
 			"id": "nvidia/nemotron-voicechat",
@@ -69081,7 +69186,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nv-embed-v1": {
 			"id": "nvidia/nv-embed-v1",
@@ -69101,7 +69207,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nv-embedcode-7b-v1": {
 			"id": "nvidia/nv-embedcode-7b-v1",
@@ -69121,7 +69228,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nv-embedqa-e5-v5": {
 			"id": "nvidia/nv-embedqa-e5-v5",
@@ -69141,7 +69249,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nv-embedqa-mistral-7b-v2": {
 			"id": "nvidia/nv-embedqa-mistral-7b-v2",
@@ -69161,7 +69270,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nvclip": {
 			"id": "nvidia/nvclip",
@@ -69181,7 +69291,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/nvidia-nemotron-nano-9b-v2": {
 			"id": "nvidia/nvidia-nemotron-nano-9b-v2",
@@ -69230,7 +69341,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/riva-translate-4b-instruct-v1.1": {
 			"id": "nvidia/riva-translate-4b-instruct-v1.1",
@@ -69250,7 +69362,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/riva-translate-4b-instruct-v2": {
 			"id": "nvidia/riva-translate-4b-instruct-v2",
@@ -69270,7 +69383,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"nvidia/vila": {
 			"id": "nvidia/vila",
@@ -69290,7 +69404,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"openai/gpt-oss-120b": {
 			"id": "openai/gpt-oss-120b",
@@ -69412,7 +69527,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"qwen/qwen3-235b-a22b": {
 			"id": "qwen/qwen3-235b-a22b",
@@ -69441,7 +69557,8 @@
 					"high"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"qwen/qwen3-coder-480b-a35b-instruct": {
 			"id": "qwen/qwen3-coder-480b-a35b-instruct",
@@ -69509,7 +69626,8 @@
 				],
 				"requiresEffort": true
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"qwen/qwen3.5-122b-a10b": {
 			"id": "qwen/qwen3.5-122b-a10b",
@@ -69607,7 +69725,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"stepfun-ai/step-3.5-flash": {
 			"id": "stepfun-ai/step-3.5-flash",
@@ -69686,7 +69805,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"thinkingmachines/inkling": {
 			"id": "thinkingmachines/inkling",
@@ -69736,7 +69856,8 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 8192,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"upstage/solar-10.7b-instruct": {
 			"id": "upstage/solar-10.7b-instruct",
@@ -69775,7 +69896,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"writer/palmyra-fin-70b-32k": {
 			"id": "writer/palmyra-fin-70b-32k",
@@ -69795,7 +69917,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"writer/palmyra-med-70b": {
 			"id": "writer/palmyra-med-70b",
@@ -69815,7 +69938,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"writer/palmyra-med-70b-32k": {
 			"id": "writer/palmyra-med-70b-32k",
@@ -69835,7 +69959,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"z-ai/glm-5.1": {
 			"id": "z-ai/glm-5.1",
@@ -69865,7 +69990,8 @@
 					"xhigh"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"z-ai/glm-5.2": {
 			"id": "z-ai/glm-5.2",
@@ -69924,7 +70050,8 @@
 					"xhigh"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"z-ai/glm5": {
 			"id": "z-ai/glm5",
@@ -69954,7 +70081,8 @@
 					"xhigh"
 				]
 			},
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		},
 		"zyphra/zamba2-7b-instruct": {
 			"id": "zyphra/zamba2-7b-instruct",
@@ -69974,7 +70102,8 @@
 			},
 			"contextWindow": null,
 			"maxTokens": null,
-			"supportsComputerUse": false
+			"supportsComputerUse": false,
+			"supportsComputerUseConfig": false
 		}
 	},
 	"ollama-cloud": {
@@ -70216,8 +70345,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -70855,8 +70983,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -73770,8 +73897,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.4,
@@ -74289,8 +74415,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.5,
@@ -74348,8 +74473,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -74377,8 +74501,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -74408,8 +74531,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -74439,8 +74561,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -75933,8 +76054,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.2,
@@ -75964,8 +76084,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.5,
@@ -76197,8 +76316,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -76229,8 +76347,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 2,
@@ -76547,8 +76664,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -77931,8 +78047,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -77963,8 +78078,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.075,
@@ -77995,8 +78109,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -78027,8 +78140,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78491,8 +78603,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78514,8 +78625,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.075,
@@ -78537,8 +78647,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -78569,8 +78678,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78601,8 +78709,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -78726,8 +78833,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.25,
@@ -78791,8 +78897,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.25,
@@ -78980,8 +79085,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -79013,8 +79117,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -79158,8 +79261,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -79417,8 +79519,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.07,
@@ -79480,8 +79581,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -80360,8 +80460,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -81124,8 +81223,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.6,
@@ -81187,8 +81285,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.73,
@@ -81219,8 +81316,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 3,
@@ -81540,8 +81636,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -81635,9 +81730,9 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.6,
-				"output": 3.5999999999999996,
-				"cacheRead": 0.19999999999999998,
+				"input": 0.5,
+				"output": 2.2,
+				"cacheRead": 0.09999999999999999,
 				"cacheWrite": 0
 			},
 			"contextWindow": 512288,
@@ -83936,8 +84031,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": -1000000,
@@ -85363,8 +85457,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.26,
@@ -85395,8 +85488,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.195,
@@ -85427,8 +85519,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.14,
@@ -85459,8 +85550,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.39,
@@ -85491,8 +85581,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -85523,8 +85612,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.065,
@@ -85555,8 +85643,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.26,
@@ -85587,8 +85674,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -85619,8 +85705,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -85682,8 +85767,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.1875,
@@ -85897,8 +85981,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.32,
@@ -85981,8 +86064,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -86164,8 +86246,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.19999999999999998,
@@ -86949,8 +87030,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.39999999999999997,
@@ -87009,8 +87089,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.14,
@@ -87271,8 +87350,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -90448,8 +90526,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -94666,8 +94743,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -94697,8 +94773,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -94728,8 +94803,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.09999999999999999,
@@ -94791,8 +94865,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.25,
@@ -94884,8 +94957,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -94916,8 +94988,7 @@
 			"reasoning": false,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.25,
@@ -94968,8 +95039,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.5,
@@ -95062,8 +95132,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.15,
@@ -95094,8 +95163,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.14,
@@ -95840,8 +95908,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -96385,8 +96452,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.95,
@@ -96417,8 +96483,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.95,
@@ -96480,8 +96545,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 3,
@@ -96633,8 +96697,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.19999999999999998,
@@ -98118,8 +98181,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.19999999999999998,
@@ -98886,8 +98948,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.14,
@@ -101578,8 +101639,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.6,
@@ -101638,8 +101698,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 0.3,
@@ -101869,8 +101928,7 @@
 			"reasoning": true,
 			"input": [
 				"text",
-				"image",
-				"video"
+				"image"
 			],
 			"cost": {
 				"input": 1.2,
