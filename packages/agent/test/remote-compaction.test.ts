@@ -1084,7 +1084,17 @@ describe("Responses Lite remote compaction", () => {
 		const onPayload = async (payload: unknown) => {
 			hookCalls += 1;
 			if (!isRecord(payload)) throw new Error("hook received a non-object payload");
-			return { ...payload, probe_marker: "SENTINEL" };
+			const input = Array.isArray(payload.input) ? payload.input : [];
+			return {
+				...payload,
+				probe_marker: "SENTINEL",
+				text: { verbosity: "high" },
+				tools: [{ type: "function", name: "compaction_hook_tool", parameters: { type: "object", properties: {} } }],
+				input: [
+					...input,
+					{ type: "message", role: "developer", content: [{ type: "input_text", text: "COMPACTION_HOOK_INPUT" }] },
+				],
+			};
 		};
 		let sentBody: Record<string, unknown> | undefined;
 		const fetchMock: FetchImpl = async (_input, init) => {
@@ -1104,8 +1114,178 @@ describe("Responses Lite remote compaction", () => {
 		// it, so an extension would see the compaction body twice.
 		expect(hookCalls).toBe(1);
 		expect(sentBody?.probe_marker).toBe("SENTINEL");
+		expect(sentBody?.text).toEqual({ verbosity: "high" });
+		expect(JSON.stringify(sentBody?.tools)).toContain("compaction_hook_tool");
+		expect(JSON.stringify(sentBody?.input)).toContain("COMPACTION_HOOK_INPUT");
 	});
 
+	test("SSE compaction reuses the post-hook prepared snapshot without firing the hook twice", async () => {
+		const model = makeCodexLiteModel({ preferWebsockets: false });
+		const sessionId = "codex-sse-prepared-snapshot";
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const sentBodies: Array<Record<string, unknown>> = [];
+		let hookCalls = 0;
+		const onPayload = async (payload: unknown) => {
+			hookCalls += 1;
+			if (!isRecord(payload)) throw new Error("hook received a non-object payload");
+			const markers = Array.isArray(payload.probe_markers) ? payload.probe_markers : [];
+			return { ...payload, probe_markers: [...markers, "SENTINEL"] };
+		};
+		const fetchMock: FetchImpl = async (_input, init) => {
+			const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+			sentBodies.push(body);
+			if (sentBodies.length === 1) {
+				return sseResponse([
+					{
+						type: "response.output_item.done",
+						item: {
+							type: "message",
+							id: "message-sse-live",
+							role: "assistant",
+							status: "completed",
+							content: [{ type: "output_text", text: "live response" }],
+						},
+					},
+					{
+						type: "response.done",
+						response: {
+							id: "response-sse-live",
+							status: "completed",
+							usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+						},
+					},
+				]);
+			}
+			return sseResponse(compactionV2Events("enc-sse-snapshot"));
+		};
+
+		await ai
+			.streamSimple(
+				model,
+				{
+					systemPrompt: ["BASE"],
+					messages: [{ role: "user", content: "Start the turn", timestamp: Date.now() }],
+				},
+				{ apiKey: "test-key", fetch: fetchMock, sessionId, providerSessionState, onPayload },
+			)
+			.result();
+		const liveBody = sentBodies[0];
+		const request = buildCompactionV2Request(
+			model,
+			[{ type: "message", role: "user", content: [{ type: "input_text", text: "rebuilt history" }] }],
+			["BASE"],
+			{ sessionId },
+		);
+		const result = await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+			fetch: fetchMock,
+			providerSessionState,
+			codexCompaction: TEST_CODEX_COMPACTION,
+			onPayload,
+		});
+
+		const compactionBody = sentBodies[1];
+		expect(hookCalls).toBe(2);
+		expect(liveBody?.probe_markers).toEqual(["SENTINEL"]);
+		expect(compactionBody?.probe_markers).toEqual(["SENTINEL"]);
+		expect(compactionBody?.input).toEqual([
+			...(Array.isArray(liveBody?.input) ? liveBody.input : []),
+			{
+				type: "message",
+				role: "assistant",
+				status: "completed",
+				content: [{ type: "output_text", text: "live response" }],
+			},
+			{ type: "compaction_trigger" },
+		]);
+		expect(result.usage).toMatchObject({ transport: "sse", continuation: "full-no-baseline" });
+	});
+
+	test("incomplete turns clear prepared snapshots before later compaction", async () => {
+		const model = makeCodexLiteModel({ preferWebsockets: false });
+		const sessionId = "codex-incomplete-snapshot";
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const sentBodies: Array<Record<string, unknown>> = [];
+		const fetchMock: FetchImpl = async (_input, init) => {
+			sentBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+			if (sentBodies.length === 1) {
+				return sseResponse([
+					{
+						type: "response.output_item.done",
+						item: {
+							type: "message",
+							id: "message-complete",
+							role: "assistant",
+							status: "completed",
+							content: [{ type: "output_text", text: "COMPLETED_SNAPSHOT" }],
+						},
+					},
+					{
+						type: "response.done",
+						response: {
+							id: "response-complete",
+							status: "completed",
+							usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+						},
+					},
+				]);
+			}
+			if (sentBodies.length === 2) {
+				return sseResponse([
+					{
+						type: "response.output_item.done",
+						item: {
+							type: "message",
+							id: "message-incomplete",
+							role: "assistant",
+							status: "incomplete",
+							content: [{ type: "output_text", text: "PARTIAL_SNAPSHOT" }],
+						},
+					},
+					{
+						type: "response.incomplete",
+						response: {
+							id: "response-incomplete",
+							status: "incomplete",
+							usage: { input_tokens: 10, output_tokens: 1, total_tokens: 11 },
+						},
+					},
+				]);
+			}
+			return sseResponse(compactionV2Events("enc-after-incomplete"));
+		};
+
+		await ai
+			.streamSimple(
+				model,
+				{ systemPrompt: ["BASE"], messages: [{ role: "user", content: "First turn", timestamp: Date.now() }] },
+				{ apiKey: "test-key", fetch: fetchMock, sessionId, providerSessionState },
+			)
+			.result();
+		await ai
+			.streamSimple(
+				model,
+				{ systemPrompt: ["BASE"], messages: [{ role: "user", content: "Incomplete turn", timestamp: Date.now() }] },
+				{ apiKey: "test-key", fetch: fetchMock, sessionId, providerSessionState },
+			)
+			.result();
+
+		const request = buildCompactionV2Request(
+			model,
+			[{ type: "message", role: "user", content: [{ type: "input_text", text: "REBUILT_AFTER_INCOMPLETE" }] }],
+			["BASE"],
+			{ sessionId },
+		);
+		await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+			fetch: fetchMock,
+			providerSessionState,
+			codexCompaction: TEST_CODEX_COMPACTION,
+		});
+
+		const compactionBody = sentBodies[2];
+		expect(JSON.stringify(compactionBody)).toContain("REBUILT_AFTER_INCOMPLETE");
+		expect(JSON.stringify(compactionBody)).not.toContain("COMPLETED_SNAPSHOT");
+		expect(JSON.stringify(compactionBody)).not.toContain("PARTIAL_SNAPSHOT");
+	});
 	test("V2 compaction reuses the live Codex WebSocket transport when preferred", async () => {
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		const webSocket = installCodexCompactionWebSocket({
@@ -1183,6 +1363,7 @@ describe("Responses Lite remote compaction", () => {
 			expect(sentRequest?.type).toBe("response.create");
 			expect(Array.isArray(sentInput) ? sentInput.at(-1) : undefined).toEqual({ type: "compaction_trigger" });
 			expect(result.compactionItem).toEqual({ type: "compaction", encrypted_content: "enc-websocket" });
+			expect(result.usage).toMatchObject({ transport: "websocket", continuation: "delta" });
 			expect(
 				getOpenAICodexTransportDetails(model, {
 					sessionId,
@@ -1541,8 +1722,7 @@ describe("Responses Lite remote compaction", () => {
 			webSocket.restore();
 		}
 	});
-
-	test("V2 compaction preserves mid-turn tool output instead of chaining", async () => {
+	test("V2 compaction chains an identity-proven mid-turn tool output", async () => {
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		const webSocket = installCodexCompactionWebSocket({
 			respond: (socket, outbound) => {
@@ -1550,16 +1730,16 @@ describe("Responses Lite remote compaction", () => {
 				const isCompaction =
 					Array.isArray(input) && input.some(item => isRecord(item) && item.type === "compaction_trigger");
 				const events = isCompaction
-					? compactionV2Events("enc-unaligned")
+					? compactionV2Events("enc-aligned-tool-output")
 					: [
 							{
 								type: "response.output_item.done",
 								item: {
-									type: "message",
-									id: "message-live-turn",
-									role: "assistant",
-									status: "completed",
-									content: [{ type: "output_text", text: "live response" }],
+									type: "function_call",
+									id: "function-call-live-turn",
+									call_id: "call_local",
+									name: "bash",
+									arguments: "{}",
 								},
 							},
 							{
@@ -1576,7 +1756,7 @@ describe("Responses Lite remote compaction", () => {
 		});
 		try {
 			const model = makeCodexLiteModel({ preferWebsockets: true });
-			const sessionId = "codex-unaligned";
+			const sessionId = "codex-aligned-tool-output";
 			const fetchMock = vi.fn(async () => {
 				throw new Error("unexpected SSE fallback");
 			});
@@ -1591,10 +1771,6 @@ describe("Responses Lite remote compaction", () => {
 				)
 				.result();
 
-			// Mid-turn: a tool result exists after the last response. The two
-			// histories are serialized independently, so there is no reliable way
-			// to locate the boundary — the request must keep its own history and
-			// fall back to a full frame rather than risk dropping the result.
 			const localToolResult = {
 				type: "function_call_output",
 				call_id: "call_local",
@@ -1609,7 +1785,7 @@ describe("Responses Lite remote compaction", () => {
 				["BASE"],
 				{ sessionId },
 			);
-			await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+			const result = await requestCompactionV2Streaming(model, "test-key", request, undefined, {
 				fetch: fetchMock,
 				preferWebsockets: true,
 				providerSessionState,
@@ -1617,10 +1793,9 @@ describe("Responses Lite remote compaction", () => {
 			});
 
 			const compactionFrame = webSocket.sockets[0]?.sent[1];
-			// Full frame, not a chain — and the tool result is intact.
-			expect(compactionFrame?.previous_response_id).toBeUndefined();
-			expect(JSON.stringify(compactionFrame)).toContain("LOCAL_TOOL_RESULT");
-			expect(JSON.stringify(compactionFrame)).toContain("collapsed turn");
+			expect(compactionFrame?.previous_response_id).toBe("response-live-turn");
+			expect(compactionFrame?.input).toEqual([localToolResult, { type: "compaction_trigger" }]);
+			expect(result.usage).toMatchObject({ transport: "websocket", continuation: "delta" });
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();
@@ -1648,18 +1823,33 @@ describe("Responses Lite remote compaction", () => {
 				["compact instructions"],
 				{ sessionId: "codex-websocket-fallback" },
 			);
-			const fetchMock = vi.fn(async () => sseResponse(compactionV2Events("enc-sse")));
+			let hookCalls = 0;
+			let sseBody: Record<string, unknown> | undefined;
+			const onPayload = async (payload: unknown) => {
+				hookCalls += 1;
+				if (!isRecord(payload)) throw new Error("hook received a non-object payload");
+				const markers = Array.isArray(payload.probe_markers) ? payload.probe_markers : [];
+				return { ...payload, probe_markers: [...markers, "SENTINEL"] };
+			};
+			const fetchMock = vi.fn(async (_input, init) => {
+				sseBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+				return sseResponse(compactionV2Events("enc-sse"));
+			});
 
 			const result = await requestCompactionV2Streaming(model, "test-key", request, undefined, {
 				fetch: fetchMock,
 				preferWebsockets: true,
 				providerSessionState,
 				codexCompaction: TEST_CODEX_COMPACTION,
+				onPayload,
 			});
 
 			expect(webSocket.sockets).toHaveLength(1);
 			expect(fetchMock).toHaveBeenCalledTimes(1);
 			expect(result.compactionItem).toEqual({ type: "compaction", encrypted_content: "enc-sse" });
+			expect(hookCalls).toBe(1);
+			expect(sseBody?.probe_markers).toEqual(["SENTINEL"]);
+			expect(result.usage).toMatchObject({ transport: "sse", continuation: "full-ws-fallback" });
 			expect(
 				getOpenAICodexTransportDetails(model, {
 					sessionId: "codex-websocket-fallback",

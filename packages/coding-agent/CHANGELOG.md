@@ -6,6 +6,7 @@
 
 - Added `provider.codexWarmAfterCompaction` (default off): after native Codex compaction the session sends a request-equivalent `generate: false` warm request with the compacted prompt/messages and the live reasoning/summary/verbosity/service-tier options, awaited before the next turn. It bills input/cache-write tokens on every compaction and its benefit has not been measured here, so it stays off until it is.
 - The compaction card renders a `Compaction V2 · input … · cache read … (%) · cache write … · output …` metrics line from native remote-compaction usage, shown in the expanded `ctrl+o` detail.
+- The compaction metrics line now identifies the actual transport and continuation outcome, such as `websocket delta` or `sse full-no-baseline`.
 
 ### Changed
 
@@ -14,6 +15,7 @@
 ### Fixed
 
 - Fixed manual and automatic Codex compaction dropping the configured OpenAI WebSocket preference ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
+- Fixed completed-turn Codex V2 compaction missing prompt-cache reuse on SSE by preserving the provider-prepared live request prefix; safe mid-turn continuation now includes only ordered, identity-proven tool outputs.
 
 ## [17.2.3] - 2026-08-01
 

@@ -86,6 +86,8 @@ describe("compaction summary divider", () => {
 				cacheWriteInputTokens: 0,
 				outputTokens: 2175,
 				totalTokens: 368714,
+				transport: "websocket",
+				continuation: "delta",
 			},
 		};
 		const component = new CompactionSummaryMessageComponent(message);
@@ -96,7 +98,7 @@ describe("compaction summary divider", () => {
 		// wrapping whitespace so the full metrics line is asserted as one unit.
 		const normalized = expanded.replace(/\s+/g, " ");
 		expect(normalized).toContain(
-			"Compaction V2 · input 366,539 · cache read 365,312 (99.7%) · cache write 0 · output 2,175",
+			"Compaction V2 · input 366,539 · cache read 365,312 (99.7%) · cache write 0 · output 2,175 · websocket delta",
 		);
 	});
 

@@ -10,6 +10,8 @@
 ### Fixed
 
 - Fixed provider-native Codex compaction streams bypassing WebSocket-first transport selection and SSE transport fallback ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
+- Codex V2 compaction now reuses the completed live turn's provider-prepared request snapshot over SSE as well as WebSocket continuation, preserves identity-proven pending tool outputs, and keeps ambiguous queued input on the safe full-frame path.
+- Post-compaction warm requests now honor explicit and fork-inherited prompt-cache keys instead of deriving a different cache namespace from the transport session ID.
 
 ## [17.2.3] - 2026-08-01
 

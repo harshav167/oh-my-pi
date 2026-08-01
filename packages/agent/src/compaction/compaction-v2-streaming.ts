@@ -74,6 +74,8 @@ export interface CompactionV2Usage {
 	totalTokens: number;
 	cachedInputTokens?: number;
 	cacheWriteInputTokens?: number;
+	transport?: "websocket" | "sse";
+	continuation?: "delta" | "full-no-baseline" | "full-pending-input" | "full-mismatch" | "full-ws-fallback";
 	reasoningOutputTokens?: number;
 }
 
@@ -136,6 +138,11 @@ export function shouldUseCompactionV2Streaming(
 
 export function compactionV2Api(model: Model): Api | undefined {
 	return model.remoteCompaction?.api ?? model.api;
+}
+
+/** Whether the compaction request uses the Codex Responses tool dialect. */
+export function usesCodexResponsesCompactionDialect(model: Model): boolean {
+	return compactionV2Api(model) === "openai-codex-responses" || model.provider === "openai-codex";
 }
 
 function isOpenAiV2CompatibleModel(model: Model): boolean {
@@ -483,6 +490,8 @@ interface CompactionV2CollectionState {
 	compactionItems: Array<Record<string, unknown>>;
 	sawCompleted: boolean;
 	usage: CompactionV2Usage | undefined;
+	transport?: CompactionV2Usage["transport"];
+	continuation?: CompactionV2Usage["continuation"];
 }
 
 function createCompactionV2CollectionState(): CompactionV2CollectionState {
@@ -491,6 +500,8 @@ function createCompactionV2CollectionState(): CompactionV2CollectionState {
 		compactionItems: [],
 		sawCompleted: false,
 		usage: undefined,
+		transport: undefined,
+		continuation: undefined,
 	};
 }
 
@@ -613,6 +624,20 @@ function handleCompactionV2Event(
 	state: CompactionV2CollectionState,
 ): void {
 	const type = typeof event.type === "string" ? event.type : eventName;
+	if (type === "omp.compaction_transport") {
+		if (event.transport === "websocket" || event.transport === "sse") state.transport = event.transport;
+		if (
+			event.continuation === "delta" ||
+			event.continuation === "full-no-baseline" ||
+			event.continuation === "full-pending-input" ||
+			event.continuation === "full-mismatch" ||
+			event.continuation === "full-ws-fallback"
+		) {
+			state.continuation = event.continuation;
+		}
+		return;
+	}
+
 	if (type === "response.output_item.done") {
 		state.outputItemCount++;
 		const item = event.item;
@@ -624,7 +649,14 @@ function handleCompactionV2Event(
 
 	if (type === "response.completed" || type === "response.done") {
 		state.sawCompleted = true;
-		state.usage = parseCompactionV2Usage(event);
+		const usage = parseCompactionV2Usage(event);
+		state.usage = usage
+			? {
+					...usage,
+					...(state.transport ? { transport: state.transport } : {}),
+					...(state.continuation ? { continuation: state.continuation } : {}),
+				}
+			: undefined;
 		return;
 	}
 
@@ -889,6 +921,16 @@ export function getCompactionV2PreserveData(preserveData: Record<string, unknown
 			const cachedInputTokens = numberField(rawUsage, "cachedInputTokens");
 			const cacheWriteInputTokens = numberField(rawUsage, "cacheWriteInputTokens");
 			const reasoningOutputTokens = numberField(rawUsage, "reasoningOutputTokens");
+			const transport =
+				rawUsage.transport === "websocket" || rawUsage.transport === "sse" ? rawUsage.transport : undefined;
+			const continuation =
+				rawUsage.continuation === "delta" ||
+				rawUsage.continuation === "full-no-baseline" ||
+				rawUsage.continuation === "full-pending-input" ||
+				rawUsage.continuation === "full-mismatch" ||
+				rawUsage.continuation === "full-ws-fallback"
+					? rawUsage.continuation
+					: undefined;
 			usage = {
 				inputTokens,
 				outputTokens,
@@ -896,6 +938,8 @@ export function getCompactionV2PreserveData(preserveData: Record<string, unknown
 				...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
 				...(cacheWriteInputTokens !== undefined ? { cacheWriteInputTokens } : {}),
 				...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
+				...(transport ? { transport } : {}),
+				...(continuation ? { continuation } : {}),
 			};
 		}
 	}

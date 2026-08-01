@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
 	getCodexPreparedPromptBlocks,
-	getOpenAICodexTransportDetails,
 	hydrateCodexCompactionOptions,
 	prewarmOpenAICodexResponses,
 	streamOpenAICodexResponses,
@@ -227,17 +226,16 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 		expect(getCodexPreparedPromptBlocks(providerSessionState, sessionId)).toEqual(["You are a helpful assistant."]);
 	});
 
-	it("keeps the WS onPayload contract: full frame with instructions, delta on the wire", async () => {
+	it("chains three turns while applying the same append-style hook exactly once per wire frame", async () => {
 		const tempDir = TempDir.createSync("@codex-prepared-");
 		setAgentDir(tempDir.path());
 		const token = createCodexTestToken();
 		const sentRequests: Array<Record<string, unknown>> = [];
-		const hookPayloads: Array<Record<string, unknown>> = [];
 		const fetchMock = vi.fn(async () => {
 			throw new Error("SSE fallback should not be called");
 		});
 
-		class PreparedWebSocket extends MockWebSocket {
+		class PersistentHookWebSocket extends MockWebSocket {
 			constructor(url: string, options?: { headers?: WsHeaders }) {
 				super(url, options);
 				this.scheduleOpen();
@@ -245,86 +243,73 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 
 			send(data: string): void {
 				sentRequests.push(JSON.parse(data) as Record<string, unknown>);
-				const responseIndex = sentRequests.length;
-				this.emitCodexResponse({
-					messageId: `msg_${responseIndex}`,
-					responseId: `resp_${responseIndex}`,
-					text: responseIndex === 1 ? "First answer" : "Second answer",
-				});
+				const index = sentRequests.length;
+				this.emitCodexResponse({ messageId: `msg_${index}`, responseId: `resp_${index}`, text: `Answer ${index}` });
 			}
 		}
 
-		global.WebSocket = PreparedWebSocket as unknown as typeof WebSocket;
+		global.WebSocket = PersistentHookWebSocket as unknown as typeof WebSocket;
 		const model = createCodexTestModel();
 		const providerSessionState = new Map<string, ProviderSessionState>();
-		const sessionId = "prepared-ws-session";
-		try {
-			const first = await streamOpenAICodexResponses(
-				model,
-				createCodexTestContext(["You are a helpful assistant."]),
-				{
-					apiKey: token,
-					fetch: fetchMock as FetchImpl,
-					sessionId,
-					providerSessionState,
-					responsesLite: true,
-					onPayload: async payload => {
-						hookPayloads.push(payload as Record<string, unknown>);
-						return undefined;
-					},
-				},
-			).result();
-			expect(first.stopReason).toBe("stop");
-
-			const secondContext: Context = {
-				systemPrompt: ["You are a helpful assistant."],
-				messages: [
-					...createCodexTestContext(["You are a helpful assistant."]).messages,
-					first,
-					{ role: "user", content: "Second question", timestamp: Date.now() },
+		let hookCalls = 0;
+		const hook = async (payload: unknown) => {
+			const frame = payload as Record<string, unknown>;
+			hookCalls += 1;
+			const input = Array.isArray(frame.input) ? frame.input : [];
+			const instructions = typeof frame.instructions === "string" ? frame.instructions : "";
+			const tools = Array.isArray(frame.tools) ? frame.tools : [];
+			return {
+				...frame,
+				instructions: `${instructions}|hook`,
+				tools: [
+					...tools,
+					{ type: "function", name: "hooked_tool", parameters: { type: "object", properties: {} } },
+				],
+				input: [
+					...input,
+					{ type: "message", role: "developer", content: [{ type: "input_text", text: "WIRE_HOOK" }] },
 				],
 			};
-			const second = await streamOpenAICodexResponses(model, secondContext, {
-				apiKey: token,
-				fetch: fetchMock as FetchImpl,
-				sessionId,
-				providerSessionState,
-				responsesLite: true,
-				onPayload: async payload => {
-					hookPayloads.push(payload as Record<string, unknown>);
-					return undefined;
-				},
-			}).result();
-			expect(second.stopReason).toBe("stop");
+		};
+		try {
+			let messages = createCodexTestContext(["You are a helpful assistant."], "Question 1").messages;
+			for (let turn = 1; turn <= 3; turn += 1) {
+				const result = await streamOpenAICodexResponses(
+					model,
+					{ systemPrompt: ["You are a helpful assistant."], messages },
+					{
+						apiKey: token,
+						fetch: fetchMock as FetchImpl,
+						sessionId: "persistent-hook-session",
+						providerSessionState,
+						responsesLite: false,
+						onPayload: hook,
+					},
+				).result();
+				if (turn < 3) {
+					messages = [
+						...messages,
+						result,
+						{ role: "user", content: `Question ${turn + 1}`, timestamp: Date.now() },
+					];
+				}
+			}
 
-			// Hook contract: onPayload still sees the chained delta frame (unchanged
-			// from before this change) — type wrapper, previous_response_id, delta input.
-			expect(hookPayloads).toHaveLength(2);
-			expect(hookPayloads[1]?.type).toBe("response.create");
-			expect(hookPayloads[1]?.previous_response_id).toBe("resp_1");
-			const hookDelta = hookPayloads[1]?.input as Array<{ role?: string }>;
-			expect(hookDelta).toHaveLength(1);
-			expect(hookDelta[0]?.role).toBe("user");
-
-			// Wire contract: the sent second frame is a delta without the instructions item.
-			expect(sentRequests).toHaveLength(2);
+			expect(hookCalls).toBe(3);
 			expect(sentRequests[1]?.previous_response_id).toBe("resp_1");
-			const deltaItems = sentRequests[1]?.input as Array<{ role?: string }>;
-			expect(deltaItems).toHaveLength(1);
-			expect(deltaItems[0]?.role).toBe("user");
-			expect(JSON.stringify(deltaItems)).not.toContain("You are a helpful assistant.");
-
-			// Capture still worked on the appendable Lite path (pre-chain full frame).
-			expect(getCodexPreparedPromptBlocks(providerSessionState, sessionId)).toEqual([
-				"You are a helpful assistant.",
-			]);
+			expect(sentRequests[2]?.previous_response_id).toBe("resp_2");
+			for (const request of sentRequests) {
+				expect(request.instructions).toBe("You are a helpful assistant.|hook");
+				expect(JSON.stringify(request.input).match(/WIRE_HOOK/g)).toHaveLength(1);
+				expect(JSON.stringify(request.tools).match(/hooked_tool/g)).toHaveLength(1);
+			}
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();
 		}
 	});
 
-	it("warm request with non-default options makes the next turn chain from it", async () => {
+	it("warm request with an explicit cache key makes the next turn chain from it", async () => {
 		const tempDir = TempDir.createSync("@codex-prepared-");
 		setAgentDir(tempDir.path());
 		const token = createCodexTestToken();
@@ -346,11 +331,7 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 					this.sendJson({ type: "response.completed", response: { id: "resp-warm", status: "completed" } });
 					return;
 				}
-				this.emitCodexResponse({
-					messageId: "msg_1",
-					responseId: "resp_1",
-					text: "main",
-				});
+				this.emitCodexResponse({ messageId: "msg_1", responseId: "resp_1", text: "main" });
 			}
 		}
 
@@ -358,11 +339,8 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 		const model = createCodexTestModel();
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		const sessionId = "warm-chain-session";
+		const promptCacheKey = "fork-cache-key";
 		const firstTimestamp = Date.now();
-		// Non-default options on BOTH the warm and the next turn: strict parity is
-		// the whole point of threading reasoning/summary/verbosity/tier through.
-		// The warm messages mirror the turn's leading messages (an empty-message
-		// warm would get the transformer's final-instruction injection and diverge).
 		const parityOptions = {
 			reasoning: "medium",
 			reasoningSummary: "detailed",
@@ -373,6 +351,7 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 			await prewarmOpenAICodexResponses(model, {
 				apiKey: token,
 				sessionId,
+				promptCacheKey,
 				providerSessionState,
 				responsesLite: true,
 				warmRequest: {
@@ -382,10 +361,6 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 					...parityOptions,
 				},
 			});
-			expect(sentRequests).toHaveLength(1);
-			expect(sentRequests[0]?.generate).toBe(false);
-			expect(sentRequests[0]?.previous_response_id).toBeUndefined();
-			expect(getOpenAICodexTransportDetails(model, { sessionId, providerSessionState }).canAppend).toBe(true);
 
 			const result = await streamOpenAICodexResponses(
 				model,
@@ -400,42 +375,118 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 					apiKey: token,
 					fetch: fetchMock as FetchImpl,
 					sessionId,
+					promptCacheKey,
 					providerSessionState,
 					responsesLite: true,
 					...parityOptions,
 				},
 			).result();
+
 			expect(result.stopReason).toBe("stop");
-
-			// Strict top-level parity between the warm and turn frames is the gate
-			// the delta comparator enforces; the diff names any non-input drift.
-			{
-				const {
-					type: _t1,
-					input: _i1,
-					client_metadata: _c1,
-					previous_response_id: _p1,
-					generate: _g1,
-					...warmOptions
-				} = sentRequests[0] ?? {};
-				const {
-					type: _t2,
-					input: _i2,
-					client_metadata: _c2,
-					previous_response_id: _p2,
-					generate: _g2,
-					...turnOptions
-				} = sentRequests[1] ?? {};
-				expect(turnOptions).toEqual(warmOptions);
-			}
-
-			// The turn chained from the warm baseline: delta + warm response id.
 			expect(sentRequests).toHaveLength(2);
+			expect(sentRequests[0]?.generate).toBe(false);
+			expect(sentRequests[0]?.prompt_cache_key).toBe(promptCacheKey);
+			expect(sentRequests[1]?.prompt_cache_key).toBe(promptCacheKey);
 			expect(sentRequests[1]?.previous_response_id).toBe("resp-warm");
 			const deltaItems = sentRequests[1]?.input as Array<{ role?: string }>;
 			expect(deltaItems).toHaveLength(1);
 			expect(deltaItems[0]?.role).toBe("user");
 			expect(JSON.stringify(deltaItems)).toContain("Second question");
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+		}
+	});
+
+	it("skips the warm request when cache retention is disabled", async () => {
+		const tempDir = TempDir.createSync("@codex-prepared-");
+		setAgentDir(tempDir.path());
+		const token = createCodexTestToken();
+		const sentRequests: Array<Record<string, unknown>> = [];
+
+		class RetentionWebSocket extends MockWebSocket {
+			constructor(url: string, options?: { headers?: WsHeaders }) {
+				super(url, options);
+				this.scheduleOpen();
+			}
+
+			send(data: string): void {
+				sentRequests.push(JSON.parse(data) as Record<string, unknown>);
+				this.sendJson({ type: "response.completed", response: { id: "resp-warm", status: "completed" } });
+			}
+		}
+
+		global.WebSocket = RetentionWebSocket as unknown as typeof WebSocket;
+		const model = createCodexTestModel();
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		try {
+			await prewarmOpenAICodexResponses(model, {
+				apiKey: token,
+				sessionId: "warm-retention-session",
+				providerSessionState,
+				cacheRetention: "none",
+				warmRequest: {
+					systemPrompt: ["You are a helpful assistant."],
+					tools: [],
+					messages: [{ role: "user", content: "First question", timestamp: Date.now() }],
+				},
+			});
+			// The warm exists to write the server-side prompt cache; with caching
+			// disabled, no frame may be sent at all.
+			expect(sentRequests).toHaveLength(0);
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+		}
+	});
+
+	it("runs the payload hook on the warm frame exactly once", async () => {
+		const tempDir = TempDir.createSync("@codex-prepared-");
+		setAgentDir(tempDir.path());
+		const token = createCodexTestToken();
+		const sentRequests: Array<Record<string, unknown>> = [];
+		const hookPayloads: Array<Record<string, unknown>> = [];
+
+		class HookWebSocket extends MockWebSocket {
+			constructor(url: string, options?: { headers?: WsHeaders }) {
+				super(url, options);
+				this.scheduleOpen();
+			}
+
+			send(data: string): void {
+				sentRequests.push(JSON.parse(data) as Record<string, unknown>);
+				this.sendJson({ type: "response.completed", response: { id: "resp-warm", status: "completed" } });
+			}
+		}
+
+		global.WebSocket = HookWebSocket as unknown as typeof WebSocket;
+		const model = createCodexTestModel();
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		try {
+			await prewarmOpenAICodexResponses(model, {
+				apiKey: token,
+				sessionId: "warm-hook-session",
+				providerSessionState,
+				onPayload: payload => {
+					const frame = payload as Record<string, unknown>;
+					hookPayloads.push(frame);
+					return {
+						...frame,
+						client_metadata: { ...(frame.client_metadata as Record<string, string>), hook_seen: "1" },
+					};
+				},
+				warmRequest: {
+					systemPrompt: ["You are a helpful assistant."],
+					tools: [],
+					messages: [{ role: "user", content: "First question", timestamp: Date.now() }],
+				},
+			});
+			// The warm is a real billed request: an extension must see it exactly
+			// once, and its rewrite must reach the wire.
+			expect(hookPayloads).toHaveLength(1);
+			expect(hookPayloads[0]?.generate).toBe(false);
+			const metadata = sentRequests[0]?.client_metadata as Record<string, string>;
+			expect(metadata.hook_seen).toBe("1");
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();
@@ -539,5 +590,79 @@ describe("compaction option hydration", () => {
 		expect(hydrated.text).toBeUndefined();
 		expect(JSON.stringify(hydrated)).toContain("compaction_tool");
 		expect(JSON.stringify(hydrated)).not.toContain("live_tool");
+	});
+
+	it("hydrates a full SSE compaction from the provider-prepared snapshot", () => {
+		const prepared = {
+			request: {
+				model: "gpt-5.6-terra",
+				input: [{ type: "message", role: "user", content: "server-seen" }],
+				text: { verbosity: "high" },
+			},
+			responseItems: [{ type: "message", role: "assistant", content: "completed" }],
+		};
+		const hydrated = hydrateCodexCompactionOptions(
+			{
+				model: "gpt-5.6-terra",
+				input: [{ type: "message", role: "user", content: "rebuilt-differently" }, { type: "compaction_trigger" }],
+				store: false,
+			} as never,
+			undefined,
+			false,
+			prepared as never,
+		);
+
+		expect(hydrated.text).toEqual({ verbosity: "high" });
+		expect(hydrated.input).toEqual([
+			{ type: "message", role: "user", content: "server-seen" },
+			{ type: "message", role: "assistant", content: "completed" },
+			{ type: "compaction_trigger" },
+		]);
+	});
+
+	it("reuses only an ordered identity-proven pending tool-output tail", () => {
+		const prepared = {
+			request: { model: "gpt-5.6-terra", input: [{ type: "message", role: "user", content: "seen" }] },
+			responseItems: [{ type: "function_call", call_id: "call_1", name: "bash", arguments: "{}" }],
+		};
+		const output = { type: "function_call_output", call_id: "call_1", output: "LOCAL_RESULT" };
+		const hydrated = hydrateCodexCompactionOptions(
+			{ model: "gpt-5.6-terra", input: [output, { type: "compaction_trigger" }], store: false } as never,
+			undefined,
+			true,
+			prepared as never,
+		);
+
+		expect(hydrated.input).toEqual([
+			{ type: "message", role: "user", content: "seen" },
+			{ type: "function_call", call_id: "call_1", name: "bash", arguments: "{}" },
+			output,
+			{ type: "compaction_trigger" },
+		]);
+	});
+
+	it.each([
+		["wrong output kind", [{ type: "custom_tool_call_output", call_id: "call_1", output: "x" }]],
+		[
+			"duplicate output",
+			[
+				{ type: "function_call_output", call_id: "call_1", output: "x" },
+				{ type: "function_call_output", call_id: "call_1", output: "again" },
+			],
+		],
+		[
+			"queued user input",
+			[
+				{ type: "function_call_output", call_id: "call_1", output: "x" },
+				{ type: "message", role: "user", content: "do not drop me" },
+			],
+		],
+	] as const)("preserves the original pending body for %s", (_name, tail) => {
+		const body = { model: "gpt-5.6-terra", input: [...tail, { type: "compaction_trigger" }], store: false };
+		const hydrated = hydrateCodexCompactionOptions(body as never, undefined, true, {
+			request: { model: "gpt-5.6-terra", input: [] },
+			responseItems: [{ type: "function_call", call_id: "call_1", name: "bash", arguments: "{}" }],
+		} as never);
+		expect(hydrated).toBe(body);
 	});
 });

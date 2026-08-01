@@ -6910,7 +6910,7 @@ export class AgentSession {
 			sessionId: this.sessionId,
 			compaction,
 		});
-		// Request-equivalent warm of the new window (default ON; bills input
+		// Request-equivalent warm of the new window (off by default; bills input
 		// tokens). The promise is awaited at the next turn's preflight seam.
 		const model = this.model;
 		if (this.settings.get("provider.codexWarmAfterCompaction") === true && model?.api === "openai-codex-responses") {
@@ -6925,8 +6925,10 @@ export class AgentSession {
 					await prewarmOpenAICodexResponses(codexModel, {
 						apiKey,
 						sessionId: this.sessionId,
+						promptCacheKey: this.agent.promptCacheKey,
 						preferWebsockets: this.#preferWebsockets ?? codexModel.preferWebsockets,
 						providerSessionState: this.#providerSessionState,
+						onPayload: this.#onPayload,
 						warmRequest: {
 							systemPrompt: warmPrompt,
 							tools: this.agent.state.tools,

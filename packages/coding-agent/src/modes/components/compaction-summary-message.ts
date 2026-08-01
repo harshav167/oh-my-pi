@@ -21,7 +21,8 @@ export function formatCompactionV2UsageLine(
 	const output = usage.outputTokens;
 	const ratio = input > 0 ? ((cached / input) * 100).toFixed(1) : "0.0";
 	const fmt = (value: number) => value.toLocaleString("en-US");
-	return `Compaction V2 · input ${fmt(input)} · cache read ${fmt(cached)} (${ratio}%) · cache write ${fmt(write)} · output ${fmt(output)}`;
+	const transport = usage.transport && usage.continuation ? ` · ${usage.transport} ${usage.continuation}` : "";
+	return `Compaction V2 · input ${fmt(input)} · cache read ${fmt(cached)} (${ratio}%) · cache write ${fmt(write)} · output ${fmt(output)}${transport}`;
 }
 
 class SummaryDividerComponent implements Component {

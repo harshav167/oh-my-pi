@@ -12,6 +12,7 @@
 
 - Fixed Codex V2 remote compaction bypassing the provider's live WebSocket transport before trying SSE ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
 - Codex-lane V2 compaction now serializes tools with the same converter as the live turn (`convertOpenAICodexResponsesTools`, strict only when the tool opts in) instead of the generic strict-by-default converter; native usage (including cache counters) is surfaced by `getCompactionV2PreserveData`.
+- Codex V2 compaction records whether the provider used a WebSocket delta or an SSE/full request, including why a full request was required, in preserved usage metadata.
 
 ## [17.2.2] - 2026-07-31
 

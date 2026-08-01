@@ -39,11 +39,11 @@ import { countTokens } from "../tokenizer";
 import type { AgentMessage } from "../types";
 import {
 	buildCompactionV2Request,
-	compactionV2Api,
 	getCompactionV2PreserveData,
 	requestCompactionV2Streaming,
 	shouldUseCompactionV2Streaming,
 	storeCompactionV2PreserveData,
+	usesCodexResponsesCompactionDialect,
 	V2_RETAINED_MESSAGE_TOKEN_BUDGET,
 } from "./compaction-v2-streaming";
 import type { CompactionEntry, SessionEntry } from "./entries";
@@ -1500,11 +1500,10 @@ export async function compact(
 					: [SUMMARIZATION_SYSTEM_PROMPT];
 				// Tool wire shape is part of the rendered prompt prefix: the live Codex
 				// turn serializes tools via `convertOpenAICodexResponsesTools` (strict
-				// only when the tool opts in), so the compaction body must use the same
-				// converter on the Codex lane or the prefix drifts and cache read is 0.
-				const tools = summaryOptions.tools
-					? compactionV2Api(model) === "openai-codex-responses" || model.provider === "openai-codex"
-						? convertOpenAICodexResponsesTools(summaryOptions.tools, model as Model<"openai-codex-responses">)
+				// only when the tool opts in), so the compaction body must use the same.
+				const codexTools = summaryOptions.tools
+					? usesCodexResponsesCompactionDialect(model)
+						? convertOpenAICodexResponsesTools(summaryOptions.tools, model)
 						: convertTools(summaryOptions.tools, model.compat.supportsStrictMode, model)
 					: undefined;
 				const trimmed = trimRemoteCompactionInputToContextWindow(
@@ -1513,7 +1512,7 @@ export async function compact(
 					// Every block ships in the prefix (primary as `instructions`, the
 					// rest as developer items), so budget against all of them.
 					promptBlocks.join("\n\n"),
-					tools,
+					codexTools,
 				);
 				if (trimmed.rewrittenOutputs > 0) {
 					logger.info("Rewrote trailing tool outputs before OpenAI V2 remote compaction", {
@@ -1526,7 +1525,7 @@ export async function compact(
 					});
 				}
 				const request = buildCompactionV2Request(model, trimmed.input, promptBlocks, {
-					tools,
+					tools: codexTools,
 					reasoning: buildCompactionV2Reasoning(model, summaryOptions.thinkingLevel),
 					sessionId: summaryOptions.sessionId,
 					promptCacheKey: summaryOptions.promptCacheKey,
