@@ -1199,6 +1199,245 @@ describe("Responses Lite remote compaction", () => {
 		}
 	});
 
+	test("V2 compaction hydrates the live lane's reasoning and text onto the compaction frame", async () => {
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const webSocket = installCodexCompactionWebSocket({
+			respond: (socket, outbound) => {
+				const input = outbound.input;
+				const isCompaction =
+					Array.isArray(input) && input.some(item => isRecord(item) && item.type === "compaction_trigger");
+				const events = isCompaction
+					? compactionV2Events("enc-chained")
+					: [
+							{
+								type: "response.output_item.done",
+								item: {
+									type: "message",
+									id: "message-live-turn",
+									role: "assistant",
+									status: "completed",
+									content: [{ type: "output_text", text: "live response" }],
+								},
+							},
+							{
+								type: "response.done",
+								response: {
+									id: "response-live-turn",
+									status: "completed",
+									usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+								},
+							},
+						];
+				for (const event of events) socket.emit(event);
+			},
+		});
+		try {
+			const model = makeCodexLiteModel({ preferWebsockets: true });
+			const sessionId = "codex-options-parity";
+			const fetchMock = vi.fn(async () => {
+				throw new Error("chained V2 compaction unexpectedly used SSE");
+			});
+			const userMessage = { role: "user" as const, content: "Start the turn", timestamp: Date.now() };
+			await ai
+				.streamSimple(
+					model,
+					{ systemPrompt: ["BASE", "PROJECT FOOTER"], messages: [userMessage] },
+					{ apiKey: "test-key", fetch: fetchMock, sessionId, preferWebsockets: true, providerSessionState },
+				)
+				.result();
+
+			const liveFrame = webSocket.sockets[0]?.sent[0];
+			const request = buildCompactionV2Request(
+				model,
+				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+				["BASE", "PROJECT FOOTER"],
+				{ sessionId },
+			);
+			await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+				fetch: fetchMock,
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: TEST_CODEX_COMPACTION,
+			});
+			const compactionFrame = webSocket.sockets[0]?.sent[1];
+
+			// The live turn always sends `text.verbosity`; a compaction body never
+			// builds one. Unhydrated, the delta comparator reports
+			// `options-mismatch: ["reasoning","text"]` and refuses to chain, so the
+			// full frame misses the prompt cache. Whether the chain then forms also
+			// depends on the history extending the baseline, which this test does
+			// not cover — the live probe is what proves the cache hit.
+			expect(liveFrame?.text).toEqual({ verbosity: "medium" });
+			expect(compactionFrame?.text).toEqual(liveFrame?.text);
+			// Lite's `reasoning.context: "all_turns"` invariant survives hydration
+			// because the live Lite turn sets it too, so the baseline carries it.
+			expect(isRecord(liveFrame?.reasoning) ? liveFrame.reasoning.context : undefined).toBe("all_turns");
+			expect(compactionFrame?.reasoning).toEqual(liveFrame?.reasoning);
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
+	});
+
+	test("V2 compaction drops a reasoning key the live turn never sent", async () => {
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const webSocket = installCodexCompactionWebSocket({
+			respond: (socket, outbound) => {
+				const input = outbound.input;
+				const isCompaction =
+					Array.isArray(input) && input.some(item => isRecord(item) && item.type === "compaction_trigger");
+				const events = isCompaction
+					? compactionV2Events("enc-surplus")
+					: [
+							{
+								type: "response.output_item.done",
+								item: {
+									type: "message",
+									id: "message-live-turn",
+									role: "assistant",
+									status: "completed",
+									content: [{ type: "output_text", text: "live response" }],
+								},
+							},
+							{
+								type: "response.done",
+								response: {
+									id: "response-live-turn",
+									status: "completed",
+									usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+								},
+							},
+						];
+				for (const event of events) socket.emit(event);
+			},
+		});
+		try {
+			// `gpt-5.3-codex` rejects `reasoning.context: "all_turns"`, so the live
+			// turn deletes the key while the Lite compaction body still forces it.
+			// Merging baseline under the body would leave that surplus key behind
+			// and the comparator would report `options-mismatch: ["reasoning"]`;
+			// only taking the live object wholesale matches.
+			const model = makeCodexLiteModel({ id: "gpt-5.3-codex", preferWebsockets: true });
+			const sessionId = "codex-reasoning-surplus";
+			const fetchMock = vi.fn(async () => {
+				throw new Error("unexpected SSE fallback");
+			});
+			await ai
+				.streamSimple(
+					model,
+					{
+						systemPrompt: ["BASE"],
+						messages: [{ role: "user", content: "Start the turn", timestamp: Date.now() }],
+					},
+					{ apiKey: "test-key", fetch: fetchMock, sessionId, preferWebsockets: true, providerSessionState },
+				)
+				.result();
+
+			const liveFrame = webSocket.sockets[0]?.sent[0];
+			const liveReasoning = isRecord(liveFrame?.reasoning) ? liveFrame.reasoning : undefined;
+			expect(liveReasoning).toBeDefined();
+			expect(liveReasoning && "context" in liveReasoning).toBe(false);
+
+			const request = buildCompactionV2Request(
+				model,
+				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+				["BASE"],
+				{ sessionId },
+			);
+			await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+				fetch: fetchMock,
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: TEST_CODEX_COMPACTION,
+			});
+
+			const compactionFrame = webSocket.sockets[0]?.sent[1];
+			expect(compactionFrame?.reasoning).toEqual(liveFrame?.reasoning);
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
+	});
+
+	test("V2 compaction drops a reasoning object the live turn omitted entirely", async () => {
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const webSocket = installCodexCompactionWebSocket({
+			respond: (socket, outbound) => {
+				const input = outbound.input;
+				const isCompaction =
+					Array.isArray(input) && input.some(item => isRecord(item) && item.type === "compaction_trigger");
+				const events = isCompaction
+					? compactionV2Events("enc-absent")
+					: [
+							{
+								type: "response.output_item.done",
+								item: {
+									type: "message",
+									id: "message-live-turn",
+									role: "assistant",
+									status: "completed",
+									content: [{ type: "output_text", text: "live response" }],
+								},
+							},
+							{
+								type: "response.done",
+								response: {
+									id: "response-live-turn",
+									status: "completed",
+									usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+								},
+							},
+						];
+				for (const event of events) socket.emit(event);
+			},
+		});
+		try {
+			// Non-Lite with no reasoning effort: the live turn sends no `reasoning`
+			// at all. A compaction request that carries one is a surplus key the
+			// baseline cannot equalize by assignment — it has to be removed.
+			const model = makeCodexLiteModel({ useResponsesLite: false, preferWebsockets: true });
+			const sessionId = "codex-reasoning-absent";
+			const fetchMock = vi.fn(async () => {
+				throw new Error("unexpected SSE fallback");
+			});
+			await ai
+				.streamSimple(
+					model,
+					{
+						systemPrompt: ["BASE"],
+						messages: [{ role: "user", content: "Start the turn", timestamp: Date.now() }],
+					},
+					{ apiKey: "test-key", fetch: fetchMock, sessionId, preferWebsockets: true, providerSessionState },
+				)
+				.result();
+
+			const liveFrame = webSocket.sockets[0]?.sent[0];
+			expect(liveFrame && "reasoning" in liveFrame).toBe(false);
+
+			const request = buildCompactionV2Request(
+				model,
+				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+				["BASE"],
+				{ sessionId, reasoning: { effort: "medium", summary: "auto" } },
+			);
+			await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+				fetch: fetchMock,
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: TEST_CODEX_COMPACTION,
+			});
+
+			const compactionFrame = webSocket.sockets[0]?.sent[1];
+			expect(compactionFrame && "reasoning" in compactionFrame).toBe(false);
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
+	});
+
 	test("V2 compaction discards partial WebSocket output before SSE replay", async () => {
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		const webSocket = installCodexCompactionWebSocket({

@@ -1710,6 +1710,38 @@ function toCodexRequestBody(body: OpenAICodexCompactionBody): RequestBody {
 }
 
 /**
+ * Align the compaction request's non-input options with the live turn's, so
+ * the strict delta comparator can chain instead of falling back to a full
+ * frame — which misses the prompt cache entirely.
+ *
+ * The compaction body is built independently of the live turn, so it omits
+ * fields the live transformer always sends (`text.verbosity` is set on every
+ * turn and never on a compaction body) and derives others differently.
+ * Top-level compaction fields still win (`store`, `include`, `tools`,
+ * `input`); the nested option objects take the live values, because parity
+ * with the cached prefix is the entire point. This does not weaken Lite's
+ * `reasoning.context: "all_turns"` invariant: the live Lite turn already
+ * forces `all_turns` itself, so the baseline carries it.
+ */
+function hydrateCodexCompactionOptions(body: RequestBody, state: CodexWebSocketSessionState | undefined): RequestBody {
+	const baseline = asRecord(state?.lastRequest);
+	if (!baseline) return body;
+	const { input: _input, client_metadata: _metadata, previous_response_id: _previous, ...baselineOptions } = baseline;
+	const hydrated = { ...baselineOptions, ...body } as RequestBody;
+	// Take the live object wholesale rather than merging: a merge still leaves
+	// keys the compaction body adds and the live turn does not send. The live
+	// turn drops `reasoning.context` on ids that reject `all_turns`
+	// (`request-transformer.ts`), while the compaction body forces it — merged,
+	// that surplus key alone breaks the comparator.
+	for (const nestedKey of ["reasoning", "text"] as const) {
+		const baselineNested = asRecord(baselineOptions[nestedKey]);
+		if (baselineNested) hydrated[nestedKey] = baselineNested;
+		else delete hydrated[nestedKey];
+	}
+	return hydrated;
+}
+
+/**
  * Open a provider-native V2 compaction stream through Codex's WebSocket-first
  * transport, replaying WebSocket transport failures over SSE.
  */
@@ -1729,6 +1761,7 @@ export async function openCodexCompactionEventStream(
 		const context = createCodexRequestContext(model, toCodexRequestBody(body), options, {
 			isolateCompactionTransport: false,
 		});
+		context.transformedBody = hydrateCodexCompactionOptions(context.transformedBody, context.websocketState);
 		context.onDeltaFailure = failure => {
 			const state = context.websocketState;
 			if (state) logCodexCompactionDeltaFailure(failure, state, context.transformedBody);
