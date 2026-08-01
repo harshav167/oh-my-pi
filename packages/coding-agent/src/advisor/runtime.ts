@@ -361,11 +361,37 @@ export class AdvisorRuntime {
 				for (;;) {
 					if (this.disposed) throw new Error("Advisor disposed");
 					if (this.#epoch !== consultEpoch) throw new Error("Advisor was reset during consultation");
+					// The pause latches are terminal for this consult. Without them the
+					// loop re-kicks a drain that re-attempts the same doomed batch on
+					// every wake — one provider call per cycle, and the consult never
+					// settles because the queue's abort only reaches a running prompt.
+					if (this.#quotaExhausted) throw new Error("Advisor is paused: provider quota exhausted");
+					if (this.#halted) throw new Error("Advisor halted after repeated failures");
+					if (request.signal?.aborted) throw abortError(request.signal);
 					if (this.#pending.length > 0) void this.#drain();
 					if (!this.#busy) break;
 					const idle = Promise.withResolvers<void>();
 					this.#drainIdle = idle.resolve;
-					await idle.promise;
+					// The wait itself must be abort-aware. A parked consult has not
+					// started an agent.prompt(), so the queue's abort hook reaches
+					// nothing; with no wake path the consult ignores its own timeout
+					// until the drain happens to go idle. Resolving (not rejecting)
+					// hands control back to the loop head, which rethrows the reason.
+					const signal = request.signal;
+					if (!signal) {
+						await idle.promise;
+						continue;
+					}
+					const onAbort = (): void => idle.resolve();
+					signal.addEventListener("abort", onAbort, { once: true });
+					// A signal that aborted between the check above and this listener
+					// has already fired, so the listener would never run.
+					if (signal.aborted) idle.resolve();
+					try {
+						await idle.promise;
+					} finally {
+						signal.removeEventListener("abort", onAbort);
+					}
 				}
 				if (this.#epoch !== consultEpoch) throw new Error("Advisor was reset during consultation");
 				this.#consultBusy = true;
@@ -1105,7 +1131,9 @@ export class AdvisorRuntime {
 	}
 
 	async #drain(): Promise<void> {
-		if (this.#busy || this.#sessionTransitionPaused || this.#consultBusy) return;
+		if (this.#busy || this.#sessionTransitionPaused || this.#consultBusy || this.#quotaExhausted || this.#halted) {
+			return;
+		}
 		this.#busy = true;
 		try {
 			this.#syncModelIdentity();

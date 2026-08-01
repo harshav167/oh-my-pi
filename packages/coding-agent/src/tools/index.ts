@@ -731,7 +731,13 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	) {
 		const consultTool = await logger.time("createTools:consult_advisor", HIDDEN_TOOLS.consult_advisor, session);
 		if (consultTool) {
-			tools.push(wrapToolWithMetaNotice(consultTool));
+			// Registering is what keeps the tool alive across an MCP refresh:
+			// #getActiveNonMCPToolNames filters on #toolRegistry.has, so a pushed
+			// but unregistered tool is silently dropped when MCP connects.
+			const wrapped = wrapToolWithMetaNotice(consultTool);
+			tools.push(wrapped);
+			toolRegistry.set(wrapped.name, wrapped);
+			builtInNames.add(wrapped.name);
 		}
 	}
 
