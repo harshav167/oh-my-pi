@@ -1,7 +1,8 @@
 import type { DesktopAction, DesktopDisplay } from "@oh-my-pi/pi-natives";
 import type { ToolResult } from "@trycua/cua-driver";
+import { resizeImage } from "../../utils/image-resize";
 import { ToolError } from "../tool-errors";
-import type { CuaDriverClient } from "./cua-runtime";
+import { type CuaDriverClient, CuaSetupError } from "./cua-runtime";
 import type { ComputerCapture } from "./supervisor";
 
 export type CuaTargetWindow = {
@@ -13,6 +14,13 @@ export type CuaTargetWindow = {
 };
 
 type StructuredRecord = Record<string, unknown>;
+
+/**
+ * Pixels per scroll line. The `computer` schema documents scroll deltas in
+ * pixels, but the daemon's `ScrollBy` is `Line | Page`, so a raw pixel delta
+ * would scroll by that many lines.
+ */
+const SCROLL_PIXELS_PER_LINE = 40;
 
 function record(value: unknown): StructuredRecord | undefined {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -73,6 +81,7 @@ export async function captureCuaWindow(
 	sessionId: string,
 	target: CuaTargetWindow,
 	signal?: AbortSignal,
+	caps?: { maxWidth?: number; maxHeight?: number },
 ): Promise<ComputerCapture> {
 	const result = await driver.callTool(
 		"get_window_state",
@@ -82,10 +91,33 @@ export async function captureCuaWindow(
 	if (result.isError) throw new ToolError(result.text || result.errorCode || "CUA operation failed");
 	const image = result.images[0];
 	if (!image) throw new ToolError("CUA window state returned no screenshot");
-	const data = Buffer.from(image.dataBase64, "base64");
+	let data = Buffer.from(image.dataBase64, "base64");
 	const metadata = await new Bun.Image(data).metadata();
-	const width = metadata.width ?? 0;
-	const height = metadata.height ?? 0;
+	let width = metadata.width ?? 0;
+	let height = metadata.height ?? 0;
+	let mimeType: string | undefined;
+	// The target is cached across captures, so a stale ratio from an earlier
+	// downscale would keep expanding coordinates once the window shrinks.
+	target.scale = 1;
+	// The daemon returns the window at native resolution and clicks in that same
+	// pixel space. Transports that silently downscale a large frame would leave
+	// the model reasoning in one space and the daemon acting in another, so cap
+	// the frame ourselves and record the ratio for `performCuaAction` to undo.
+	const maxWidth = caps?.maxWidth;
+	const maxHeight = caps?.maxHeight;
+	if (width > 0 && height > 0 && ((maxWidth && width > maxWidth) || (maxHeight && height > maxHeight))) {
+		const resized = await resizeImage(
+			{ type: "image", data: data.toBase64(), mimeType: "image/png" },
+			{ maxWidth, maxHeight },
+		);
+		if (resized.wasResized && resized.width > 0) {
+			target.scale = resized.width / resized.originalWidth;
+			data = Buffer.from(resized.buffer);
+			width = resized.width;
+			height = resized.height;
+			mimeType = resized.mimeType;
+		}
+	}
 	target.width = width;
 	target.height = height;
 	const display: DesktopDisplay = {
@@ -113,6 +145,7 @@ export async function captureCuaWindow(
 		inputPermission: "granted",
 		contextText: result.text || undefined,
 		structuredJson: result.structuredJson || result.rawJson || undefined,
+		...(mimeType ? { mimeType } : {}),
 	};
 }
 
@@ -128,39 +161,49 @@ export async function selectCuaTarget(
 	);
 	const frontmost = apps.find(app => booleanField(app, "frontmost", "is_frontmost", "active"));
 	const frontmostPid = frontmost ? numberField(frontmost, "pid", "process_id") : undefined;
-	const windows = resultRecords(
-		await driver.callTool(
-			"list_windows",
-			JSON.stringify(
-				frontmostPid === undefined ? { session: sessionId } : { session: sessionId, pid: frontmostPid },
+	const listWindows = async (pid: number | undefined): Promise<StructuredRecord[]> =>
+		resultRecords(
+			await driver.callTool(
+				"list_windows",
+				JSON.stringify(pid === undefined ? { session: sessionId } : { session: sessionId, pid }),
+				options,
 			),
-			options,
-		),
-		"windows",
-	)
-		.filter(
-			window =>
-				booleanField(window, "is_on_screen", "on_screen") &&
-				notFalseField(window, "on_current_space", "is_on_current_space") &&
-				hasUsableBounds(window),
+			"windows",
 		)
-		.sort((left, right) => {
-			const z =
-				(numberField(left, "z_index") ?? Number.MAX_SAFE_INTEGER) -
-				(numberField(right, "z_index") ?? Number.MAX_SAFE_INTEGER);
-			if (z !== 0) return z;
-			const leftBounds = record(left.bounds) ?? {};
-			const rightBounds = record(right.bounds) ?? {};
-			return (
-				(numberField(rightBounds, "width") ?? 0) * (numberField(rightBounds, "height") ?? 0) -
-				(numberField(leftBounds, "width") ?? 0) * (numberField(leftBounds, "height") ?? 0)
-			);
-		});
+			.filter(
+				window =>
+					booleanField(window, "is_on_screen", "on_screen") &&
+					notFalseField(window, "on_current_space", "is_on_current_space") &&
+					hasUsableBounds(window),
+			)
+			.sort((left, right) => {
+				const z =
+					(numberField(left, "z_index") ?? Number.MAX_SAFE_INTEGER) -
+					(numberField(right, "z_index") ?? Number.MAX_SAFE_INTEGER);
+				if (z !== 0) return z;
+				const leftBounds = record(left.bounds) ?? {};
+				const rightBounds = record(right.bounds) ?? {};
+				return (
+					(numberField(rightBounds, "width") ?? 0) * (numberField(rightBounds, "height") ?? 0) -
+					(numberField(leftBounds, "width") ?? 0) * (numberField(leftBounds, "height") ?? 0)
+				);
+			});
+	let windows = await listWindows(frontmostPid);
+	let pidForWindow = frontmostPid;
+	if (windows.length === 0 && frontmostPid !== undefined) {
+		// A windowless frontmost app (menu-bar item, everything minimised) must not
+		// strand the whole session: the desktop is still capturable, so fall back
+		// to the topmost window of any app.
+		windows = await listWindows(undefined);
+		pidForWindow = undefined;
+	}
 	const selected = windows[0];
 	const windowId = selected ? numberField(selected, "window_id", "id") : undefined;
-	const pid = frontmostPid ?? (selected ? numberField(selected, "pid", "process_id") : undefined);
+	const pid = pidForWindow ?? (selected ? numberField(selected, "pid", "process_id") : undefined);
 	if (pid === undefined || windowId === undefined) {
-		throw new ToolError("CUA found no visible window for the frontmost application");
+		// `CuaSetupError`, not `ToolError`: this is the daemon being unusable for
+		// this session, which is exactly what `auto` falls back to native on.
+		throw new CuaSetupError("CUA found no visible window to target");
 	}
 	return { pid, windowId, width: 0, height: 0, scale: 1 };
 }
@@ -173,6 +216,10 @@ export async function performCuaAction(
 	signal?: AbortSignal,
 ): Promise<void> {
 	const base = { session: sessionId, pid: target.pid, window_id: target.windowId };
+	// The model reasons over the (possibly downscaled) frame; the daemon acts in
+	// native window pixels. Every outgoing coordinate is converted back.
+	const toDaemon = (value: number | undefined): number | undefined =>
+		value === undefined ? undefined : Math.round(value / (target.scale || 1));
 	let name: string;
 	let args: StructuredRecord;
 	switch (action.type) {
@@ -181,8 +228,8 @@ export async function performCuaAction(
 			name = action.button === "right" ? "right_click" : "click";
 			args = {
 				...base,
-				x: action.x,
-				y: action.y,
+				x: toDaemon(action.x),
+				y: toDaemon(action.y),
 				count: action.type === "double_click" ? 2 : 1,
 				modifier: action.keys,
 			};
@@ -192,16 +239,33 @@ export async function performCuaAction(
 			const last = action.path?.at(-1);
 			if (!first || !last) throw new ToolError("CUA drag requires a path");
 			name = "drag";
-			args = { ...base, from_x: first.x, from_y: first.y, to_x: last.x, to_y: last.y, modifier: action.keys };
+			args = {
+				...base,
+				from_x: toDaemon(first.x),
+				from_y: toDaemon(first.y),
+				to_x: toDaemon(last.x),
+				to_y: toDaemon(last.y),
+				modifier: action.keys,
+			};
 			break;
 		}
-		case "keypress":
-			name = (action.keys?.length ?? 0) > 1 ? "hotkey" : "press_key";
-			args = name === "hotkey" ? { ...base, keys: action.keys } : { ...base, key: action.keys?.[0] ?? "" };
+		case "keypress": {
+			// A single entry may itself be a chord ("CTRL+A"): the tool schema
+			// accepts that form and the native backend splits it. Sending it as a
+			// literal key name is not a key the daemon knows.
+			const keys = (action.keys ?? []).flatMap(entry =>
+				entry
+					.split("+")
+					.map(part => part.trim())
+					.filter(Boolean),
+			);
+			name = keys.length > 1 ? "hotkey" : "press_key";
+			args = keys.length > 1 ? { ...base, keys } : { ...base, key: keys[0] ?? "" };
 			break;
+		}
 		case "move":
 			name = "move_cursor";
-			args = { ...base, x: action.x, y: action.y };
+			args = { ...base, x: toDaemon(action.x), y: toDaemon(action.y) };
 			break;
 		case "scroll": {
 			const vertical = Math.abs(action.scroll_y ?? 0) >= Math.abs(action.scroll_x ?? 0);
@@ -209,10 +273,12 @@ export async function performCuaAction(
 			name = "scroll";
 			args = {
 				...base,
-				x: action.x,
-				y: action.y,
+				x: toDaemon(action.x),
+				y: toDaemon(action.y),
 				direction: vertical ? (delta >= 0 ? "down" : "up") : delta >= 0 ? "right" : "left",
-				amount: Math.abs(delta),
+				// The schema documents pixels; the daemon counts lines or pages.
+				// Sending pixels as lines overscrolls by an order of magnitude.
+				amount: Math.max(1, Math.round(Math.abs(delta) / SCROLL_PIXELS_PER_LINE)),
 				by: "line",
 			};
 			break;

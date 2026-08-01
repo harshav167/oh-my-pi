@@ -80,12 +80,6 @@ Special URLs for internal resources; with most FS/bash tools they auto-resolve t
 {{else}}
 {{toolInventory}}
 {{/if}}
-{{#if mcpDiscoveryMode}}
-<discovery-notice>
-{{#if hasMCPDiscoveryServers}}Discoverable MCP servers this session: {{#list mcpDiscoveryServerSummaries join=", "}}{{this}}{{/list}}.{{/if}}
-If the task may involve external systems (SaaS APIs, chat, tickets, databases, deployments, or other non-local integrations), you SHOULD call `{{toolRefs.search_tool_bm25}}` before concluding no such tool exists.
-</discovery-notice>
-{{/if}}
 {{/if}}
 
 {{#has tools "computer"}}

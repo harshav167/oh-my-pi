@@ -83,9 +83,15 @@ export class CuaComputerController implements ComputerController {
 	#closed = false;
 	readonly #loadRuntime: CuaRuntimeLoader;
 	readonly #timeouts: CuaControllerTimeouts;
+	readonly #options: DesktopSessionOptions;
 	capabilities: DesktopCapabilities | undefined;
 
-	constructor(loadRuntime: CuaRuntimeLoader = loadCuaRuntime, timeouts: Partial<CuaControllerTimeouts> = {}) {
+	constructor(
+		options: DesktopSessionOptions,
+		loadRuntime: CuaRuntimeLoader = loadCuaRuntime,
+		timeouts: Partial<CuaControllerTimeouts> = {},
+	) {
+		this.#options = options;
 		this.#loadRuntime = loadRuntime;
 		this.#timeouts = { ...DEFAULT_TIMEOUTS, ...timeouts };
 	}
@@ -104,7 +110,7 @@ export class CuaComputerController implements ComputerController {
 		await this.#start(signal);
 		if (this.#closed) throw new ToolError("Computer session is closed");
 		if (!this.#target) this.#target = await selectCuaTarget(this.#driver!, this.#sessionId, signal);
-		let capture = await captureCuaWindow(this.#driver!, this.#sessionId, this.#target, signal);
+		let capture = await captureCuaWindow(this.#driver!, this.#sessionId, this.#target, signal, this.#options);
 		for (const action of actions) {
 			if (action.type === "wait") {
 				await waitForComputerAction(signal);
@@ -113,7 +119,7 @@ export class CuaComputerController implements ComputerController {
 			}
 			if (action.type !== "screenshot") {
 				if (signal?.aborted) throw new ToolAbortError();
-				capture = await captureCuaWindow(this.#driver!, this.#sessionId, this.#target, signal);
+				capture = await captureCuaWindow(this.#driver!, this.#sessionId, this.#target, signal, this.#options);
 			}
 		}
 		this.capabilities = {
@@ -130,7 +136,11 @@ export class CuaComputerController implements ComputerController {
 
 	#start(signal?: AbortSignal): Promise<void> {
 		if (this.#startPromise) return this.#startPromise;
-		this.#startPromise = this.#connect(signal).catch(error => {
+		const started = this.#connect(signal).catch(error => {
+			// A failed handshake must never be cached. Escape during the handshake
+			// would otherwise re-throw the same abort for the rest of the session,
+			// and a transient daemon outage would brick an explicit `cua` backend.
+			this.#startPromise = undefined;
 			// A caller abort is the user cancelling, not a broken daemon. Wrapping it
 			// as `CuaSetupError` would trip automatic fallback and stickily commit the
 			// session to the native backend because someone pressed Escape.
@@ -139,7 +149,8 @@ export class CuaComputerController implements ComputerController {
 				? error
 				: new CuaSetupError(`CUA daemon setup failed: ${error instanceof Error ? error.message : String(error)}`);
 		});
-		return this.#startPromise;
+		this.#startPromise = started;
+		return started;
 	}
 
 	async #connect(signal?: AbortSignal): Promise<void> {
@@ -203,13 +214,14 @@ export class CuaComputerController implements ComputerController {
  */
 export function createComputerController(
 	options: DesktopSessionOptions,
-	createCua: () => ComputerController = () => new CuaComputerController(),
+	createCua: (options: DesktopSessionOptions) => ComputerController = cuaOptions =>
+		new CuaComputerController(cuaOptions),
 	createNative: (options: DesktopSessionOptions) => ComputerController = nativeOptions =>
 		new ComputerSupervisor(nativeOptions),
 ): ComputerController {
 	if (options.backend === "native") return createNative(options);
-	if (options.backend === "cua") return createCua();
-	const cua = createCua();
+	if (options.backend === "cua") return createCua(options);
+	const cua = createCua(options);
 	const native = createNative(options);
 	/** `undefined` until the first execution resolves which backend serves this session. */
 	let selected: ComputerController | undefined;

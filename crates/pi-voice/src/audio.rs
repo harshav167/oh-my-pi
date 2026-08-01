@@ -27,7 +27,23 @@ use parking_lot::Mutex;
 use tokio::sync::Notify;
 
 const AUDIO_CHANNELS: u32 = 1;
-pub const AUDIO_PERIOD_MS: u32 = 20;
+// PulseAudio TCP playback stutters with a 20 ms target buffer; 50 ms absorbs
+// transport jitter while preserving interactive latency.
+#[cfg(target_os = "linux")]
+pub const PLAYBACK_PERIOD_MS: u32 = 50;
+#[cfg(not(target_os = "linux"))]
+pub const PLAYBACK_PERIOD_MS: u32 = 20;
+// miniaudio's PulseAudio backend reserves three periods. Android's OpenSL ES
+// source emits 125 ms fragments, so Linux capture needs at least 150 ms queued.
+#[cfg(target_os = "linux")]
+const CAPTURE_PERIOD_MS: u32 = 50;
+#[cfg(not(target_os = "linux"))]
+const CAPTURE_PERIOD_MS: u32 = 20;
+// PulseAudio can retain its default three periods after the producer closes.
+// Wait for all of them before stopping the device so the tail reaches the sink.
+#[cfg(target_os = "linux")]
+const PLAYBACK_DRAIN_CALLBACKS: usize = 3;
+#[cfg(not(target_os = "linux"))]
 const PLAYBACK_DRAIN_CALLBACKS: usize = 2;
 /// Memory ceiling for the general-purpose playback queue, in seconds of audio.
 /// Long enough that no realistic synthesized utterance is truncated, short
@@ -347,7 +363,7 @@ impl PlaybackStream {
 		builder
 			.sample_rate(sample_rate)
 			.playback_channels(AUDIO_CHANNELS)
-			.period_size_millis(AUDIO_PERIOD_MS)
+			.period_size_millis(PLAYBACK_PERIOD_MS)
 			.performance_profile(PerformanceProfile::LowLatency)
 			.backends(AUDIO_BACKENDS);
 		if let Some(device_id) = output_device.as_ref() {
@@ -519,7 +535,7 @@ impl CaptureStream {
 		builder
 			.sample_rate(sample_rate)
 			.capture_channels(AUDIO_CHANNELS)
-			.period_size_millis(AUDIO_PERIOD_MS)
+			.period_size_millis(CAPTURE_PERIOD_MS)
 			.performance_profile(PerformanceProfile::LowLatency)
 			.backends(AUDIO_BACKENDS);
 		if let Some(device_id) = input_device.as_ref() {

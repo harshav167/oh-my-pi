@@ -17,6 +17,8 @@ const SMOKE_TIMEOUT_MS = 5_000;
 export interface ComputerCapture extends DesktopCapture {
 	contextText?: string;
 	structuredJson?: string;
+	/** Encoded format of `data`. Absent means PNG, which every native capture emits. */
+	mimeType?: string;
 }
 
 export interface ComputerController {

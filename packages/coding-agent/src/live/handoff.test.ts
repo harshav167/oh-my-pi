@@ -449,6 +449,31 @@ describe("LiveHandoffBridge generation ownership", () => {
 		expect(fixture.closedIds).toEqual(["d1"]);
 	});
 
+	it("does not re-speak an earlier answer when the final message is empty", async () => {
+		const fixture = createFixture();
+		const body = "Retention is long when the endpoint advertises it.";
+		await fixture.bridge.handleDelegation(delegation("d1", "retention?"));
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent(textDelta(body, "final_answer"));
+		fixture.bridge.handleSessionEvent({ type: "agent_end", messages: [assistant(body)], isTerminal: false });
+		await fixture.bridge.flush();
+		// A new message that extracts nothing is routine with the empty-stop retry
+		// machinery. Walking past it to the previous message would adopt an answer
+		// the voice already delivered: `#messageText` is empty for this message, so
+		// `startsWith("")` makes the whole earlier body a remainder and speaks it
+		// a second time.
+		fixture.bridge.handleSessionEvent(START);
+		fixture.bridge.handleSessionEvent({
+			type: "agent_end",
+			messages: [assistant(body), assistant("")],
+			isTerminal: true,
+		});
+		await fixture.bridge.flush();
+
+		expect(fixture.text()).toBe(body);
+		expect(fixture.closes()).toBe(1);
+	});
+
 	it("steers the same backend turn and promotes the correction on the next message", async () => {
 		const fixture = createFixture();
 		await fixture.bridge.handleDelegation(delegation("old", "first"));

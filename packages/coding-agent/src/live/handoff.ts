@@ -700,11 +700,16 @@ export class LiveHandoffBridge {
 	 */
 	#projectAnswer(generation: Generation, messages: readonly AgentMessage[]): boolean {
 		let finalText = "";
+		// Stop at the newest assistant message even when it extracted nothing. An
+		// empty final message is routine with the empty-stop retry machinery, and
+		// walking past it would adopt an already-spoken earlier answer: with
+		// `#messageText` empty, `startsWith("")` makes the whole thing a remainder
+		// and the turn speaks it twice.
 		for (let index = messages.length - 1; index >= 0; index -= 1) {
 			const message = messages[index];
 			if (message?.role !== "assistant") continue;
 			finalText = this.#extractAssistantText(message);
-			if (finalText) break;
+			break;
 		}
 		if (generation.answerProjected) return false;
 		// Nothing to project yet. Marking the message done here would suppress a

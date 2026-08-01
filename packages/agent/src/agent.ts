@@ -1113,9 +1113,6 @@ export class Agent {
 			throw new AgentBusyError();
 		}
 
-		const model = this.#state.model;
-		if (!model) throw new Error("No model configured");
-
 		let msgs: AgentMessage[];
 		let promptOptions: AgentPromptOptions | undefined;
 		let images: ImageContent[] | undefined;

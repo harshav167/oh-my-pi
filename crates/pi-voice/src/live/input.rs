@@ -122,7 +122,28 @@ pub(super) async fn run_input_audio(
 		}
 		stalled = false;
 
+		// The startup-release flush can drain tens of seconds of retained audio in
+		// one wake. Commands only reach the outer `select!`, so without polling
+		// here a mute issued mid-flush is unread while already-captured speech is
+		// encoded and sent -- the exact thing the privacy contract above forbids.
+		let mut closing = false;
 		loop {
+			while let Ok(command) = input_rx.try_recv() {
+				match command {
+					InputCommand::Muted(next_muted) => {
+						muted = next_muted;
+						if muted {
+							queue.lock().silence_queued();
+							assembler.silence_pending();
+						}
+					},
+					InputCommand::Activate => queue.lock().activate(),
+					InputCommand::Close => closing = true,
+				}
+			}
+			if closing {
+				break;
+			}
 			let (has_block, dropped, max_queued) = {
 				let mut queue = queue.lock();
 				(queue.next_block(&mut block), queue.dropped_samples(), queue.max_queued_samples())
@@ -176,6 +197,9 @@ pub(super) async fn run_input_audio(
 					return;
 				}
 			}
+		}
+		if closing {
+			break;
 		}
 	}
 }

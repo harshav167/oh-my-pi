@@ -46,10 +46,7 @@ use webrtc::{
 };
 
 pub use self::apm::{
-	LiveAgcMode,
-	LiveAudioProcessingConfig,
-	LiveEchoCancellationMode,
-	LiveNoiseSuppressionLevel,
+	LiveAgcMode, LiveAudioProcessingConfig, LiveEchoCancellationMode, LiveNoiseSuppressionLevel,
 	live_audio_processing_available,
 };
 use self::{
@@ -79,7 +76,7 @@ const PLAYBACK_CUSHION_SAMPLES: usize = 960;
 /// device's own output period. The adaptive playout target has already elapsed
 /// by then, so it is deliberately excluded.
 const RENDER_LATENCY_MS: u32 =
-	(PLAYBACK_CUSHION_SAMPLES as u32) * 1_000 / AUDIO_SAMPLE_RATE + crate::audio::AUDIO_PERIOD_MS;
+	(PLAYBACK_CUSHION_SAMPLES as u32) * 1_000 / AUDIO_SAMPLE_RATE + crate::audio::PLAYBACK_PERIOD_MS;
 /// Silence from an active, unmuted microphone that counts as a stalled device.
 const CAPTURE_STALL_TIMEOUT: Duration = Duration::from_secs(2);
 pub const DEFAULT_OPEN_TIMEOUT_MS: u32 = 20_000;

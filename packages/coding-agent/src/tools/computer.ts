@@ -483,11 +483,12 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 		const capture = await this.#controller.execute(actions.map(toDesktopAction), signal);
 		throwIfAborted(signal);
 		const data = Buffer.from(capture.data).toBase64();
+		const captureMimeType = capture.mimeType ?? "image/png";
 		const contextText = [capture.contextText, capture.structuredJson].filter(Boolean).join("\n");
 		return {
 			content: [
 				...(contextText ? [{ type: "text" as const, text: contextText }] : []),
-				{ type: "image", data, mimeType: "image/png", detail: "original" },
+				{ type: "image", data, mimeType: captureMimeType, detail: "original" },
 			],
 			details: {
 				width: capture.width,
@@ -504,7 +505,10 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 				? {
 						providerMetadata: {
 							type: "computer" as const,
-							screenshot: { type: "computer_screenshot" as const, image_url: `data:image/png;base64,${data}` },
+							screenshot: {
+								type: "computer_screenshot" as const,
+								image_url: `data:${captureMimeType};base64,${data}`,
+							},
 							acknowledgedSafetyChecks: pendingSafetyChecks,
 						},
 					}
