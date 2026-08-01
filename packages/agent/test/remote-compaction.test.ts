@@ -47,6 +47,7 @@ const TEST_CODEX_COMPACTION: CodexCompactionContext = {
 	reason: "context_limit",
 	phase: "pre_turn",
 	strategy: "memento",
+	hasPendingLocalInput: false,
 };
 
 beforeEach(() => {
@@ -1500,10 +1501,15 @@ describe("Responses Lite remote compaction", () => {
 
 			// A deliberately different tool set: without prefix ownership the
 			// compaction ships its own catalog and the comparator reports an item
-			// mismatch on `additional_tools.tools` at input index 0.
+			// mismatch on `additional_tools.tools` at input index 0. The history
+			// covers exactly what the server saw (the user turn plus the assistant
+			// reply), so the delta should be the trigger alone.
 			const request = buildCompactionV2Request(
 				model,
-				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+				[
+					{ type: "message", role: "user", content: [{ type: "input_text", text: "Start the turn" }] },
+					{ type: "message", role: "assistant", content: [{ type: "output_text", text: "live response" }] },
+				],
 				["BASE"],
 				{
 					sessionId,
@@ -1529,6 +1535,92 @@ describe("Responses Lite remote compaction", () => {
 			// The compaction's own divergent tool catalog never reaches the wire.
 			expect(JSON.stringify(compactionFrame)).not.toContain("compaction_only_tool");
 			expect(compactionFrame?.tools).toEqual(liveFrame?.tools);
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
+	});
+
+	test("V2 compaction preserves mid-turn tool output instead of chaining", async () => {
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const webSocket = installCodexCompactionWebSocket({
+			respond: (socket, outbound) => {
+				const input = outbound.input;
+				const isCompaction =
+					Array.isArray(input) && input.some(item => isRecord(item) && item.type === "compaction_trigger");
+				const events = isCompaction
+					? compactionV2Events("enc-unaligned")
+					: [
+							{
+								type: "response.output_item.done",
+								item: {
+									type: "message",
+									id: "message-live-turn",
+									role: "assistant",
+									status: "completed",
+									content: [{ type: "output_text", text: "live response" }],
+								},
+							},
+							{
+								type: "response.done",
+								response: {
+									id: "response-live-turn",
+									status: "completed",
+									usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+								},
+							},
+						];
+				for (const event of events) socket.emit(event);
+			},
+		});
+		try {
+			const model = makeCodexLiteModel({ preferWebsockets: true });
+			const sessionId = "codex-unaligned";
+			const fetchMock = vi.fn(async () => {
+				throw new Error("unexpected SSE fallback");
+			});
+			await ai
+				.streamSimple(
+					model,
+					{
+						systemPrompt: ["BASE"],
+						messages: [{ role: "user", content: "Start the turn", timestamp: Date.now() }],
+					},
+					{ apiKey: "test-key", fetch: fetchMock, sessionId, preferWebsockets: true, providerSessionState },
+				)
+				.result();
+
+			// Mid-turn: a tool result exists after the last response. The two
+			// histories are serialized independently, so there is no reliable way
+			// to locate the boundary — the request must keep its own history and
+			// fall back to a full frame rather than risk dropping the result.
+			const localToolResult = {
+				type: "function_call_output",
+				call_id: "call_local",
+				output: "LOCAL_TOOL_RESULT",
+			};
+			const request = buildCompactionV2Request(
+				model,
+				[
+					{ type: "message", role: "user", content: [{ type: "input_text", text: "collapsed turn" }] },
+					localToolResult,
+				],
+				["BASE"],
+				{ sessionId },
+			);
+			await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+				fetch: fetchMock,
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: { ...TEST_CODEX_COMPACTION, phase: "mid_turn", hasPendingLocalInput: true },
+			});
+
+			const compactionFrame = webSocket.sockets[0]?.sent[1];
+			// Full frame, not a chain — and the tool result is intact.
+			expect(compactionFrame?.previous_response_id).toBeUndefined();
+			expect(JSON.stringify(compactionFrame)).toContain("LOCAL_TOOL_RESULT");
+			expect(JSON.stringify(compactionFrame)).toContain("collapsed turn");
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();

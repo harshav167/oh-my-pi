@@ -155,6 +155,7 @@ const COMPACTION: CodexCompactionRequestContext = {
 	reason: "context_limit",
 	phase: "mid_turn",
 	strategy: "memento",
+	hasPendingLocalInput: false,
 	implementation: "responses_compaction_v2",
 };
 
@@ -465,6 +466,7 @@ describe("compaction option hydration", () => {
 				store: false,
 			} as never,
 			state,
+			false,
 		);
 
 		// Prefix-owned fields become the live turn's, exactly.
@@ -496,6 +498,7 @@ describe("compaction option hydration", () => {
 				store: false,
 			} as never,
 			laneWithLiveRequest(lastRequest),
+			false,
 		);
 
 		// `onPayload` runs after hydration; an extension mutating the body in
@@ -509,5 +512,32 @@ describe("compaction option hydration", () => {
 		expect(lastRequest.input[0]?.tools).toEqual([{ name: "live_tool" }]);
 		expect(lastRequest.reasoning).toEqual({ effort: "medium", summary: "auto" });
 		expect(lastRequest.text).toEqual({ verbosity: "medium" });
+	});
+
+	it("leaves a pending-local-input request untouched so its hook runs once", () => {
+		const body = {
+			model: "gpt-5.6-terra",
+			input: [{ type: "additional_tools", role: "developer", tools: [{ name: "compaction_tool" }] }],
+			store: false,
+		};
+		const hydrated = hydrateCodexCompactionOptions(
+			body as never,
+			laneWithLiveRequest({
+				input: [{ type: "additional_tools", role: "developer", tools: [{ name: "live_tool" }] }],
+				reasoning: { effort: "medium", summary: "auto" },
+				text: { verbosity: "medium" },
+			}),
+			true,
+		);
+
+		// The baseline was recorded after `onPayload`, and this request will run
+		// that hook again on the way out. Copying any baseline-owned bytes here
+		// would let a non-idempotent extension apply itself twice, so the body
+		// must come back exactly as it went in.
+		expect(hydrated).toBe(body);
+		expect(hydrated.reasoning).toBeUndefined();
+		expect(hydrated.text).toBeUndefined();
+		expect(JSON.stringify(hydrated)).toContain("compaction_tool");
+		expect(JSON.stringify(hydrated)).not.toContain("live_tool");
 	});
 });

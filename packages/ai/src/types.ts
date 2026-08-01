@@ -353,6 +353,16 @@ export interface CodexCompactionContext {
 	reason: "user_requested" | "context_limit" | "model_downshift" | "comp_hash_changed";
 	phase: "standalone_turn" | "pre_turn" | "mid_turn";
 	strategy: "memento" | "prefix_compaction";
+	/**
+	 * True when the session holds input the server has not seen — a queued user
+	 * prompt or a mid-turn tool result. Compaction may then not reuse the live
+	 * lane's conversation verbatim, because the two histories are serialized
+	 * independently and the local items cannot be located reliably.
+	 *
+	 * `phase` cannot stand in for this: the post-agent-end threshold path and
+	 * the pending-prompt path are both `pre_turn`, and only the first is safe.
+	 */
+	hasPendingLocalInput: boolean;
 }
 
 /** Canonical nested metadata serialized into the Codex turn envelope. */
@@ -366,6 +376,8 @@ export interface CodexCompactionMetadata {
 
 /** Dispatch context combining canonical metadata with its local operation identity. */
 export interface CodexCompactionRequestContext extends CodexCompactionMetadata {
+	/** See {@link CodexCompactionContext.hasPendingLocalInput}. */
+	hasPendingLocalInput: boolean;
 	operationId: string;
 }
 

@@ -601,11 +601,13 @@ describe("openai-codex Responses Lite and client metadata wire format", () => {
 			implementation: "responses",
 			phase: "pre_turn",
 			strategy: "memento",
+			hasPendingLocalInput: false,
 		};
 		const midTurn: CodexCompactionRequestContext = {
 			...preTurn,
 			operationId: "mid-turn-operation",
 			phase: "mid_turn",
+			hasPendingLocalInput: true,
 		};
 		const standalone: CodexCompactionRequestContext = {
 			...preTurn,

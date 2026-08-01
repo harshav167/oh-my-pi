@@ -2792,6 +2792,7 @@ describe("openai-codex streaming", () => {
 				trigger: "auto",
 				reason: "context_limit",
 				implementation: "responses",
+				hasPendingLocalInput: false,
 				phase: "pre_turn",
 				strategy: "memento",
 			},
@@ -2906,6 +2907,7 @@ describe("openai-codex streaming", () => {
 			reason: "context_limit",
 			implementation: "responses",
 			phase: "mid_turn",
+			hasPendingLocalInput: false,
 			strategy: "memento",
 		};
 		const first = await streamOpenAICodexResponses(websocketModel, context, {
@@ -2942,6 +2944,7 @@ describe("openai-codex streaming", () => {
 				trigger: "auto",
 				reason: "context_limit",
 				implementation: "responses",
+				hasPendingLocalInput: false,
 				phase: "mid_turn",
 				strategy: "memento",
 			},
@@ -3082,6 +3085,7 @@ describe("openai-codex streaming", () => {
 			reason: "context_limit",
 			implementation: "responses",
 			phase: "pre_turn",
+			hasPendingLocalInput: false,
 			strategy: "memento",
 		};
 
@@ -4896,6 +4900,7 @@ describe("openai-codex streaming", () => {
 				trigger: "auto",
 				reason: "context_limit",
 				phase: "pre_turn",
+				hasPendingLocalInput: false,
 				strategy: "memento",
 			},
 		});

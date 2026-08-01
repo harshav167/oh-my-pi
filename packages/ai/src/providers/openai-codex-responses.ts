@@ -221,6 +221,7 @@ export function createOpenAICodexCompactionRequestContext(options: {
 		implementation: options.implementation,
 		phase: context.phase,
 		strategy: context.strategy,
+		hasPendingLocalInput: context.hasPendingLocalInput,
 	};
 }
 
@@ -1747,7 +1748,15 @@ const CODEX_LIVE_OWNED_REQUEST_KEYS = ["reasoning", "text", "tools", "tool_choic
 export function hydrateCodexCompactionOptions(
 	body: RequestBody,
 	state: CodexWebSocketSessionState | undefined,
+	hasPendingLocalInput: boolean,
 ): RequestBody {
+	// Bail before touching anything when the session holds unsent input. The
+	// baseline was recorded AFTER `onPayload`, and this request will run that
+	// hook again on its way out; copying baseline-owned fields here would let a
+	// non-idempotent extension (the classic "append the machine name" case)
+	// apply itself twice to the same bytes. Chaining is impossible on this path
+	// anyway, so there is nothing to gain by hydrating.
+	if (hasPendingLocalInput) return body;
 	const baseline = asRecord(state?.lastRequest);
 	if (!baseline) return body;
 	const {
@@ -1782,22 +1791,28 @@ export function hydrateCodexCompactionOptions(
 	const responseItems = state?.lastResponseItems ?? [];
 	const hydratedInput = Array.isArray(hydrated.input) ? hydrated.input : undefined;
 	if (hydratedInput) {
-		// The trigger is always the final item and is never part of the server's
-		// history, so lift it out before measuring the boundary — otherwise an
-		// empty local tail drops it and the request stops being a compaction.
+		const leadingPrefixLength = (items: readonly unknown[]): number => {
+			let count = 0;
+			for (const item of items) {
+				const record = asRecord(item);
+				if (!record || (record.type !== "additional_tools" && record.role !== "developer")) break;
+				count += 1;
+			}
+			return count;
+		};
+		// The rendered prompt prefix is always the live lane's — it describes the
+		// prompt, never the conversation, so replacing it can lose no content.
+		const copiedPrefix = structuredCloneJSON(
+			baselineItems.slice(0, leadingPrefixLength(baselineItems)),
+		) as InputItem[];
+		hydrated.input = [...copiedPrefix, ...hydratedInput.slice(leadingPrefixLength(hydratedInput))];
+
+		// Nothing local exists past the server's copy (the early return above
+		// guarantees it), so the exact chain is reconstructible and the delta
+		// collapses to the trigger.
 		const lastItem = hydratedInput[hydratedInput.length - 1];
 		const trigger = asRecord(lastItem)?.type === "compaction_trigger" ? [lastItem] : [];
-		const withoutTrigger = trigger.length > 0 ? hydratedInput.slice(0, -1) : hydratedInput;
-		// Anything beyond what the server has seen is genuinely local — a
-		// mid-turn tool result, say — and has to survive. Everything at or
-		// before that boundary is replaced wholesale.
-		const serverSeen = baselineItems.length + responseItems.length;
-		const localTail = withoutTrigger.length > serverSeen ? withoutTrigger.slice(serverSeen) : [];
-		hydrated.input = [
-			...(structuredCloneJSON([...baselineItems, ...responseItems]) as InputItem[]),
-			...localTail,
-			...trigger,
-		];
+		hydrated.input = [...(structuredCloneJSON([...baselineItems, ...responseItems]) as InputItem[]), ...trigger];
 	}
 	return hydrated;
 }
@@ -1822,7 +1837,11 @@ export async function openCodexCompactionEventStream(
 		const context = createCodexRequestContext(model, toCodexRequestBody(body), options, {
 			isolateCompactionTransport: false,
 		});
-		context.transformedBody = hydrateCodexCompactionOptions(context.transformedBody, context.websocketState);
+		context.transformedBody = hydrateCodexCompactionOptions(
+			context.transformedBody,
+			context.websocketState,
+			options.codexCompaction?.hasPendingLocalInput !== false,
+		);
 		context.onDeltaFailure = failure => {
 			const state = context.websocketState;
 			if (state) logCodexCompactionDeltaFailure(failure, state, context.transformedBody);

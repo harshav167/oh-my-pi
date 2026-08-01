@@ -126,17 +126,25 @@ function compactionDeadEndWarning(remedies: string): string {
 	);
 }
 
-/** Creates one provider-scoped compaction lifecycle descriptor. */
+/**
+ * Creates one provider-scoped compaction lifecycle descriptor.
+ *
+ * `hasPendingLocalInput` is required on purpose: it decides whether the Codex
+ * compaction request may reuse the live lane's conversation verbatim, so a
+ * forgotten value must not silently default to the content-dropping side.
+ */
 export function createCodexCompactionContext(options: {
 	trigger: CodexCompactionContext["trigger"];
 	reason: CodexCompactionContext["reason"];
 	phase: CodexCompactionContext["phase"];
+	hasPendingLocalInput: boolean;
 }): CodexCompactionContext {
 	return {
 		operationId: crypto.randomUUID(),
 		trigger: options.trigger,
 		reason: options.reason,
 		phase: options.phase,
+		hasPendingLocalInput: options.hasPendingLocalInput,
 		strategy: "memento",
 	};
 }
@@ -812,6 +820,8 @@ export class SessionMaintenance {
 					trigger: "manual",
 					reason: "user_requested",
 					phase: "standalone_turn",
+					// `/compact` runs between turns with nothing queued.
+					hasPendingLocalInput: false,
 				});
 				// Generate compaction result. Only convert known abort-shaped
 				// rejections (AbortError raised while the abort signal is set,
@@ -1394,6 +1404,11 @@ export class SessionMaintenance {
 					autoContinue,
 					triggerContextTokens: postMaintenanceContextTokens,
 					phase: "pre_turn",
+					// Post-agent-end: the turn finished and its results are already
+					// persisted, so nothing is queued that the server has not seen.
+					// Shares `pre_turn` with the pending-prompt path, which is why
+					// this is stated explicitly rather than derived from the phase.
+					hasPendingLocalInput: false,
 					terminalTextAnswer: isTerminalTextAssistantAnswer(assistantMessage),
 				});
 			}
@@ -2139,6 +2154,12 @@ export class SessionMaintenance {
 			suppressContinuation?: boolean;
 			suppressHandoff?: boolean;
 			phase?: CodexCompactionContext["phase"];
+			/**
+			 * Set only when the session provably holds nothing the server has
+			 * not seen. Omitted defaults to `true` (preserve), because a wrong
+			 * `false` drops a queued prompt or tool result from compaction.
+			 */
+			hasPendingLocalInput?: boolean;
 			terminalTextAnswer?: boolean;
 		} = {},
 	): Promise<CompactionCheckResult> {
@@ -2580,6 +2601,9 @@ export class SessionMaintenance {
 					phase:
 						options.phase ??
 						(reason === "threshold" ? "pre_turn" : reason === "idle" ? "standalone_turn" : "mid_turn"),
+					// Defaults to the preserving side; only callers that know the
+					// session holds nothing unsent may opt into history reuse.
+					hasPendingLocalInput: options.hasPendingLocalInput ?? true,
 				});
 
 				for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
