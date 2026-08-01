@@ -787,7 +787,19 @@ export interface SummaryOptions {
 	promptOverride?: string;
 	extraContext?: string[];
 	remoteEndpoint?: string;
-	remoteInstructions?: string;
+	/**
+	 * Live turn's normalized system-prompt blocks. V2 renders `[0]` as
+	 * `instructions` and `[1..]` as leading `developer` input items so the
+	 * compaction prefix matches the live turn's; the V1 endpoint takes a single
+	 * instructions string and joins them.
+	 */
+	remotePromptBlocks?: string[];
+	/**
+	 * The caller's `before_provider_request` hook. Running it on the compaction
+	 * body too keeps an extension's payload rewrites identical across the live
+	 * turn and the compaction request, so their prefixes cannot drift.
+	 */
+	onPayload?: SimpleStreamOptions["onPayload"];
 	initiatorOverride?: MessageAttribution;
 	metadata?: Record<string, unknown>;
 	convertToLlm?: ConvertToLlm;
@@ -1424,7 +1436,7 @@ export async function compact(
 		promptOverride: options?.promptOverride,
 		extraContext: options?.extraContext,
 		remoteEndpoint: settings.remoteEnabled === false ? undefined : settings.remoteEndpoint,
-		remoteInstructions: options?.remoteInstructions,
+		remotePromptBlocks: options?.remotePromptBlocks,
 		initiatorOverride: options?.initiatorOverride,
 		metadata: options?.metadata,
 		convertToLlm: options?.convertToLlm,
@@ -1483,7 +1495,9 @@ export async function compact(
 		);
 		if (remoteHistory.length > 0) {
 			try {
-				const instructions = summaryOptions.remoteInstructions ?? SUMMARIZATION_SYSTEM_PROMPT;
+				const promptBlocks = summaryOptions.remotePromptBlocks?.length
+					? summaryOptions.remotePromptBlocks
+					: [SUMMARIZATION_SYSTEM_PROMPT];
 				// Tool wire shape is part of the rendered prompt prefix: the live Codex
 				// turn serializes tools via `convertOpenAICodexResponsesTools` (strict
 				// only when the tool opts in), so the compaction body must use the same
@@ -1496,7 +1510,9 @@ export async function compact(
 				const trimmed = trimRemoteCompactionInputToContextWindow(
 					remoteHistory,
 					model.contextWindow,
-					instructions,
+					// Every block ships in the prefix (primary as `instructions`, the
+					// rest as developer items), so budget against all of them.
+					promptBlocks.join("\n\n"),
 					tools,
 				);
 				if (trimmed.rewrittenOutputs > 0) {
@@ -1509,7 +1525,7 @@ export async function compact(
 						contextWindow: model.contextWindow,
 					});
 				}
-				const request = buildCompactionV2Request(model, trimmed.input, instructions, {
+				const request = buildCompactionV2Request(model, trimmed.input, promptBlocks, {
 					tools,
 					reasoning: buildCompactionV2Reasoning(model, summaryOptions.thinkingLevel),
 					sessionId: summaryOptions.sessionId,
@@ -1524,6 +1540,7 @@ export async function compact(
 							providerSessionState: summaryOptions.providerSessionState,
 							preferWebsockets: summaryOptions.preferWebsockets,
 							codexCompaction: summaryOptions.codexCompaction,
+							onPayload: summaryOptions.onPayload,
 						}),
 					{ signal },
 				);
@@ -1575,7 +1592,7 @@ export async function compact(
 							model,
 							key,
 							remoteHistory,
-							summaryOptions.remoteInstructions ?? SUMMARIZATION_SYSTEM_PROMPT,
+							summaryOptions.remotePromptBlocks?.join("\n\n") || SUMMARIZATION_SYSTEM_PROMPT,
 							signal,
 							{
 								fetch: summaryOptions.fetch,

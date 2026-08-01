@@ -4,9 +4,12 @@
 
 ### Added
 
-- Codex V2 compaction now reuses the live cached WebSocket lane when one is healthy: new `openCodexCompactionV2WebSocket` (reuse-only, auth-verified, baseline-hydrated from the live turn's request so the strict delta comparator sees identical options) with a shared WS/SSE V2 event collector, and post-compaction baseline recording so the next request can chain from the compaction response.
-- Codex transport captures the final prepared primary instructions of every live turn (post-transform, post-Lite, pre-delta-reduction) on the metadata session, exposed via `getCodexPreparedInstructions`, so native V2 compaction sends the instructions the live turn actually sent instead of reconstructing them from the base prompt. Developer prompt blocks (`systemPrompt[1..]`, which the live turn emits as separate input items) are not part of this capture.
+- Codex transport captures the live turn's normalized system-prompt blocks on the metadata session, exposed via `getCodexPreparedPromptBlocks`, so native V2 compaction renders the same prefix the live turn sent instead of reconstructing it from the base prompt. Capture happens pre-Lite: once `applyCodexResponsesLiteShape` folds the primary block into `input` as a synthetic developer item, it can no longer be told apart from a real secondary block.
 - `prewarmOpenAICodexResponses` supports a request-equivalent `warmRequest` (`generate: false` lifecycle with reasoning/summary/verbosity/service-tier parity and continuation-baseline recording); the processor's append-state writes are shared via `recordCodexWebSocketAppendState`.
+
+### Fixed
+
+- Fixed provider-native Codex compaction streams bypassing WebSocket-first transport selection and SSE transport fallback ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
 
 ## [17.2.3] - 2026-08-01
 
@@ -18,9 +21,6 @@
 
 - Fixed Anthropic OAuth (Claude Pro/Max subscription) requests hard-429ing (`Usage credits are required for long context requests`) on every beta-gated 1M model — e.g. `claude-sonnet-4-6`, which the default `task`/`smol`/`scout` subagent roles resolve to — regardless of prompt size, breaking all subagents. The 17.2.1 cowork request profile reintroduced the `context-1m-2025-08-07` beta for any model with a 1M catalog window, but subscription credentials have no long-context credit balance so Anthropic rejects the request outright. The beta is no longer advertised on OAuth requests; subscription accounts transparently get the standard 200k window. ([#7238](https://github.com/can1357/oh-my-pi/issues/7238))
 - Fixed OpenAI Codex Responses ignoring disabled cache retention when deriving `prompt_cache_key`, while preserving transport session identity ([#7219](https://github.com/can1357/oh-my-pi/issues/7219)).
-### Fixed
-
-- Fixed provider-native Codex compaction streams bypassing WebSocket-first transport selection and SSE transport fallback ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
 
 ## [17.2.2] - 2026-07-31
 

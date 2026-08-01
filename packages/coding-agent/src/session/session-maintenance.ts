@@ -44,9 +44,16 @@ import {
 	readToolSupersedeKey,
 } from "@oh-my-pi/pi-agent-core/compaction/pruning";
 import type { ProtectedToolMatcher } from "@oh-my-pi/pi-agent-core/compaction/tool-protection";
-import type { AssistantMessage, CodexCompactionContext, Message, Model, ProviderSessionState } from "@oh-my-pi/pi-ai";
+import type {
+	AssistantMessage,
+	CodexCompactionContext,
+	Message,
+	Model,
+	ProviderSessionState,
+	SimpleStreamOptions,
+} from "@oh-my-pi/pi-ai";
 import * as AIError from "@oh-my-pi/pi-ai/error";
-import { getCodexPreparedInstructions } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
+import { getCodexPreparedPromptBlocks } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { preferredDialect } from "@oh-my-pi/pi-catalog/identity";
 import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
 import { logger } from "@oh-my-pi/pi-utils";
@@ -182,6 +189,12 @@ export interface SessionMaintenanceHost {
 	sideStreamFn: StreamFn;
 	providerSessionState: Map<string, ProviderSessionState>;
 	preferWebsockets: boolean | undefined;
+	/**
+	 * The session's `before_provider_request` hook. Compaction runs it too, so
+	 * an extension that rewrites the payload rewrites both the live turn and
+	 * the compaction request and their prefixes cannot drift apart.
+	 */
+	onPayload: SimpleStreamOptions["onPayload"] | undefined;
 	model(): Model | undefined;
 	thinkingLevel(): ThinkingLevel | undefined;
 	isDisposed(): boolean;
@@ -320,6 +333,19 @@ export class SessionMaintenance {
 	#withPlanProtection<T extends { protectedTools: ProtectedToolMatcher[] }>(config: T): T {
 		const planMatcher = createPlanReadMatcher(() => this.#host.planReferencePath());
 		return { ...config, protectedTools: [...config.protectedTools, planMatcher] };
+	}
+
+	/**
+	 * System-prompt blocks the remote compaction request must render, so its
+	 * prefix matches the live turn's byte for byte. Prefers the blocks the
+	 * Codex transport captured for the active turn; falls back to the session's
+	 * current base prompt when no live turn has been captured yet.
+	 */
+	#resolveRemoteCompactionPromptBlocks(): string[] {
+		return (
+			getCodexPreparedPromptBlocks(this.#host.providerSessionState, this.#host.sessionId()) ??
+			this.#host.baseSystemPrompt()
+		);
 	}
 
 	async #pruneToolOutputs(): Promise<{ prunedCount: number; tokensSaved: number } | undefined> {
@@ -802,9 +828,8 @@ export class SessionMaintenance {
 						{
 							promptOverride: this.#host.obfuscateTextForProvider(compactionPrep.hookPrompt),
 							extraContext: compactionPrep.hookContext,
-							remoteInstructions:
-								getCodexPreparedInstructions(this.#host.providerSessionState, this.#host.sessionId()) ??
-								this.#host.baseSystemPrompt().join("\n\n"),
+							remotePromptBlocks: this.#resolveRemoteCompactionPromptBlocks(),
+							onPayload: this.#host.onPayload,
 							convertToLlm: messages => this.#host.convertToLlmForSideRequest(messages),
 							codexCompaction,
 						},
@@ -2578,9 +2603,8 @@ export class SessionMaintenance {
 								{
 									promptOverride: this.#host.obfuscateTextForProvider(compactionPrep.hookPrompt),
 									extraContext: compactionPrep.hookContext,
-									remoteInstructions:
-										getCodexPreparedInstructions(this.#host.providerSessionState, this.#host.sessionId()) ??
-										this.#host.baseSystemPrompt().join("\n\n"),
+									remotePromptBlocks: this.#resolveRemoteCompactionPromptBlocks(),
+									onPayload: this.#host.onPayload,
 									metadata: this.#host.agent.metadataForProvider(candidate.provider),
 									initiatorOverride: "agent",
 									convertToLlm: messages => this.#host.convertToLlmForSideRequest(messages),

@@ -7,7 +7,14 @@
  * compaction item as replacement history.
  */
 
-import type { Api, CodexCompactionContext, FetchImpl, Model, ProviderSessionState } from "@oh-my-pi/pi-ai";
+import type {
+	Api,
+	CodexCompactionContext,
+	FetchImpl,
+	Model,
+	ProviderSessionState,
+	SimpleStreamOptions,
+} from "@oh-my-pi/pi-ai";
 import * as AIError from "@oh-my-pi/pi-ai/error";
 import { applyCodexResponsesLiteShape } from "@oh-my-pi/pi-ai/providers/openai-codex/request-transformer";
 import {
@@ -74,7 +81,12 @@ export interface CompactionV2Usage {
 export interface CompactionV2Request {
 	model: string;
 	input: unknown[];
-	instructions: string;
+	/**
+	 * Normalized system-prompt blocks of the live turn. `[0]` becomes
+	 * `instructions`; `[1..]` become leading `developer` input items, matching
+	 * how the live turn renders them.
+	 */
+	promptBlocks: string[];
 	retainedMessageBudget: number;
 	tools?: unknown[];
 	/** Responses reasoning param (effort + summary), matching a normal turn; omitted for non-reasoning models. */
@@ -195,7 +207,7 @@ export function resolveCompactionV2RetainedMessageBudget(value: number | undefin
 export function buildCompactionV2Request(
 	model: Model,
 	input: unknown[],
-	instructions: string,
+	promptBlocks: string[],
 	options?: {
 		tools?: unknown[];
 		reasoning?: { effort: string; summary: string };
@@ -207,7 +219,7 @@ export function buildCompactionV2Request(
 	return {
 		model: resolveCompactionV2Model(model),
 		input,
-		instructions,
+		promptBlocks,
 		retainedMessageBudget: resolveCompactionV2RetainedMessageBudget(options?.retainedMessageBudget),
 		reasoning: options?.reasoning,
 		tools: options?.tools,
@@ -240,6 +252,7 @@ export async function requestCompactionV2Streaming(
 		providerSessionState?: Map<string, ProviderSessionState>;
 		codexCompaction?: CodexCompactionContext;
 		preferWebsockets?: boolean;
+		onPayload?: SimpleStreamOptions["onPayload"];
 	},
 ): Promise<CompactionV2Response> {
 	const endpoint = getCompactionV2Endpoint(model);
@@ -272,6 +285,7 @@ export async function requestCompactionV2Streaming(
 				providerSessionState: options?.providerSessionState,
 				codexCompaction: options?.codexCompaction,
 				preferWebsockets: options?.preferWebsockets,
+				onPayload: options?.onPayload,
 			});
 		} catch (err) {
 			const error = err instanceof Error ? err : new Error(String(err));
@@ -296,29 +310,35 @@ export async function requestCompactionV2Streaming(
 	throw lastError ?? new Error("V2 compaction failed after max retries");
 }
 
-async function attemptCompactionV2Streaming(
-	endpoint: string,
-	apiKey: string,
+/**
+ * Build the V2 compaction wire body.
+ *
+ * Faithful to Codex: the compaction trigger is the final input item of an
+ * otherwise-normal Responses request. `store` stays false — compaction must
+ * never persist a server-side response object.
+ *
+ * @internal Exported for tests.
+ */
+export function buildCompactionV2RequestBody(
 	model: Model,
 	request: CompactionV2Request,
-	fetchImpl: FetchImpl,
-	signal: AbortSignal | undefined,
-	options: {
-		codexMetadata?: OpenAICodexCompatibilityMetadata;
-		providerSessionState?: Map<string, ProviderSessionState>;
-		codexCompaction?: CodexCompactionContext;
-		preferWebsockets?: boolean;
-	},
-): Promise<CompactionV2Response> {
-	// Faithful to Codex: append the compaction trigger as the final input item
-	// of an otherwise-normal Responses request, then stream the result. `store`
-	// stays false — compaction must never persist a server-side response object.
+	codexMetadata?: OpenAICodexCompatibilityMetadata,
+): OpenAICodexCompactionBody {
 	const cacheOptions = { sessionId: request.sessionId, promptCacheKey: request.promptCacheKey };
 	const promptCacheKey = getOpenAIPromptCacheKey(cacheOptions);
+	// Mirror the live turn's prompt rendering exactly: `[0]` is `instructions`,
+	// `[1..]` lead `input` as `developer` items. Omitting the latter breaks the
+	// prefix at index 0 and the prompt cache misses the whole request.
+	const [primary = "", ...secondary] = request.promptBlocks;
+	const developerItems = secondary.map(text => ({
+		type: "message",
+		role: "developer",
+		content: [{ type: "input_text", text }],
+	}));
 	const body: OpenAICodexCompactionBody = {
 		model: request.model,
-		input: [...request.input, COMPACTION_TRIGGER_ITEM],
-		instructions: request.instructions,
+		input: [...developerItems, ...request.input, COMPACTION_TRIGGER_ITEM],
+		instructions: primary,
 		stream: true,
 		store: false,
 		...(request.reasoning || model.useResponsesLite
@@ -333,8 +353,8 @@ async function attemptCompactionV2Streaming(
 		...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
 		...(request.tools && request.tools.length > 0 ? { tools: request.tools, tool_choice: "auto" } : {}),
 	};
-	if (options.codexMetadata) {
-		body.client_metadata = options.codexMetadata.clientMetadata;
+	if (codexMetadata) {
+		body.client_metadata = codexMetadata.clientMetadata;
 	}
 	// Responses Lite models take the same rewrite on the compaction stream:
 	// instructions/tools ride as input items (codex-rs `compact_remote_v2`
@@ -342,6 +362,25 @@ async function attemptCompactionV2Streaming(
 	if (model.useResponsesLite) {
 		applyCodexResponsesLiteShape(body);
 	}
+	return body;
+}
+
+async function attemptCompactionV2Streaming(
+	endpoint: string,
+	apiKey: string,
+	model: Model,
+	request: CompactionV2Request,
+	fetchImpl: FetchImpl,
+	signal: AbortSignal | undefined,
+	options: {
+		codexMetadata?: OpenAICodexCompatibilityMetadata;
+		providerSessionState?: Map<string, ProviderSessionState>;
+		codexCompaction?: CodexCompactionContext;
+		preferWebsockets?: boolean;
+		onPayload?: SimpleStreamOptions["onPayload"];
+	},
+): Promise<CompactionV2Response> {
+	const body = buildCompactionV2RequestBody(model, request, options.codexMetadata);
 
 	if (shouldUseCodexProviderTransport(model)) {
 		const eventStream = await openCodexCompactionEventStream(model, body, {
@@ -352,6 +391,7 @@ async function attemptCompactionV2Streaming(
 			providerSessionState: options.providerSessionState,
 			preferWebsockets: options.preferWebsockets,
 			responsesLite: model.useResponsesLite,
+			onPayload: options.onPayload,
 			codexCompaction: createOpenAICodexCompactionRequestContext({
 				context: options.codexCompaction,
 				implementation: "responses_compaction_v2",
@@ -360,10 +400,15 @@ async function attemptCompactionV2Streaming(
 		return collectCompactionV2Events(eventStream, request);
 	}
 
+	// Provider bypassed on this branch, so the `before_provider_request` hook
+	// has to run here. The provider transport above applies it itself — never
+	// both, or an extension sees the compaction body twice.
+	const rewritten = await options.onPayload?.(body, model);
+	const finalBody = isRecord(rewritten) ? rewritten : body;
 	const response = await fetchImpl(endpoint, {
 		method: "POST",
 		headers: buildCompactionV2Headers(model, apiKey, request, options.codexMetadata),
-		body: stringifyJson(body),
+		body: stringifyJson(finalBody),
 		signal,
 	});
 

@@ -4,15 +4,14 @@
 
 ### Changed
 
-- Codex V2 remote compaction sends its body over the live cached WebSocket when a healthy connection exists (delta + `compaction_trigger` when options match the live turn; full request otherwise), falling back to the existing SSE POST on any WS failure; the SSE and WS paths now share one event collector.
+- Codex V2 compaction renders the live turn's system-prompt blocks into its request — `[0]` as `instructions`, `[1..]` as leading `developer` input items — matching how a normal turn builds its prefix. Previously only the primary block was sent, so the two `input` arrays diverged at index 0 and the prompt cache missed the whole request. `buildCompactionV2Request` takes `promptBlocks: string[]` in place of `instructions: string`.
+- The compaction body now runs the caller's `before_provider_request` hook exactly once per request, so an extension's payload rewrites apply identically to live turns and to compaction.
 - V2 compaction usage (input/cached/total/output tokens) is logged at `info` as `Codex V2 compaction usage` after a successful native compaction.
 
 ### Fixed
 
-- Codex-lane V2 compaction now serializes tools with the same converter as the live turn (`convertOpenAICodexResponsesTools`, strict only when the tool opts in) instead of the generic strict-by-default converter, removing a prompt-prefix divergence that caused `cache read 0` on native compaction; native usage (including cache counters) is now surfaced by `getCompactionV2PreserveData`.
-### Fixed
-
 - Fixed Codex V2 remote compaction bypassing the provider's live WebSocket transport before trying SSE ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
+- Codex-lane V2 compaction now serializes tools with the same converter as the live turn (`convertOpenAICodexResponsesTools`, strict only when the tool opts in) instead of the generic strict-by-default converter; native usage (including cache counters) is surfaced by `getCompactionV2PreserveData`.
 
 ## [17.2.2] - 2026-07-31
 

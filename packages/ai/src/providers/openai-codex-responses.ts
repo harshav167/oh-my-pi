@@ -488,8 +488,13 @@ interface CodexMetadataSessionState {
 	turnStartedAtUnixMs?: number;
 	compactionOperationId?: string;
 	reuseTurnForNextRequest?: boolean;
-	/** Final prepared primary-instructions value of the last live turn (post-transform, post-Lite). */
-	lastPreparedInstructions?: string;
+	/**
+	 * Normalized system-prompt blocks of the last live turn, captured pre-Lite.
+	 * Compaction re-renders these with the live mapping so its prefix matches;
+	 * scraping them back out of a shipped Lite body is ambiguous, because Lite
+	 * folds the primary into `input` as a synthetic developer item.
+	 */
+	lastPreparedPromptBlocks?: string[];
 	/** turnId at capture time; consumption requires equality with the active turnId. */
 	lastPreparedTurnId?: string;
 }
@@ -744,6 +749,12 @@ interface CodexRequestContext {
 	metadataSession?: CodexMetadataSessionState;
 	requestMetadata?: CodexRequestMetadata;
 	transformedBody: RequestBody;
+	/**
+	 * Compaction-only chain-break diagnostic. A normal turn misses the delta
+	 * chain routinely (first turn, post-rewrite, model switch), so live turns
+	 * leave this unset and stay uninstrumented.
+	 */
+	onDeltaFailure?: (failure: ResponsesDeltaFailure) => void;
 	rawRequestDump: RawHttpRequestDump;
 }
 
@@ -1054,17 +1065,17 @@ function getCodexProviderSessionState(
 	return created;
 }
 
-export function getCodexPreparedInstructions(
+export function getCodexPreparedPromptBlocks(
 	providerSessionState: Map<string, ProviderSessionState> | undefined,
 	sessionId: string | undefined,
-): string | undefined {
+): string[] | undefined {
 	const providerState = getCodexProviderSessionState(providerSessionState);
 	if (!providerState) return undefined;
 	const normalized = normalizeOpenAIPromptCacheKey(sessionId);
 	if (!normalized) return undefined;
 	const session = providerState.metadataSessions.get(normalized);
-	if (!session?.lastPreparedInstructions || session.lastPreparedTurnId !== session.turnId) return undefined;
-	return session.lastPreparedInstructions;
+	if (!session?.lastPreparedPromptBlocks || session.lastPreparedTurnId !== session.turnId) return undefined;
+	return session.lastPreparedPromptBlocks;
 }
 
 function isCodexWebSocketRetryableStreamError(error: unknown): boolean {
@@ -1502,11 +1513,19 @@ async function buildCodexRequestContext(
 ): Promise<CodexRequestContext> {
 	const promptCacheKey = normalizeOpenAIPromptCacheKey(options?.promptCacheKey ?? options?.sessionId);
 	const transformedBody = await buildTransformedCodexRequestBody(model, context, options, promptCacheKey);
-	return createCodexRequestContext(model, transformedBody, options, {
+	const requestContext = createCodexRequestContext(model, transformedBody, options, {
 		isolateCompactionTransport: true,
 		startNewTurn: options?.codexCompaction ? undefined : !isCodexWithinTurnContinuation(context),
 		turnStartedAtUnixMs: options?.codexCompaction ? undefined : getCodexTurnStartedAtUnixMs(context),
 	});
+	// Capture the blocks the live turn rendered from, before Lite shaping makes
+	// the primary indistinguishable from a secondary block in the wire body.
+	const metadataSession = requestContext.metadataSession;
+	if (requestContext.requestKind === "turn" && metadataSession) {
+		metadataSession.lastPreparedPromptBlocks = normalizeSystemPrompts(context.systemPrompt);
+		metadataSession.lastPreparedTurnId = metadataSession.turnId;
+	}
+	return requestContext;
 }
 
 /** @internal Exported for tests. */
@@ -1681,40 +1700,6 @@ async function openInitialCodexEventStream(
 	}
 	return openCodexSseTransport(model, requestContext, requestSetup, options, websocketState, transformedBody);
 }
-/** @internal Exported for tests. */
-export function codexPreparedInstructionsFromBody(body: unknown): string | undefined {
-	const record = asRecord(body);
-	if (!record) return undefined;
-	if (typeof record["instructions"] === "string" && record["instructions"].length > 0) {
-		return record["instructions"];
-	}
-	if (!Array.isArray(record["input"])) return undefined;
-	for (const item of record["input"]) {
-		const itemRecord = asRecord(item);
-		if (!itemRecord || itemRecord["role"] !== "developer" || !Array.isArray(itemRecord["content"])) continue;
-		const textParts: string[] = [];
-		for (const part of itemRecord["content"]) {
-			const partRecord = asRecord(part);
-			if (partRecord && partRecord["type"] === "input_text" && typeof partRecord["text"] === "string") {
-				textParts.push(partRecord["text"]);
-			}
-		}
-		const text = textParts.join("\n");
-		if (text !== "") return text;
-	}
-	return undefined;
-}
-
-function captureCodexPreparedInstructions(requestContext: CodexRequestContext, wireBody: unknown): void {
-	if (requestContext.requestKind !== "turn") return;
-	const instructions = codexPreparedInstructionsFromBody(wireBody);
-	if (instructions === undefined) return;
-	const session = requestContext.metadataSession;
-	if (!session) return;
-	session.lastPreparedInstructions = instructions;
-	session.lastPreparedTurnId = session.turnId;
-}
-
 
 function toCodexRequestBody(body: OpenAICodexCompactionBody): RequestBody {
 	const request: RequestBody = { model: body.model };
@@ -1741,10 +1726,15 @@ export async function openCodexCompactionEventStream(
 		transport: CodexTransport;
 	};
 	try {
-		requestContext = createCodexRequestContext(model, toCodexRequestBody(body), options, {
+		const context = createCodexRequestContext(model, toCodexRequestBody(body), options, {
 			isolateCompactionTransport: false,
 		});
-		initial = await openInitialCodexEventStream(model, options, requestSetup, requestContext);
+		context.onDeltaFailure = failure => {
+			const state = context.websocketState;
+			if (state) logCodexCompactionDeltaFailure(failure, state, context.transformedBody);
+		};
+		requestContext = context;
+		initial = await openInitialCodexEventStream(model, options, requestSetup, context);
 	} catch (error) {
 		requestSetup.requestAbortController.abort();
 		throw error;
@@ -1841,7 +1831,11 @@ async function openCodexWebSocketTransport(
 	transport: CodexTransport;
 }> {
 	const canAppendBeforeRequest = websocketState.canAppend === true;
-	const chainedBody = buildCodexChainedRequestBody(requestContext.transformedBody, websocketState);
+	const chainedBody = buildCodexChainedRequestBody(
+		requestContext.transformedBody,
+		websocketState,
+		requestContext.onDeltaFailure,
+	);
 	// WebSocket frames cannot carry per-request HTTP headers. Canonical Codex
 	// request identity is already in `client_metadata`; connection-scoped
 	// compatibility values that can change after the upgrade ride alongside it
@@ -1858,17 +1852,10 @@ async function openCodexWebSocketTransport(
 		...chainedBody,
 		client_metadata: websocketClientMetadata,
 	};
-	// Capture the FULL prepared body before delta reduction: a Lite chained
-	// delta drops the developer-instructions item, and the pre-chain body is
-	// the only faithful view of the live turn's instructions.
-	captureCodexPreparedInstructions(requestContext, requestContext.transformedBody);
 	const replacementWebsocketRequest = await options?.onPayload?.(websocketRequest, model);
 	if (replacementWebsocketRequest !== undefined) {
 		websocketRequest = replacementWebsocketRequest as typeof websocketRequest;
 	}
-	// Post-hook overwrite only when the rewritten frame still carries an
-	// extractable instruction value (capture no-ops on undefined).
-	captureCodexPreparedInstructions(requestContext, websocketRequest);
 	recordCodexTurnRequestDiagnostics(websocketState, websocketRequest, "websocket", canAppendBeforeRequest);
 	const websocketHeaders = createCodexHeaders(
 		requestContext.requestHeaders,
@@ -1993,7 +1980,6 @@ async function openCodexSseTransport(
 	if (replacementWireBody !== undefined) {
 		wireBody = replacementWireBody as RequestBody;
 	}
-	captureCodexPreparedInstructions(requestContext, wireBody);
 	recordCodexTurnRequestDiagnostics(state, wireBody, "sse", canAppendBeforeRequest);
 	return { eventStream: await open(wireBody), requestBodyForState: structuredCloneJSON(wireBody), transport: "sse" };
 }

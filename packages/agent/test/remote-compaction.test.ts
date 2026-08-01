@@ -724,7 +724,7 @@ describe("requestCompactionV2Streaming", () => {
 				userItem,
 				{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ignored" }] },
 			],
-			"instructions",
+			["instructions"],
 			{ sessionId: "session-1", promptCacheKey: "cache-1" },
 		);
 		let requestBody: { model: string; input: Array<Record<string, unknown>>; prompt_cache_key?: string } | undefined;
@@ -795,7 +795,7 @@ describe("requestCompactionV2Streaming", () => {
 		const request = buildCompactionV2Request(
 			model,
 			[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
-			"instructions",
+			["instructions"],
 		);
 		let attempts = 0;
 		const fetchMock: FetchImpl = async () => {
@@ -832,7 +832,7 @@ describe("requestCompactionV2Streaming", () => {
 		const request = buildCompactionV2Request(
 			model,
 			[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
-			"instructions",
+			["instructions"],
 		);
 		const fetchMock = vi.fn(async () =>
 			Response.json(
@@ -849,6 +849,52 @@ describe("requestCompactionV2Streaming", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(error).toBeInstanceOf(AIError.ProviderHttpError);
 		expect(AIError.is(AIError.classify(error), AIError.Flag.AuthFailed)).toBe(true);
+	});
+
+	test("runs the before_provider_request hook exactly once on the compaction body", async () => {
+		const model = makeOpenAiModel({
+			remoteCompaction: {
+				enabled: true,
+				v2StreamingEnabled: true,
+				v2Endpoint: "https://compact.example/v1/responses",
+			},
+		});
+		const request = buildCompactionV2Request(
+			model,
+			[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+			["BASE", "PROJECT FOOTER"],
+			{ sessionId: "hook-session" },
+		);
+		const sentinel = { type: "message", role: "developer", content: [{ type: "input_text", text: "SENTINEL" }] };
+		let hookCalls = 0;
+		const onPayload = async (payload: unknown) => {
+			hookCalls += 1;
+			if (!isRecord(payload)) throw new Error("hook received a non-object payload");
+			const input = Array.isArray(payload.input) ? payload.input : [];
+			return { ...payload, input: [sentinel, ...input] };
+		};
+		let requestBody: { input?: Array<Record<string, unknown>> } | undefined;
+		const fetchMock: FetchImpl = async (_input, init) => {
+			requestBody = JSON.parse(String(init?.body)) as { input?: Array<Record<string, unknown>> };
+			return sseResponse([
+				{
+					type: "response.output_item.done",
+					output_index: 0,
+					item: { type: "compaction", encrypted_content: "enc_hook" },
+				},
+				{ type: "response.completed", response: { usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
+			]);
+		};
+
+		await requestCompactionV2Streaming(model, "test-key", request, undefined, { fetch: fetchMock, onPayload });
+
+		// Exactly once: the provider transport applies the hook itself, so a
+		// caller-side apply on that branch too would double-fire it.
+		expect(hookCalls).toBe(1);
+		// The extension's rewrite reached the wire, ahead of the composed
+		// developer prefix it was handed.
+		expect(requestBody?.input?.[0]).toEqual(sentinel);
+		expect(requestBody?.input?.[1]).toMatchObject({ role: "developer" });
 	});
 });
 
@@ -981,7 +1027,7 @@ describe("Responses Lite remote compaction", () => {
 		const request = buildCompactionV2Request(
 			model,
 			[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
-			"compact instructions",
+			["compact instructions"],
 			{ sessionId: "codex-compaction-session" },
 		);
 		let captured: CapturedLiteExchange | undefined;
@@ -1023,6 +1069,40 @@ describe("Responses Lite remote compaction", () => {
 			content: [{ type: "input_text", text: "compact instructions" }],
 		});
 		expect(captured?.body.input?.at(-1)).toEqual({ type: "compaction_trigger" });
+	});
+
+	test("runs the before_provider_request hook exactly once on the Codex provider transport", async () => {
+		const model = makeCodexLiteModel();
+		const request = buildCompactionV2Request(
+			model,
+			[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+			["BASE", "PROJECT FOOTER"],
+			{ sessionId: "codex-hook-session" },
+		);
+		let hookCalls = 0;
+		const onPayload = async (payload: unknown) => {
+			hookCalls += 1;
+			if (!isRecord(payload)) throw new Error("hook received a non-object payload");
+			return { ...payload, probe_marker: "SENTINEL" };
+		};
+		let sentBody: Record<string, unknown> | undefined;
+		const fetchMock: FetchImpl = async (_input, init) => {
+			sentBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+			return sseResponse(compactionV2Events("enc_hook"));
+		};
+
+		await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+			fetch: fetchMock,
+			providerSessionState: new Map<string, ProviderSessionState>(),
+			codexCompaction: TEST_CODEX_COMPACTION,
+			onPayload,
+		});
+
+		// The provider transport owns the hook on this branch. Applying it
+		// caller-side as well — as the raw SSE fallback must — would double-fire
+		// it, so an extension would see the compaction body twice.
+		expect(hookCalls).toBe(1);
+		expect(sentBody?.probe_marker).toBe("SENTINEL");
 	});
 
 	test("V2 compaction reuses the live Codex WebSocket transport when preferred", async () => {
@@ -1084,7 +1164,7 @@ describe("Responses Lite remote compaction", () => {
 			const request = buildCompactionV2Request(
 				model,
 				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
-				"compact instructions",
+				["compact instructions"],
 				{ sessionId },
 			);
 			const result = await requestCompactionV2Streaming(model, "test-key", request, undefined, {
@@ -1136,7 +1216,7 @@ describe("Responses Lite remote compaction", () => {
 			const request = buildCompactionV2Request(
 				model,
 				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
-				"compact instructions",
+				["compact instructions"],
 				{ sessionId: "codex-websocket-fallback" },
 			);
 			const fetchMock = vi.fn(async () => sseResponse(compactionV2Events("enc-sse")));
@@ -1185,7 +1265,7 @@ describe("Responses Lite remote compaction", () => {
 				buildCompactionV2Request(
 					model,
 					[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
-					"compact instructions",
+					["compact instructions"],
 					{ sessionId },
 				);
 			const streamOptions = {

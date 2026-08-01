@@ -4,12 +4,16 @@
 
 ### Added
 
-- Added `provider.codexWarmAfterCompaction` (default on): after native Codex compaction the session sends a request-equivalent `generate: false` warm request with the compacted prompt/messages and the live reasoning/summary/verbosity/service-tier options, awaited before the next turn, so the server sees the post-compaction prefix and the WebSocket lane records a chainable continuation baseline before the next turn runs. Bills input/cache-write tokens; set the setting to `false` to opt out.
-- The compaction card renders a `Compaction V2 · input … · cache read … (%) · cache write … · output …` metrics line from native remote-compaction usage (Howaboua-style), shown in the expanded `ctrl+o` detail.
+- Added `provider.codexWarmAfterCompaction` (default off): after native Codex compaction the session sends a request-equivalent `generate: false` warm request with the compacted prompt/messages and the live reasoning/summary/verbosity/service-tier options, awaited before the next turn. It bills input/cache-write tokens on every compaction and its benefit has not been measured here, so it stays off until it is.
+- The compaction card renders a `Compaction V2 · input … · cache read … (%) · cache write … · output …` metrics line from native remote-compaction usage, shown in the expanded `ctrl+o` detail.
 
 ### Changed
 
-- Compaction's `remoteInstructions` now reuse the live turn's final prepared instructions when available (captured by the Codex provider), falling back to the base prompt otherwise.
+- Remote compaction sends the live turn's system-prompt blocks (captured by the Codex provider, falling back to the session's base prompt) instead of a single joined instructions string, and forwards the session's `before_provider_request` hook so extensions rewrite the compaction body exactly as they rewrite a live turn.
+
+### Fixed
+
+- Fixed manual and automatic Codex compaction dropping the configured OpenAI WebSocket preference ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
 
 ## [17.2.3] - 2026-08-01
 
@@ -24,9 +28,6 @@
 - Fixed ephemeral side turns and native compaction bypassing an explicit or fork-inherited prompt cache key ([#7218](https://github.com/can1357/oh-my-pi/issues/7218)).
 - Fixed the live Ask dialog crashing the whole session with a `replaceTabs` TypeError when a question reached `AskDialogComponent` without a string `question` field; questions are now normalized at dialog entry, mirroring the transcript renderer ([#7211](https://github.com/can1357/oh-my-pi/issues/7211)).
 - Fixed Codex web search collapsing backend errors to `Codex error (): Unknown error`; the SSE error parser now preserves the backend code and message from top-level, nested `error`, and `response.error` envelopes ([#7200](https://github.com/can1357/oh-my-pi/issues/7200)).
-### Fixed
-
-- Fixed manual and automatic Codex compaction dropping the configured OpenAI WebSocket preference ([#7198](https://github.com/can1357/oh-my-pi/issues/7198)).
 
 ## [17.2.2] - 2026-07-31
 

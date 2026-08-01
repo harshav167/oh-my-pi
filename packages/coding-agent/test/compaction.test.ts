@@ -838,7 +838,7 @@ describe("remote compaction setting", () => {
 		vi.spyOn(ai, "completeSimple").mockResolvedValue(createAssistantMessage("Short summary"));
 
 		const result = await compact(preparation, model, "test-api-key", undefined, undefined, {
-			remoteInstructions: "BASE INSTRUCTIONS",
+			remotePromptBlocks: ["BASE INSTRUCTIONS"],
 			fetch: fetchSpy,
 		});
 		const requestBody = JSON.parse(String(fetchHandler.mock.calls[0]?.[1]?.body)) as {

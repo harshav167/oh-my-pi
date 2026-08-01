@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
-	codexPreparedInstructionsFromBody,
-	getCodexPreparedInstructions,
+	getCodexPreparedPromptBlocks,
 	getOpenAICodexTransportDetails,
 	prewarmOpenAICodexResponses,
 	streamOpenAICodexResponses,
@@ -158,69 +157,7 @@ const COMPACTION: CodexCompactionRequestContext = {
 	implementation: "responses_compaction_v2",
 };
 
-describe("codexPreparedInstructionsFromBody", () => {
-	it("returns the top-level instructions field when present", () => {
-		expect(
-			codexPreparedInstructionsFromBody({
-				instructions: "You are a helpful assistant.",
-				input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] }],
-			}),
-		).toBe("You are a helpful assistant.");
-	});
-
-	it("returns the Lite developer instructions item, skipping additional_tools", () => {
-		expect(
-			codexPreparedInstructionsFromBody({
-				input: [
-					{ type: "additional_tools", role: "developer", tools: [] },
-					{
-						type: "message",
-						role: "developer",
-						content: [{ type: "input_text", text: "You are a helpful assistant." }],
-					},
-					{ type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] },
-				],
-			}),
-		).toBe("You are a helpful assistant.");
-	});
-
-	it("returns undefined for a body with only additional_tools", () => {
-		expect(
-			codexPreparedInstructionsFromBody({ input: [{ type: "additional_tools", role: "developer", tools: [] }] }),
-		).toBeUndefined();
-	});
-
-	it("returns undefined for a chained delta body without instructions", () => {
-		expect(
-			codexPreparedInstructionsFromBody({
-				previous_response_id: "resp_1",
-				input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "follow up" }] }],
-			}),
-		).toBeUndefined();
-	});
-
-	it("falls through to the developer scan when instructions is empty", () => {
-		expect(
-			codexPreparedInstructionsFromBody({
-				instructions: "",
-				input: [
-					{
-						type: "message",
-						role: "developer",
-						content: [{ type: "input_text", text: "You are a helpful assistant." }],
-					},
-				],
-			}),
-		).toBe("You are a helpful assistant.");
-	});
-
-	it("returns undefined for non-object input", () => {
-		expect(codexPreparedInstructionsFromBody(null)).toBeUndefined();
-		expect(codexPreparedInstructionsFromBody("nope")).toBeUndefined();
-	});
-});
-
-describe("prepared-instructions capture lifecycle", () => {
+describe("prepared prompt-blocks capture lifecycle", () => {
 	it("captures the live turn's instructions and serves them until the turn rotates", async () => {
 		const tempDir = TempDir.createSync("@codex-prepared-");
 		setAgentDir(tempDir.path());
@@ -240,7 +177,7 @@ describe("prepared-instructions capture lifecycle", () => {
 			providerSessionState,
 		}).result();
 		expect(first.stopReason).toBe("stop");
-		expect(getCodexPreparedInstructions(providerSessionState, sessionId)).toBe("You are a helpful assistant.");
+		expect(getCodexPreparedPromptBlocks(providerSessionState, sessionId)).toEqual(["You are a helpful assistant."]);
 
 		// A compaction-kind request must not overwrite the capture.
 		await streamOpenAICodexResponses(model, createCodexTestContext(["You are a helpful assistant."], "compact me"), {
@@ -250,7 +187,7 @@ describe("prepared-instructions capture lifecycle", () => {
 			providerSessionState,
 			codexCompaction: COMPACTION,
 		}).result();
-		expect(getCodexPreparedInstructions(providerSessionState, sessionId)).toBe("You are a helpful assistant.");
+		expect(getCodexPreparedPromptBlocks(providerSessionState, sessionId)).toEqual(["You are a helpful assistant."]);
 
 		// A new turn with no system prompt rotates turnId without capturing:
 		// the stale capture must be invalidated, not served.
@@ -260,7 +197,9 @@ describe("prepared-instructions capture lifecycle", () => {
 			sessionId,
 			providerSessionState,
 		}).result();
-		expect(getCodexPreparedInstructions(providerSessionState, sessionId)).toBeUndefined();
+		// A promptless turn captures `[]` — the faithful record of what it sent —
+		// so the stale prior capture is invalidated rather than served.
+		expect(getCodexPreparedPromptBlocks(providerSessionState, sessionId)).toEqual([]);
 	});
 
 	it("captures the Lite relocated instructions over SSE", async () => {
@@ -283,7 +222,7 @@ describe("prepared-instructions capture lifecycle", () => {
 			responsesLite: true,
 		}).result();
 		expect(result.stopReason).toBe("stop");
-		expect(getCodexPreparedInstructions(providerSessionState, sessionId)).toBe("You are a helpful assistant.");
+		expect(getCodexPreparedPromptBlocks(providerSessionState, sessionId)).toEqual(["You are a helpful assistant."]);
 	});
 
 	it("keeps the WS onPayload contract: full frame with instructions, delta on the wire", async () => {
@@ -374,7 +313,9 @@ describe("prepared-instructions capture lifecycle", () => {
 			expect(JSON.stringify(deltaItems)).not.toContain("You are a helpful assistant.");
 
 			// Capture still worked on the appendable Lite path (pre-chain full frame).
-			expect(getCodexPreparedInstructions(providerSessionState, sessionId)).toBe("You are a helpful assistant.");
+			expect(getCodexPreparedPromptBlocks(providerSessionState, sessionId)).toEqual([
+				"You are a helpful assistant.",
+			]);
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();

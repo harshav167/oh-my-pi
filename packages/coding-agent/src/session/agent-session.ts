@@ -1404,6 +1404,7 @@ export class AgentSession {
 			sideStreamFn: this.#sideStreamFn,
 			providerSessionState: this.#providerSessionState,
 			preferWebsockets: this.#preferWebsockets,
+			onPayload: this.#onPayload,
 			model: () => this.model,
 			thinkingLevel: () => this.thinkingLevel,
 			isDisposed: () => this.#isDisposed,
@@ -6912,7 +6913,7 @@ export class AgentSession {
 		// Request-equivalent warm of the new window (default ON; bills input
 		// tokens). The promise is awaited at the next turn's preflight seam.
 		const model = this.model;
-		if (this.settings.get("provider.codexWarmAfterCompaction") !== false && model?.api === "openai-codex-responses") {
+		if (this.settings.get("provider.codexWarmAfterCompaction") === true && model?.api === "openai-codex-responses") {
 			const warmPrompt = this.agent.state.systemPrompt;
 			// `.api` equality doesn't narrow the generic; the guard makes this cast sound.
 			const codexModel = model as Model<"openai-codex-responses">;

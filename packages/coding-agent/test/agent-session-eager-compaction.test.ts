@@ -403,11 +403,11 @@ describe("AgentSession eager prelude re-injection after compaction", () => {
 		});
 	});
 
-	it("fires the post-compaction Codex warm request with the session prompt (default ON)", async () => {
+	it("fires the post-compaction Codex warm request with the session prompt when enabled", async () => {
 		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
 		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
 		const warmSpy = vi.spyOn(codexResponses, "prewarmOpenAICodexResponses").mockResolvedValue(undefined);
-		const { session, waitForCall } = await createHarness({}, { model });
+		const { session, waitForCall } = await createHarness({ "provider.codexWarmAfterCompaction": true }, { model });
 		stubCompaction();
 
 		await runToContinuation(session, waitForCall);
@@ -420,11 +420,11 @@ describe("AgentSession eager prelude re-injection after compaction", () => {
 		expect(warmOptions?.providerSessionState).toBe(session.providerSessionState);
 	});
 
-	it("skips the post-compaction Codex warm request when the setting is off", async () => {
+	it("skips the post-compaction Codex warm request by default", async () => {
 		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
 		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
 		const warmSpy = vi.spyOn(codexResponses, "prewarmOpenAICodexResponses").mockResolvedValue(undefined);
-		const { session, waitForCall } = await createHarness({ "provider.codexWarmAfterCompaction": false }, { model });
+		const { session, waitForCall } = await createHarness({}, { model });
 		stubCompaction();
 
 		await runToContinuation(session, waitForCall);
@@ -436,8 +436,8 @@ describe("AgentSession eager prelude re-injection after compaction", () => {
 		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
 		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
 		const getterSpy = vi
-			.spyOn(codexResponses, "getCodexPreparedInstructions")
-			.mockReturnValue("captured-instructions");
+			.spyOn(codexResponses, "getCodexPreparedPromptBlocks")
+			.mockReturnValue(["captured-instructions"]);
 		const capturedOptions: Array<Record<string, unknown>> = [];
 		vi.spyOn(compactionModule, "compact").mockImplementation(
 			async (_prep, _model, _key, _signal, _options, summaryOptions) => {
@@ -456,14 +456,14 @@ describe("AgentSession eager prelude re-injection after compaction", () => {
 		await runToContinuation(session, waitForCall);
 
 		expect(capturedOptions).toHaveLength(1);
-		expect(capturedOptions[0]?.remoteInstructions).toBe("captured-instructions");
+		expect(capturedOptions[0]?.remotePromptBlocks).toEqual(["captured-instructions"]);
 		getterSpy.mockRestore();
 	});
 
 	it("falls back to the base prompt when no prepared instructions are captured", async () => {
 		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
 		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
-		const getterSpy = vi.spyOn(codexResponses, "getCodexPreparedInstructions").mockReturnValue(undefined);
+		const getterSpy = vi.spyOn(codexResponses, "getCodexPreparedPromptBlocks").mockReturnValue(undefined);
 		const capturedOptions: Array<Record<string, unknown>> = [];
 		vi.spyOn(compactionModule, "compact").mockImplementation(
 			async (_prep, _model, _key, _signal, _options, summaryOptions) => {
@@ -482,7 +482,7 @@ describe("AgentSession eager prelude re-injection after compaction", () => {
 		await runToContinuation(session, waitForCall);
 
 		expect(capturedOptions).toHaveLength(1);
-		expect(capturedOptions[0]?.remoteInstructions).toBe(session.agent.state.systemPrompt.join("\n\n"));
+		expect(capturedOptions[0]?.remotePromptBlocks).toEqual(session.agent.state.systemPrompt);
 		getterSpy.mockRestore();
 	});
 });
