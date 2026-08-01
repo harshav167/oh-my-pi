@@ -45,6 +45,21 @@ describe("createTools", () => {
 		vi.restoreAllMocks();
 	});
 
+	it("registers consult_advisor so an MCP refresh cannot strip it mid-session", async () => {
+		// The tool was pushed onto the returned list without ever entering the
+		// session registry. #getActiveNonMCPToolNames filters on that registry, so
+		// the first background MCP connect rebuilt the active set without it and
+		// there was no way to get it back.
+		const session = createTestSession({
+			consultAdvisor: async () => ({ reply: "ok", advisor: "sol" }),
+		});
+		const tools = await createTools(session);
+
+		expect(tools.map(tool => tool.name)).toContain("consult_advisor");
+		expect(session.toolRegistry?.has("consult_advisor")).toBe(true);
+		expect(session.xdev?.builtInNames.has("consult_advisor")).toBe(true);
+	});
+
 	it("creates all builtin tools by default", async () => {
 		// xdev mounting (default-on) would unmount discoverables like lsp and
 		// web_search into xd://; disable it to assert the full builtin set.

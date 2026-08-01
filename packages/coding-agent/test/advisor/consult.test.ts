@@ -106,6 +106,59 @@ describe("consult_advisor contracts", () => {
 			expect(result.reply).toContain("write races the reader");
 		});
 
+		it("settles a parked consult the moment its signal aborts", async () => {
+			// A parked consult has not started an agent.prompt() yet, so the queue's
+			// abort hook reaches nothing and the 120s tool timeout was a no-op: the
+			// consult waited for the review drain regardless, freezing the primary
+			// turn behind it.
+			const promptInputs: string[] = [];
+			const { promise: firstPromptStarted, resolve: startFirstPrompt } = Promise.withResolvers<void>();
+			const { promise: finishFirstPrompt, resolve: releaseFirstPrompt } = Promise.withResolvers<void>();
+			let promptCalls = 0;
+			let abortCalls = 0;
+			const agent: AdvisorAgent = {
+				prompt: async input => {
+					promptInputs.push(input);
+					promptCalls++;
+					if (promptCalls === 1) {
+						startFirstPrompt();
+						await finishFirstPrompt;
+					}
+				},
+				abort: () => {
+					abortCalls++;
+				},
+				reset: () => {},
+				state: { messages: [] },
+			};
+			const messages: AgentMessage[] = [{ role: "user", content: "primary turn", timestamp: 1 } as AgentMessage];
+			const runtime = new AdvisorRuntime(agent, makeHost(messages));
+
+			runtime.onTurnEnd(messages);
+			await firstPromptStarted;
+
+			const controller = new AbortController();
+			const consult = runtime.consult({ message: "Why is this a concern?", signal: controller.signal });
+			await flushMicrotasksUntil(() => false, 4);
+			controller.abort(new Error("consult timed out"));
+
+			// Rejects while the review is still running: no release below this line.
+			// Only a consult that already entered runConsult routes its abort through
+			// the runtime's abortConsult hook. A still-queued job is dropped by the
+			// queue instead, which would let this pass without the parked-wait fix.
+			expect(abortCalls).toBe(1);
+			const error = await consult.then(
+				() => undefined,
+				(cause: unknown) => cause,
+			);
+			expect(error).toBeInstanceOf(Error);
+			expect((error as Error).message).toBe("consult timed out");
+			// The consult never reached the model.
+			expect(promptInputs).toHaveLength(1);
+
+			releaseFirstPrompt();
+		});
+
 		it("does not run a ghost consult after a reset during the idle wait", async () => {
 			// A review holds the drain busy; a queued consult parks on the idle
 			// waiter. reset() rejects the queued job but its runConsult callback
