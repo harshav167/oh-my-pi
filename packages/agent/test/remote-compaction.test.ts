@@ -1438,6 +1438,100 @@ describe("Responses Lite remote compaction", () => {
 		}
 	});
 
+	test("V2 compaction adopts the live lane's tool payload instead of its own", async () => {
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const webSocket = installCodexCompactionWebSocket({
+			respond: (socket, outbound) => {
+				const input = outbound.input;
+				const isCompaction =
+					Array.isArray(input) && input.some(item => isRecord(item) && item.type === "compaction_trigger");
+				const events = isCompaction
+					? compactionV2Events("enc-tools")
+					: [
+							{
+								type: "response.output_item.done",
+								item: {
+									type: "message",
+									id: "message-live-turn",
+									role: "assistant",
+									status: "completed",
+									content: [{ type: "output_text", text: "live response" }],
+								},
+							},
+							{
+								type: "response.done",
+								response: {
+									id: "response-live-turn",
+									status: "completed",
+									usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+								},
+							},
+						];
+				for (const event of events) socket.emit(event);
+			},
+		});
+		try {
+			const model = makeCodexLiteModel({ preferWebsockets: true });
+			const sessionId = "codex-tool-parity";
+			const fetchMock = vi.fn(async () => {
+				throw new Error("unexpected SSE fallback");
+			});
+			const liveTool = {
+				type: "function" as const,
+				name: "live_only_tool",
+				description: "only the live turn declares this",
+				parameters: { type: "object" as const, properties: {} },
+			};
+			await ai
+				.streamSimple(
+					model,
+					{
+						systemPrompt: ["BASE"],
+						messages: [{ role: "user", content: "Start the turn", timestamp: Date.now() }],
+						tools: [liveTool],
+					},
+					{ apiKey: "test-key", fetch: fetchMock, sessionId, preferWebsockets: true, providerSessionState },
+				)
+				.result();
+
+			const liveFrame = webSocket.sockets[0]?.sent[0];
+			const liveLead = Array.isArray(liveFrame?.input) ? liveFrame.input[0] : undefined;
+			expect(isRecord(liveLead) ? liveLead.type : undefined).toBe("additional_tools");
+
+			// A deliberately different tool set: without prefix ownership the
+			// compaction ships its own catalog and the comparator reports an item
+			// mismatch on `additional_tools.tools` at input index 0.
+			const request = buildCompactionV2Request(
+				model,
+				[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+				["BASE"],
+				{
+					sessionId,
+					tools: [
+						{ type: "function", name: "compaction_only_tool", parameters: { type: "object", properties: {} } },
+					],
+				},
+			);
+			await requestCompactionV2Streaming(model, "test-key", request, undefined, {
+				fetch: fetchMock,
+				preferWebsockets: true,
+				providerSessionState,
+				codexCompaction: TEST_CODEX_COMPACTION,
+			});
+
+			const compactionFrame = webSocket.sockets[0]?.sent[1];
+			const compactionLead = Array.isArray(compactionFrame?.input) ? compactionFrame.input[0] : undefined;
+			expect(compactionLead).toEqual(liveLead);
+			expect(JSON.stringify(compactionLead)).toContain("live_only_tool");
+			expect(JSON.stringify(compactionLead)).not.toContain("compaction_only_tool");
+			expect(compactionFrame?.tools).toEqual(liveFrame?.tools);
+		} finally {
+			for (const state of providerSessionState.values()) state.close();
+			providerSessionState.clear();
+			webSocket.restore();
+		}
+	});
+
 	test("V2 compaction discards partial WebSocket output before SSE replay", async () => {
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		const webSocket = installCodexCompactionWebSocket({

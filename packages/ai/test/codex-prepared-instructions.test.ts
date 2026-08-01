@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
 	getCodexPreparedPromptBlocks,
 	getOpenAICodexTransportDetails,
+	hydrateCodexCompactionOptions,
 	prewarmOpenAICodexResponses,
 	streamOpenAICodexResponses,
 } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
@@ -438,5 +439,75 @@ describe("prepared prompt-blocks capture lifecycle", () => {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();
 		}
+	});
+});
+
+describe("compaction option hydration", () => {
+	/** Minimal live-lane state: only `lastRequest` is read. */
+	function laneWithLiveRequest(lastRequest: Record<string, unknown>) {
+		return { lastRequest } as unknown as Parameters<typeof hydrateCodexCompactionOptions>[1];
+	}
+
+	it("copies the live turn's prefix-owned fields and drops ones it never sent", () => {
+		const state = laneWithLiveRequest({
+			input: [{ type: "additional_tools", role: "developer", tools: [{ name: "live_tool" }] }],
+			reasoning: { effort: "medium", summary: "auto" },
+			text: { verbosity: "medium" },
+			previous_response_id: "resp_live",
+		});
+
+		const hydrated = hydrateCodexCompactionOptions(
+			{
+				model: "gpt-5.6-terra",
+				input: [{ type: "additional_tools", role: "developer", tools: [{ name: "compaction_tool" }] }],
+				reasoning: { effort: "low", summary: "auto", context: "all_turns" },
+				tools: [{ name: "compaction_tool" }],
+				store: false,
+			} as never,
+			state,
+		);
+
+		// Prefix-owned fields become the live turn's, exactly.
+		expect(hydrated.reasoning).toEqual({ effort: "medium", summary: "auto" });
+		expect(hydrated.text).toEqual({ verbosity: "medium" });
+		// The live turn sent no top-level `tools`, so neither may the compaction.
+		expect("tools" in hydrated).toBe(false);
+		// Compaction keeps what is genuinely its own, and never inherits the
+		// baseline's chaining identity.
+		expect(hydrated.store).toBe(false);
+		expect(hydrated.previous_response_id).toBeUndefined();
+		expect(Array.isArray(hydrated.input) ? hydrated.input[0] : undefined).toEqual({
+			type: "additional_tools",
+			role: "developer",
+			tools: [{ name: "live_tool" }],
+		});
+	});
+
+	it("never lets a later in-place rewrite reach the comparator's baseline", () => {
+		const lastRequest = {
+			input: [{ type: "additional_tools", role: "developer", tools: [{ name: "live_tool" }] }],
+			reasoning: { effort: "medium", summary: "auto" },
+			text: { verbosity: "medium" },
+		};
+		const hydrated = hydrateCodexCompactionOptions(
+			{
+				model: "gpt-5.6-terra",
+				input: [{ type: "additional_tools", role: "developer", tools: [] }],
+				store: false,
+			} as never,
+			laneWithLiveRequest(lastRequest),
+		);
+
+		// `onPayload` runs after hydration; an extension mutating the body in
+		// place must not corrupt `lastRequest`, which the next turn compares
+		// against to decide whether it can chain.
+		const lead = Array.isArray(hydrated.input) ? hydrated.input[0] : undefined;
+		if (lead && typeof lead === "object") (lead as Record<string, unknown>).tools = ["MUTATED"];
+		if (hydrated.reasoning) (hydrated.reasoning as Record<string, unknown>).effort = "MUTATED";
+		if (hydrated.text) (hydrated.text as Record<string, unknown>).verbosity = "MUTATED";
+
+		expect(lastRequest.input[0]?.tools).toEqual([{ name: "live_tool" }]);
+		expect(lastRequest.reasoning).toEqual({ effort: "medium", summary: "auto" });
+		expect(lastRequest.text).toEqual({ verbosity: "medium" });
 	});
 });

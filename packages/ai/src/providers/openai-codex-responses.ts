@@ -1638,11 +1638,25 @@ function logCodexCompactionDeltaFailure(
 			: responseItems[failure.index - baselineInput.length];
 	const compactionInput = Array.isArray(chainedSource.input) ? chainedSource.input : [];
 	const compactionItem = compactionInput[failure.index];
+	// Count the rendered prompt prefix on each side. A mismatch here means the
+	// two paths disagree on how many system-prompt blocks they emitted, which
+	// shifts every later index and shows up as a bogus role/content mismatch.
+	const leadingPrefixCount = (items: readonly unknown[]): number => {
+		let count = 0;
+		for (const item of items) {
+			const record = asRecord(item);
+			if (!record || (record.type !== "additional_tools" && record.role !== "developer")) break;
+			count += 1;
+		}
+		return count;
+	};
 	logger.warn("[codex] compaction request diverges from the live lane (item)", {
 		index: failure.index,
 		baseline: structural(baselineItem),
 		compaction: structural(compactionItem),
 		differingFields: differingFields(baselineItem, compactionItem, new Set(["status"])),
+		baselinePrefixItems: leadingPrefixCount(baselineInput),
+		compactionPrefixItems: leadingPrefixCount(compactionInput),
 	});
 }
 
@@ -1710,33 +1724,74 @@ function toCodexRequestBody(body: OpenAICodexCompactionBody): RequestBody {
 }
 
 /**
- * Align the compaction request's non-input options with the live turn's, so
+ * Align the compaction request with the live turn's own rendered shape, so
  * the strict delta comparator can chain instead of falling back to a full
  * frame — which misses the prompt cache entirely.
  *
  * The compaction body is built independently of the live turn, so it omits
  * fields the live transformer always sends (`text.verbosity` is set on every
- * turn and never on a compaction body) and derives others differently.
- * Top-level compaction fields still win (`store`, `include`, `tools`,
- * `input`); the nested option objects take the live values, because parity
- * with the cached prefix is the entire point. This does not weaken Lite's
- * `reasoning.context: "all_turns"` invariant: the live Lite turn already
- * forces `all_turns` itself, so the baseline carries it.
+ * turn and never on a compaction body) and re-derives others that must match
+ * byte for byte. Anything describing the prompt prefix is therefore owned by
+ * the live lane and copied wholesale; compaction keeps only what is genuinely
+ * its own (`store`, `include`, `input`).
+ *
+ * Wholesale, not merged: a merge leaves keys the compaction body adds and the
+ * live turn never sent. The live turn drops `reasoning.context` on ids that
+ * reject `all_turns` while the Lite compaction body forces it, and that
+ * surplus key alone breaks the comparator. Absent on the baseline means
+ * absent on the wire.
  */
-function hydrateCodexCompactionOptions(body: RequestBody, state: CodexWebSocketSessionState | undefined): RequestBody {
+const CODEX_LIVE_OWNED_REQUEST_KEYS = ["reasoning", "text", "tools", "tool_choice"] as const;
+
+/** @internal Exported for tests. */
+export function hydrateCodexCompactionOptions(
+	body: RequestBody,
+	state: CodexWebSocketSessionState | undefined,
+): RequestBody {
 	const baseline = asRecord(state?.lastRequest);
 	if (!baseline) return body;
-	const { input: _input, client_metadata: _metadata, previous_response_id: _previous, ...baselineOptions } = baseline;
+	const {
+		input: baselineInput,
+		client_metadata: _metadata,
+		previous_response_id: _previous,
+		...baselineOptions
+	} = baseline;
 	const hydrated = { ...baselineOptions, ...body } as RequestBody;
-	// Take the live object wholesale rather than merging: a merge still leaves
-	// keys the compaction body adds and the live turn does not send. The live
-	// turn drops `reasoning.context` on ids that reject `all_turns`
-	// (`request-transformer.ts`), while the compaction body forces it — merged,
-	// that surplus key alone breaks the comparator.
-	for (const nestedKey of ["reasoning", "text"] as const) {
-		const baselineNested = asRecord(baselineOptions[nestedKey]);
-		if (baselineNested) hydrated[nestedKey] = baselineNested;
-		else delete hydrated[nestedKey];
+	// `RequestBody` types these fields individually; one named record view is
+	// cheaper than a cast per assignment. Clone every copied value: `onPayload`
+	// runs after this and an extension mutating the body in place would
+	// otherwise corrupt `state.lastRequest`, the comparator's own baseline.
+	const hydratedFields = hydrated as Record<string, unknown>;
+	for (const key of CODEX_LIVE_OWNED_REQUEST_KEYS) {
+		if (key in baselineOptions) hydratedFields[key] = structuredCloneJSON(baselineOptions[key]);
+		else delete hydratedFields[key];
+	}
+	// The whole rendered prompt prefix belongs to the live lane, not just the
+	// tool catalog: reconstructing it from prompt blocks is lossy in both
+	// directions (the capture can carry the wrong block count, the base prompt
+	// the wrong post-transform content). Copy the baseline's entire contiguous
+	// prefix run and keep only the compaction's own conversation tail.
+	//
+	// Safe against a second rewrite: `buildCodexChainedRequestBody` runs before
+	// `options.onPayload`, so once this makes the comparator succeed the hook
+	// only ever sees the delta frame, never the copied prefix.
+	const leadingPrefixLength = (items: readonly unknown[]): number => {
+		let count = 0;
+		for (const item of items) {
+			const record = asRecord(item);
+			if (!record || (record.type !== "additional_tools" && record.role !== "developer")) break;
+			count += 1;
+		}
+		return count;
+	};
+	const baselineItems = Array.isArray(baselineInput) ? baselineInput : [];
+	const hydratedInput = Array.isArray(hydrated.input) ? hydrated.input : undefined;
+	const baselinePrefixLength = leadingPrefixLength(baselineItems);
+	if (hydratedInput) {
+		// No guard on length: an empty baseline prefix must strip the compaction's
+		// own, exactly like an absent nested option is deleted above.
+		const copiedPrefix = structuredCloneJSON(baselineItems.slice(0, baselinePrefixLength)) as InputItem[];
+		hydrated.input = [...copiedPrefix, ...hydratedInput.slice(leadingPrefixLength(hydratedInput))];
 	}
 	return hydrated;
 }

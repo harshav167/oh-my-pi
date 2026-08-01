@@ -342,10 +342,14 @@ export class SessionMaintenance {
 	 * current base prompt when no live turn has been captured yet.
 	 */
 	#resolveRemoteCompactionPromptBlocks(): string[] {
-		return (
-			getCodexPreparedPromptBlocks(this.#host.providerSessionState, this.#host.sessionId()) ??
-			this.#host.baseSystemPrompt()
-		);
+		const captured = getCodexPreparedPromptBlocks(this.#host.providerSessionState, this.#host.sessionId());
+		const blocks = captured ?? this.#host.baseSystemPrompt();
+		logger.debug("Codex compaction prompt blocks resolved", {
+			source: captured ? "captured" : "base-prompt-fallback",
+			blockCount: blocks.length,
+			baseSystemPromptCount: this.#host.baseSystemPrompt().length,
+		});
+		return blocks;
 	}
 
 	async #pruneToolOutputs(): Promise<{ prunedCount: number; tokensSaved: number } | undefined> {
