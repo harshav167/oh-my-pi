@@ -1766,32 +1766,38 @@ export function hydrateCodexCompactionOptions(
 		if (key in baselineOptions) hydratedFields[key] = structuredCloneJSON(baselineOptions[key]);
 		else delete hydratedFields[key];
 	}
-	// The whole rendered prompt prefix belongs to the live lane, not just the
-	// tool catalog: reconstructing it from prompt blocks is lossy in both
-	// directions (the capture can carry the wrong block count, the base prompt
-	// the wrong post-transform content). Copy the baseline's entire contiguous
-	// prefix run and keep only the compaction's own conversation tail.
+	// The conversation the server already holds is authoritative, not just the
+	// rendered prefix: reconstructing either is lossy (the captured blocks carry
+	// the wrong count, the base prompt the wrong post-transform content, and the
+	// history serializer renders items differently again).
+	//
+	// Rebuild the exact chain the comparator expects:
+	//   lastRequest.input + lastResponseItems + items only this request adds
+	// so the delta collapses to the trailing new items plus the trigger.
 	//
 	// Safe against a second rewrite: `buildCodexChainedRequestBody` runs before
 	// `options.onPayload`, so once this makes the comparator succeed the hook
-	// only ever sees the delta frame, never the copied prefix.
-	const leadingPrefixLength = (items: readonly unknown[]): number => {
-		let count = 0;
-		for (const item of items) {
-			const record = asRecord(item);
-			if (!record || (record.type !== "additional_tools" && record.role !== "developer")) break;
-			count += 1;
-		}
-		return count;
-	};
+	// only ever sees the delta frame, never the copied history.
 	const baselineItems = Array.isArray(baselineInput) ? baselineInput : [];
+	const responseItems = state?.lastResponseItems ?? [];
 	const hydratedInput = Array.isArray(hydrated.input) ? hydrated.input : undefined;
-	const baselinePrefixLength = leadingPrefixLength(baselineItems);
 	if (hydratedInput) {
-		// No guard on length: an empty baseline prefix must strip the compaction's
-		// own, exactly like an absent nested option is deleted above.
-		const copiedPrefix = structuredCloneJSON(baselineItems.slice(0, baselinePrefixLength)) as InputItem[];
-		hydrated.input = [...copiedPrefix, ...hydratedInput.slice(leadingPrefixLength(hydratedInput))];
+		// The trigger is always the final item and is never part of the server's
+		// history, so lift it out before measuring the boundary — otherwise an
+		// empty local tail drops it and the request stops being a compaction.
+		const lastItem = hydratedInput[hydratedInput.length - 1];
+		const trigger = asRecord(lastItem)?.type === "compaction_trigger" ? [lastItem] : [];
+		const withoutTrigger = trigger.length > 0 ? hydratedInput.slice(0, -1) : hydratedInput;
+		// Anything beyond what the server has seen is genuinely local — a
+		// mid-turn tool result, say — and has to survive. Everything at or
+		// before that boundary is replaced wholesale.
+		const serverSeen = baselineItems.length + responseItems.length;
+		const localTail = withoutTrigger.length > serverSeen ? withoutTrigger.slice(serverSeen) : [];
+		hydrated.input = [
+			...(structuredCloneJSON([...baselineItems, ...responseItems]) as InputItem[]),
+			...localTail,
+			...trigger,
+		];
 	}
 	return hydrated;
 }

@@ -1438,7 +1438,7 @@ describe("Responses Lite remote compaction", () => {
 		}
 	});
 
-	test("V2 compaction adopts the live lane's tool payload instead of its own", async () => {
+	test("V2 compaction chains off the live lane instead of resending its own prefix", async () => {
 		const providerSessionState = new Map<string, ProviderSessionState>();
 		const webSocket = installCodexCompactionWebSocket({
 			respond: (socket, outbound) => {
@@ -1520,10 +1520,14 @@ describe("Responses Lite remote compaction", () => {
 			});
 
 			const compactionFrame = webSocket.sockets[0]?.sent[1];
-			const compactionLead = Array.isArray(compactionFrame?.input) ? compactionFrame.input[0] : undefined;
-			expect(compactionLead).toEqual(liveLead);
-			expect(JSON.stringify(compactionLead)).toContain("live_only_tool");
-			expect(JSON.stringify(compactionLead)).not.toContain("compaction_only_tool");
+			// Adopting the live lane's prefix and history makes the comparator
+			// accept the chain, so the frame collapses to `previous_response_id`
+			// plus the trigger — the server reuses the whole cached prefix and
+			// none of it is resent.
+			expect(compactionFrame?.previous_response_id).toBe("response-live-turn");
+			expect(compactionFrame?.input).toEqual([{ type: "compaction_trigger" }]);
+			// The compaction's own divergent tool catalog never reaches the wire.
+			expect(JSON.stringify(compactionFrame)).not.toContain("compaction_only_tool");
 			expect(compactionFrame?.tools).toEqual(liveFrame?.tools);
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
