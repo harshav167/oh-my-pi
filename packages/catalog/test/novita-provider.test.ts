@@ -86,7 +86,8 @@ describe("Novita built-in provider", () => {
 		expect(model?.name).toBe("Kimi K2.7 Code");
 		expect(model?.reasoning).toBe(true);
 		expect(model?.supportsTools).toBe(true);
-		expect(model?.input).toEqual(["text", "image"]);
+		// Kimi video model on `openai-completions`; video input is native here.
+		expect(model?.input).toEqual(["text", "image", "video"]);
 		expect(model?.cost).toEqual({ input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0 });
 		expect(model?.contextWindow).toBe(262144);
 		expect(model?.maxTokens).toBe(131072);

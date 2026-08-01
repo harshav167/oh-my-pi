@@ -131,7 +131,8 @@ describe("issue #2113 — moonshot kimi-k2.6 discovery and wire format", () => {
 
 		const k26 = byId.get("kimi-k2.6");
 		expect(k26?.reasoning).toBe(true);
-		expect(k26?.input).toEqual(["text", "image"]);
+		// Kimi video model on `openai-completions`; video input is native here.
+		expect(k26?.input).toEqual(["text", "image", "video"]);
 		expect(k26?.thinking).toEqual({
 			mode: "effort",
 			efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High],

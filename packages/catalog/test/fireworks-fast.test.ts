@@ -39,7 +39,10 @@ describe("buildFireworksFastSeed", () => {
 
 	it("inherits limits and modalities from the base model", () => {
 		const kimi = byId.get("kimi-k2.6-fast");
-		expect(kimi?.input).toEqual(["text", "image"]);
+		// Modalities track the bundled base model, so this list follows upstream
+		// metadata. Fireworks is `openai-completions`, the one api whose
+		// serializer emits `video_url`, so a reported video capability survives.
+		expect(kimi?.input).toEqual(["text", "image", "video"]);
 		expect(kimi?.contextWindow).toBe(262144);
 		expect(kimi?.reasoning).toBe(true);
 		expect(byId.get("glm-5.1-fast")?.input).toEqual(["text"]);

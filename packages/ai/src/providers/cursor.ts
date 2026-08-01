@@ -218,6 +218,7 @@ import {
 	piReadDisplayPath,
 	piTimeout,
 } from "./cursor/exec-modern";
+import { NON_VIDEO_PLACEHOLDER } from "./vision-guard";
 
 export const CURSOR_API_URL = "https://api2.cursor.sh";
 export const CURSOR_CLIENT_VERSION = "cli-2026.07.23-e383d2b";
@@ -4034,6 +4035,10 @@ function buildCursorRootPromptContent(
 			}
 		} else if (item.type === "image") {
 			parts.push({ type: "image", image: `data:${item.mimeType};base64,${item.data}`, mediaType: item.mimeType });
+		} else {
+			// Cursor's root prompt carries no video part. Leave a marker rather than
+			// dropping the block, so the model is told the attachment existed.
+			parts.push({ type: "text", text: NON_VIDEO_PLACEHOLDER });
 		}
 	}
 	return parts;

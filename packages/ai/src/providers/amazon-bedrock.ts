@@ -44,6 +44,7 @@ import { invalidateAwsCredentialCache, resolveAwsCredentials } from "./aws-crede
 import { decodeEventStream } from "./aws-eventstream";
 import { signRequest } from "./aws-sigv4";
 import { transformMessages } from "./transform-messages";
+import { NON_VIDEO_PLACEHOLDER } from "./vision-guard";
 
 export type BedrockThinkingDisplay = "summarized" | "omitted";
 
@@ -796,6 +797,12 @@ function convertMessages(
 							}
 							case "image":
 								contentBlocks.push({ image: createImageBlock(c.mimeType, c.data) });
+								break;
+							case "video":
+								// Converse has no video block. A throw here would fail this
+								// turn and every later one, because the video stays in
+								// history; degrade to the same marker other providers use.
+								contentBlocks.push({ text: NON_VIDEO_PLACEHOLDER });
 								break;
 							default:
 								throw new AIError.ValidationError("Unknown user content type");

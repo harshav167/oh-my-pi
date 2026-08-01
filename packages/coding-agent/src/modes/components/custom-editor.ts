@@ -11,6 +11,7 @@ import {
 	TUI,
 } from "@oh-my-pi/pi-tui";
 import { BracketedPasteHandler } from "@oh-my-pi/pi-tui/bracketed-paste";
+import { VIDEO_MIME_TYPES } from "../../cli/file-processor";
 import type { AppKeybinding } from "../../config/keybindings";
 import { isSettingsInitialized, settings } from "../../config/settings";
 import { imageReferenceHyperlink, PLACEHOLDER_REGEX, renderPlaceholders } from "../image-references";
@@ -82,7 +83,10 @@ function unionOfMatchKeys(matchKeys: ReadonlyMap<ConfigurableEditorAction, Reado
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
 const BRACKETED_IMAGE_PATH_REGEX = /\.(?:png|jpe?g|gif|webp)$/i;
-const VIDEO_PATH_REGEX = /\.(?:mp4|mpeg|mov|avi|flv|mpg|webm|wmv|3gp|3gpp|m4v|mkv)$/i;
+// Derived from the MIME map so the two cannot drift: an extension the map
+// cannot resolve would route a plain-text paste into the image loader and
+// report it as an unsupported image.
+const VIDEO_PATH_REGEX = new RegExp(`\\.(?:${[...VIDEO_MIME_TYPES.keys()].map(ext => ext.slice(1)).join("|")})$`, "i");
 const SHELL_ESCAPED_PATH_CHAR_REGEX = /\\([\\\s'"()[\]{}&;<>|?*!$`])/g;
 const URI_SCHEME_REGEX = /^[a-z][a-z0-9+.-]*:/i;
 const FILE_URI_REGEX = /^file:\/\//i;

@@ -66,6 +66,19 @@ export function dropUnsupportedBedrockGeoIds(models: readonly ModelSpec[]): Mode
 	return models.filter(model => !(model.provider === "amazon-bedrock" && model.id === "jp.anthropic.claude-opus-5"));
 }
 
+/**
+ * `openai-completions` is the only serializer that emits `video_url` (see
+ * `openai-completions.ts`); every other API renders a placeholder or drops the
+ * block. Advertising video elsewhere offers an attach affordance that can only
+ * ever produce "[video omitted]", so strip it from the generated catalog.
+ */
+export function stripVideoInputWithoutSerializer(models: readonly ModelSpec[]): ModelSpec[] {
+	return models.map(model => {
+		if (model.api === "openai-completions" || !model.input.includes("video")) return model;
+		return { ...model, input: model.input.filter(modality => modality !== "video") };
+	});
+}
+
 const CODEX_GPT_5_4_PRIORITY_BY_VARIANT: Partial<Record<OpenAIVariant, number>> = {
 	base: 0,
 	mini: 1,

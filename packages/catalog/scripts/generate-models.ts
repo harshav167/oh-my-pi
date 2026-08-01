@@ -58,6 +58,7 @@ import {
 	CLOUDFLARE_FALLBACK_MODEL,
 	dropUnsupportedBedrockGeoIds,
 	linkOpenAIPromotionTargets,
+	stripVideoInputWithoutSerializer,
 } from "./generated-policies";
 
 const packageRoot = path.join(import.meta.dir, "..");
@@ -658,6 +659,7 @@ async function generateModels() {
 	allModels = dropXiaomiAudioOnlyIds(allModels);
 	allModels = dropUnsupportedBedrockGeoIds(allModels);
 	allModels = normalizeAntigravityEndpoint(allModels);
+	allModels = stripVideoInputWithoutSerializer(allModels);
 	// Normalize display names: gateway author prefixes ("OpenAI: …"), alias
 	// markers ("(latest)"), provider attribution ("(Antigravity)"), and
 	// price/promo tags are model-extrinsic — strip them from the bundle.

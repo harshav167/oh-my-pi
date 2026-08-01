@@ -89,16 +89,18 @@ function toModelName(value: unknown, fallback: string): string {
 	return trimmed.length > 0 ? trimmed : fallback;
 }
 
-function toInputCapabilities(value: unknown): ("text" | "image" | "video")[] {
+function toInputCapabilities(value: unknown, api: Api): ("text" | "image" | "video")[] {
 	if (!Array.isArray(value)) {
 		return ["text"];
 	}
 	// Preserve whatever modalities the upstream source reports, for any provider.
-	// Video capability flows automatically when metadata includes it; the Kimi
-	// id-classifier is only a fallback for Kimi endpoints that omit the flag.
+	// Video is the exception: `openai-completions` is the only serializer that
+	// emits `video_url`, so advertising it elsewhere offers an attach affordance
+	// that can only ever produce a placeholder. The Kimi id-classifier remains a
+	// fallback for Kimi endpoints that omit the flag.
 	const input: ("text" | "image" | "video")[] = ["text"];
 	if (value.some(item => item === "image")) input.push("image");
-	if (value.some(item => item === "video")) input.push("video");
+	if (api === "openai-completions" && value.some(item => item === "video")) input.push("video");
 	return input;
 }
 
@@ -201,7 +203,7 @@ function mapAnthropicModelsDev(payload: unknown, baseUrl: string): ModelSpec<"an
 			provider: "anthropic",
 			baseUrl,
 			reasoning: model.reasoning === true,
-			input: toInputCapabilities(model.modalities?.input),
+			input: toInputCapabilities(model.modalities?.input, "anthropic-messages"),
 			cost: {
 				input: toNumber(model.cost?.input) ?? 0,
 				output: toNumber(model.cost?.output) ?? 0,
@@ -1148,7 +1150,7 @@ function mapNovitaModel(
 		...model,
 		reasoning: novitaArrayIncludes(entry.features, "reasoning"),
 		supportsTools: novitaArrayIncludes(entry.features, "function-calling"),
-		input: toInputCapabilities(entry.input_modalities),
+		input: toInputCapabilities(entry.input_modalities, model.api),
 		cost: {
 			input: toNovitaCostPerMillion(entry.input_token_price_per_m),
 			output: toNovitaCostPerMillion(entry.output_token_price_per_m),
@@ -2639,7 +2641,10 @@ export function zenmuxModelManagerOptions(config?: ZenMuxModelManagerConfig): Mo
 						api: isAnthropicModel ? "anthropic-messages" : "openai-completions",
 						baseUrl: isAnthropicModel ? anthropicBaseUrl : openAiBaseUrl,
 						reasoning: capabilities?.reasoning === true || defaults.reasoning,
-						input: toInputCapabilities(entry.input_modalities),
+						input: toInputCapabilities(
+							entry.input_modalities,
+							isAnthropicModel ? "anthropic-messages" : "openai-completions",
+						),
 						cost: {
 							input: getZenMuxPricingValue(pricings, "prompt"),
 							output: getZenMuxPricingValue(pricings, "completion"),
@@ -5219,7 +5224,7 @@ export function mapModelsDevToModels(
 				provider: desc.providerId as ModelSpec<Api>["provider"],
 				baseUrl: resolved.baseUrl,
 				reasoning: m.reasoning === true,
-				input: toInputCapabilities(m.modalities?.input),
+				input: toInputCapabilities(m.modalities?.input, resolved.api),
 				cost: {
 					input: toNumber(m.cost?.input) ?? 0,
 					output: toNumber(m.cost?.output) ?? 0,

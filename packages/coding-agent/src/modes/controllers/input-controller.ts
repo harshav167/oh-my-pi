@@ -1539,8 +1539,11 @@ export class InputController {
 	}
 
 	async handleImagePathPaste(path: string): Promise<void> {
-		if (await this.#insertPendingVideo(path)) return;
 		try {
+			// Inside the try: a missing video path passes the size gate (a nonexistent
+			// Bun.file reports size 0) and throws ENOENT on read. Outside, that
+			// rejection is swallowed by #trackAsyncPaste and the paste vanishes.
+			if (await this.#insertPendingVideo(path)) return;
 			const image = await loadImageInput({
 				path,
 				cwd: this.ctx.sessionManager.getCwd(),

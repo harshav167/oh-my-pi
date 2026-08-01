@@ -50,7 +50,9 @@ describe("issue #5756 — moonshot kimi-k3 pricing and wire format", () => {
 		expect(k3.cost).toEqual({ input: 3, output: 15, cacheRead: 0.3, cacheWrite: 0 });
 		expect(k3.contextWindow).toBe(1_048_576);
 		expect(k3.maxTokens).toBe(131_072);
-		expect(k3.input).toEqual(["text", "image"]);
+		// K3 is a Kimi video model on `openai-completions`, the one api whose
+		// serializer emits `video_url`, so native video input survives discovery.
+		expect(k3.input).toEqual(["text", "image", "video"]);
 		expect(k3.reasoning).toBe(true);
 		// The effort ladder itself tracks the generated catalog policies; the
 		// binding K3 contract — reasoning_effort=max on the wire, no K2-style

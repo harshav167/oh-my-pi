@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { kimiCodeModelManagerOptions } from "../src/provider-models/openai-compat";
+import {
+	kimiCodeModelManagerOptions,
+	MODELS_DEV_PROVIDER_DESCRIPTORS,
+	mapModelsDevToModels,
+} from "../src/provider-models/openai-compat";
 
 function fakeModelsFetch(ids: string[]): typeof fetch {
 	return (async () =>
@@ -33,5 +37,48 @@ describe("kimiCodeModelManagerOptions video capability", () => {
 		const models = await options.fetchDynamicModels?.();
 		const k25 = models?.find(m => m.id === "kimi-k2.5");
 		expect(k25?.input).toEqual(["text", "image"]);
+	});
+});
+
+// `openai-completions` is the only serializer that emits `video_url`; every
+// other API renders "[video omitted]". Both the live discovery path and the
+// generated catalog must therefore refuse to advertise video elsewhere, or the
+// editor offers a video attach affordance that can never be honoured.
+describe("video capability is limited to the serializer that supports it", () => {
+	const payloadFor = (providerId: string, modelId: string) => ({
+		[providerId]: {
+			models: {
+				[modelId]: {
+					id: modelId,
+					name: modelId,
+					tool_call: true,
+					modalities: { input: ["text", "image", "video"] },
+				},
+			},
+		},
+	});
+
+	it("keeps reported video for a descriptor resolved to openai-completions", () => {
+		const mapped = mapModelsDevToModels(payloadFor("moonshotai", "kimi-k2.6"), MODELS_DEV_PROVIDER_DESCRIPTORS);
+		const model = mapped.find(m => m.id === "kimi-k2.6" && m.api === "openai-completions");
+		expect(model).toBeDefined();
+		expect(model?.input).toContain("video");
+	});
+
+	it("strips reported video for a descriptor resolved to anthropic-messages", () => {
+		const mapped = mapModelsDevToModels(payloadFor("anthropic", "claude-opus-5"), MODELS_DEV_PROVIDER_DESCRIPTORS);
+		const model = mapped.find(m => m.id === "claude-opus-5");
+		expect(model?.api).toBe("anthropic-messages");
+		expect(model?.input).toEqual(["text", "image"]);
+	});
+
+	it("strips reported video for a descriptor resolved to bedrock-converse-stream", () => {
+		const mapped = mapModelsDevToModels(
+			payloadFor("amazon-bedrock", "us.amazon.nova-lite-v1:0"),
+			MODELS_DEV_PROVIDER_DESCRIPTORS,
+		);
+		const model = mapped.find(m => m.id === "us.amazon.nova-lite-v1:0");
+		expect(model?.api).toBe("bedrock-converse-stream");
+		expect(model?.input).toEqual(["text", "image"]);
 	});
 });

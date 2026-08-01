@@ -33,7 +33,7 @@ import {
 	type StreamMarkupHealingEvent,
 } from "../utils/stream-markup-healing";
 import { transformMessages } from "./transform-messages";
-import { joinTextWithImagePlaceholder, partitionVisionContent } from "./vision-guard";
+import { joinTextWithImagePlaceholder, NON_VIDEO_PLACEHOLDER, partitionVisionContent } from "./vision-guard";
 
 export interface OllamaChatOptions extends StreamOptions {
 	reasoning?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -183,13 +183,22 @@ function toPlainContent(
 	if (typeof content === "string") {
 		return { content };
 	}
+	// Video is filtered out below because Ollama's wire format carries only text
+	// and images. Note it first: dropping the block silently would turn a
+	// video-only message into an empty one with no trace for the model.
+	const omittedVideos = content.some(block => block.type === "video");
 	const visionContent = content.filter(
 		(block): block is TextContent | ImageContent => block.type === "text" || block.type === "image",
 	);
 	const { textBlocks, imageBlocks, omittedImages } = partitionVisionContent(visionContent, supportsImages);
 	const text = textBlocks.map(block => block.text).join("\n");
+	const withImageNotice = joinTextWithImagePlaceholder(text, omittedImages);
 	return {
-		content: joinTextWithImagePlaceholder(text, omittedImages),
+		content: omittedVideos
+			? withImageNotice
+				? `${withImageNotice}\n${NON_VIDEO_PLACEHOLDER}`
+				: NON_VIDEO_PLACEHOLDER
+			: withImageNotice,
 		...(imageBlocks.length > 0 ? { images: imageBlocks.map(block => block.data) } : {}),
 	};
 }

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import type { Api, ModelSpec, Provider } from "@oh-my-pi/pi-catalog/types";
-import { applyGeneratedModelPolicies, linkOpenAIPromotionTargets } from "../scripts/generated-policies";
+import {
+	applyGeneratedModelPolicies,
+	linkOpenAIPromotionTargets,
+	stripVideoInputWithoutSerializer,
+} from "../scripts/generated-policies";
 
 function createSpec<TApi extends Api>(overrides: {
 	id: string;
@@ -48,6 +52,27 @@ describe("generated model policies", () => {
 		expect(k3.input).toContain("video");
 		expect(moonshotK3.input).toContain("video");
 		expect(fireworksK3.input).not.toContain("video");
+	});
+
+	it("strips generated video input from every api that cannot serialize it", () => {
+		// `openai-completions` is the only serializer that emits `video_url`;
+		// elsewhere an advertised video attaches and renders "[video omitted]".
+		const nova = createSpec({
+			id: "us.amazon.nova-lite-v1:0",
+			api: "bedrock-converse-stream",
+			provider: "amazon-bedrock",
+		});
+		nova.input = ["text", "image", "video"];
+		const gemini = createSpec({ id: "gemini-3-flash", api: "cursor-agent", provider: "cursor" });
+		gemini.input = ["text", "image", "video"];
+		const k3 = createSpec({ id: "k3", api: "openai-completions", provider: "kimi-code" });
+		k3.input = ["text", "image", "video"];
+
+		const [strippedNova, strippedGemini, keptK3] = stripVideoInputWithoutSerializer([nova, gemini, k3]);
+
+		expect(strippedNova?.input).toEqual(["text", "image"]);
+		expect(strippedGemini?.input).toEqual(["text", "image"]);
+		expect(keptK3?.input).toEqual(["text", "image", "video"]);
 	});
 
 	it("re-bakes thinking metadata and applies parsed catalog corrections", () => {
