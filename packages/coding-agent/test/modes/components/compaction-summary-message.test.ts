@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import {
+	CompactionSummaryMessageComponent,
 	createHandoffSummaryMessageComponent,
 	HandoffSummaryMessageComponent,
 } from "@oh-my-pi/pi-coding-agent/modes/components/compaction-summary-message";
 import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
+import type { CompactionSummaryMessage, CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
 
 beforeAll(async () => {
 	resetSettingsForTest();
@@ -69,5 +70,62 @@ describe("handoff summary divider", () => {
 		message.customType = "extension-note";
 
 		expect(createHandoffSummaryMessageComponent(message, false)).toBeUndefined();
+	});
+});
+
+describe("compaction summary divider", () => {
+	it("renders the V2 usage metrics line when the message carries usage", () => {
+		const message: CompactionSummaryMessage = {
+			role: "compactionSummary",
+			summary: "Remote compaction preserved provider-native history for this session.",
+			tokensBefore: 138423,
+			timestamp: Date.now(),
+			compactionV2Usage: {
+				inputTokens: 366539,
+				cachedInputTokens: 365312,
+				cacheWriteInputTokens: 0,
+				outputTokens: 2175,
+				totalTokens: 368714,
+			},
+		};
+		const component = new CompactionSummaryMessageComponent(message);
+		component.setExpanded(true);
+		const expanded = Bun.stripANSI(component.render(80).join("\n"));
+
+		// The Markdown box wraps the line at the render width; collapse the
+		// wrapping whitespace so the full metrics line is asserted as one unit.
+		const normalized = expanded.replace(/\s+/g, " ");
+		expect(normalized).toContain(
+			"Compaction V2 · input 366,539 · cache read 365,312 (99.7%) · cache write 0 · output 2,175",
+		);
+	});
+
+	it("omits the metrics line when the message has no usage", () => {
+		const message: CompactionSummaryMessage = {
+			role: "compactionSummary",
+			summary: "Local summary.",
+			tokensBefore: 1000,
+			timestamp: Date.now(),
+		};
+		const component = new CompactionSummaryMessageComponent(message);
+		component.setExpanded(true);
+		const expanded = Bun.stripANSI(component.render(80).join("\n"));
+
+		expect(expanded).not.toContain("Compaction V2 ·");
+	});
+
+	it("guards the ratio when input is zero", () => {
+		const message: CompactionSummaryMessage = {
+			role: "compactionSummary",
+			summary: "Empty.",
+			tokensBefore: 0,
+			timestamp: Date.now(),
+			compactionV2Usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+		};
+		const component = new CompactionSummaryMessageComponent(message);
+		component.setExpanded(true);
+		const expanded = Bun.stripANSI(component.render(80).join("\n"));
+
+		expect(expanded).toContain("cache read 0 (0.0%)");
 	});
 });

@@ -5637,6 +5637,17 @@ export const SETTINGS_SCHEMA = {
 			],
 		},
 	},
+	"provider.codexWarmAfterCompaction": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "providers",
+			group: "Protocol",
+			label: "Codex Warm After Compaction",
+			description:
+				"After native Codex compaction, send a real `generate: false` warm request with the compacted prompt so the next turn starts from a warm prompt cache and WebSocket continuation. Billed input/cache-write tokens; disable to opt out.",
+		},
+	},
 
 	// Exa
 	"exa.enabled": {

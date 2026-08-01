@@ -23,7 +23,10 @@ import {
 	withAuth,
 } from "@oh-my-pi/pi-ai";
 import * as AIError from "@oh-my-pi/pi-ai/error";
-import { createOpenAICodexCompactionRequestContext } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
+import {
+	convertOpenAICodexResponsesTools,
+	createOpenAICodexCompactionRequestContext,
+} from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { convertTools } from "@oh-my-pi/pi-ai/providers/openai-responses";
 import { buildResponsesInput, resolveOpenAICompatPolicy } from "@oh-my-pi/pi-ai/providers/openai-shared";
 import { preferredDialect } from "@oh-my-pi/pi-catalog/identity";
@@ -36,6 +39,7 @@ import { countTokens } from "../tokenizer";
 import type { AgentMessage } from "../types";
 import {
 	buildCompactionV2Request,
+	compactionV2Api,
 	getCompactionV2PreserveData,
 	requestCompactionV2Streaming,
 	shouldUseCompactionV2Streaming,
@@ -1477,8 +1481,14 @@ export async function compact(
 		if (remoteHistory.length > 0) {
 			try {
 				const instructions = summaryOptions.remoteInstructions ?? SUMMARIZATION_SYSTEM_PROMPT;
+				// Tool wire shape is part of the rendered prompt prefix: the live Codex
+				// turn serializes tools via `convertOpenAICodexResponsesTools` (strict
+				// only when the tool opts in), so the compaction body must use the same
+				// converter on the Codex lane or the prefix drifts and cache read is 0.
 				const tools = summaryOptions.tools
-					? convertTools(summaryOptions.tools, model.compat.supportsStrictMode, model)
+					? compactionV2Api(model) === "openai-codex-responses" || model.provider === "openai-codex"
+						? convertOpenAICodexResponsesTools(summaryOptions.tools, model as Model<"openai-codex-responses">)
+						: convertTools(summaryOptions.tools, model.compat.supportsStrictMode, model)
 					: undefined;
 				const trimmed = trimRemoteCompactionInputToContextWindow(
 					remoteHistory,
@@ -1514,6 +1524,14 @@ export async function compact(
 					{ signal },
 				);
 				preserveData = { ...(preserveData ?? {}), ...storeCompactionV2PreserveData(remote, model) };
+				logger.info("Codex V2 compaction usage", {
+					provider: model.provider,
+					model: model.id,
+					inputTokens: remote.usage?.inputTokens ?? 0,
+					cachedInputTokens: remote.usage?.cachedInputTokens ?? 0,
+					totalTokens: remote.usage?.totalTokens ?? 0,
+					outputTokens: remote.usage?.outputTokens ?? 0,
+				});
 				usedRemoteCompaction = true;
 			} catch (err) {
 				// A user/session abort is a cancellation, not a remote failure —

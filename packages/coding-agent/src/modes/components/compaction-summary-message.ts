@@ -7,6 +7,23 @@ interface SummaryDividerOptions {
 	detailMarkdown: () => string;
 }
 
+/**
+ * TUI presentation of native V2 compaction usage (Howaboua-style metrics line),
+ * e.g. `Compaction V2 · input 366,539 · cache read 365,312 (99.7%) · cache write 0 · output 2,175`.
+ */
+export function formatCompactionV2UsageLine(
+	usage: CompactionSummaryMessage["compactionV2Usage"] | undefined,
+): string | undefined {
+	if (!usage) return undefined;
+	const input = usage.inputTokens;
+	const cached = usage.cachedInputTokens ?? 0;
+	const write = usage.cacheWriteInputTokens ?? 0;
+	const output = usage.outputTokens;
+	const ratio = input > 0 ? ((cached / input) * 100).toFixed(1) : "0.0";
+	const fmt = (value: number) => value.toLocaleString("en-US");
+	return `Compaction V2 · input ${fmt(input)} · cache read ${fmt(cached)} (${ratio}%) · cache write ${fmt(write)} · output ${fmt(output)}`;
+}
+
 class SummaryDividerComponent implements Component {
 	#expanded = false;
 	#cache?: { width: number; lines: string[] };
@@ -111,11 +128,13 @@ export class CompactionSummaryMessageComponent implements Component {
 
 	#detailMarkdown(): string {
 		const tokenStr = this.message.tokensBefore.toLocaleString();
+		const usageLine = formatCompactionV2UsageLine(this.message.compactionV2Usage);
+		const usageNote = usageLine ? `\n\n${usageLine}` : "";
 		const frameCount = this.message.images?.length ?? 0;
 		const frameNote =
 			frameCount > 0 ? `\n\n_${frameCount} snapcompact frame${frameCount === 1 ? "" : "s"} attached_` : "";
 		const warningNote = this.message.warning ? `\n\n${theme.icon.warning} **Warning:** ${this.message.warning}` : "";
-		return `**Compacted from ${tokenStr} tokens**${warningNote}\n\n${this.message.summary}${frameNote}`;
+		return `**Compacted from ${tokenStr} tokens**${warningNote}${usageNote}\n\n${this.message.summary}${frameNote}`;
 	}
 }
 

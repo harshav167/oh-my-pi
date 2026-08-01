@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
+import { getCompactionV2PreserveData } from "@oh-my-pi/pi-agent-core/compaction/openai";
 import { coerceServiceTierByFamily, type ProviderPayload, type ServiceTierByFamily } from "@oh-my-pi/pi-ai";
 import * as snapcompact from "@oh-my-pi/snapcompact";
 import {
@@ -358,6 +359,7 @@ export function buildSessionContext(
 						undefined,
 						snapcompactHistoryBlocksForContext(snapcompactArchive, options),
 						entry.warning,
+						getCompactionV2PreserveData(entry.preserveData)?.usage,
 					),
 				);
 			} else {
@@ -391,6 +393,7 @@ export function buildSessionContext(
 			undefined,
 			snapcompactHistoryBlocksForContext(snapcompactArchive, options),
 			compaction.warning,
+			getCompactionV2PreserveData(compaction.preserveData)?.usage,
 		);
 		// Agent context (non-transcript): summary first so the LLM sees the
 		// compacted context before recent messages.

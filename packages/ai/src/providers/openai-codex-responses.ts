@@ -119,6 +119,7 @@ import {
 	normalizeOpenAIPromptCacheKey,
 	populateResponsesUsageFromResponse,
 	promoteResponsesToolUseStopReason,
+	type ResponsesDeltaFailure,
 	type SequentialCutoffSummaryState,
 } from "./openai-shared";
 import { redactSensitiveInObject, transformMessages } from "./transform-messages";
@@ -475,6 +476,10 @@ interface CodexMetadataSessionState {
 	turnStartedAtUnixMs?: number;
 	compactionOperationId?: string;
 	reuseTurnForNextRequest?: boolean;
+	/** Final prepared primary-instructions value of the last live turn (post-transform, post-Lite). */
+	lastPreparedInstructions?: string;
+	/** turnId at capture time; consumption requires equality with the active turnId. */
+	lastPreparedTurnId?: string;
 }
 
 interface CodexCompatibilityIdentity {
@@ -721,6 +726,10 @@ interface CodexRequestContext {
 	isolatedTransportState?: CodexProviderSessionState;
 	websocketState?: CodexWebSocketSessionState;
 	responsesLite: boolean;
+	/** Populated by `buildCodexRequestContext`; absent only on synthetic error-reporting fallbacks. */
+	requestKind?: OpenAICodexRequestKind;
+	/** Populated by `buildCodexRequestContext`; absent only on synthetic error-reporting fallbacks. */
+	metadataSession?: CodexMetadataSessionState;
 	requestMetadata?: CodexRequestMetadata;
 	transformedBody: RequestBody;
 	rawRequestDump: RawHttpRequestDump;
@@ -1031,6 +1040,19 @@ function getCodexProviderSessionState(
 	const created = createCodexProviderSessionState();
 	providerSessionState.set(CODEX_PROVIDER_SESSION_STATE_KEY, created);
 	return created;
+}
+
+export function getCodexPreparedInstructions(
+	providerSessionState: Map<string, ProviderSessionState> | undefined,
+	sessionId: string | undefined,
+): string | undefined {
+	const providerState = getCodexProviderSessionState(providerSessionState);
+	if (!providerState) return undefined;
+	const normalized = normalizeOpenAIPromptCacheKey(sessionId);
+	if (!normalized) return undefined;
+	const session = providerState.metadataSessions.get(normalized);
+	if (!session?.lastPreparedInstructions || session.lastPreparedTurnId !== session.turnId) return undefined;
+	return session.lastPreparedInstructions;
 }
 
 function isCodexWebSocketRetryableStreamError(error: unknown): boolean {
@@ -1453,6 +1475,8 @@ async function buildCodexRequestContext(
 		isolatedTransportState,
 		websocketState,
 		responsesLite,
+		requestKind,
+		metadataSession,
 		requestMetadata,
 		codexClientVersion,
 		transformedBody,
@@ -1513,6 +1537,71 @@ export async function buildTransformedCodexRequestBody(
 	return transformRequestBody(params, model, codexOptions, { developerMessages });
 }
 
+/**
+ * Log why the compaction request could not chain from the live lane, using
+ * the strict comparator's own failure reason. Structural diagnostics only:
+ * input items can contain user prompts, tool outputs, or credentials, and
+ * centralized logs are written to disk.
+ */
+function logCodexCompactionDeltaFailure(
+	failure: ResponsesDeltaFailure,
+	state: CodexWebSocketSessionState,
+	chainedSource: Record<string, unknown>,
+): void {
+	const structural = (value: unknown): Record<string, unknown> => {
+		const record = asRecord(value);
+		if (!record) return { kind: typeof value, length: JSON.stringify(value)?.length ?? 0 };
+		const type = typeof record.type === "string" ? record.type : undefined;
+		const role = typeof record.role === "string" ? record.role : undefined;
+		return { type, role, length: JSON.stringify(value)?.length ?? 0 };
+	};
+	const differingFields = (a: unknown, b: unknown, omit: ReadonlySet<string>): string[] => {
+		const ra = asRecord(a);
+		const rb = asRecord(b);
+		if (!ra || !rb) return [];
+		return Array.from(new Set([...Object.keys(ra), ...Object.keys(rb)])).filter(
+			key => !omit.has(key) && !Bun.deepEquals(ra[key], rb[key]),
+		);
+	};
+
+	if (failure.kind === "options-mismatch") {
+		const baseline = asRecord(state.lastRequest);
+		const topLevelKeys = Array.from(new Set([...Object.keys(baseline ?? {}), ...Object.keys(chainedSource)])).filter(
+			key => key !== "input" && key !== "client_metadata" && key !== "previous_response_id",
+		);
+		const differing = topLevelKeys.filter(key => !Bun.deepEquals(baseline?.[key], chainedSource[key]));
+		logger.warn("[codex] compaction request diverges from the live lane (options)", {
+			differingKeys: differing,
+		});
+		return;
+	}
+	if (failure.kind === "input-not-extended") {
+		logger.warn("[codex] compaction request input does not extend the live lane baseline", {
+			baselineInputLength: Array.isArray(state.lastRequest?.input) ? state.lastRequest.input.length : 0,
+			baselineResponseItemsLength: state.lastResponseItems?.length ?? 0,
+			compactionInputLength: Array.isArray(chainedSource.input) ? chainedSource.input.length : 0,
+		});
+		return;
+	}
+
+	// item-mismatch: the failing position compares the union of the previous
+	// input and previous response items against the current input.
+	const baselineInput = Array.isArray(state.lastRequest?.input) ? state.lastRequest.input : [];
+	const responseItems = state.lastResponseItems ?? [];
+	const baselineItem =
+		failure.index < baselineInput.length
+			? baselineInput[failure.index]
+			: responseItems[failure.index - baselineInput.length];
+	const compactionInput = Array.isArray(chainedSource.input) ? chainedSource.input : [];
+	const compactionItem = compactionInput[failure.index];
+	logger.warn("[codex] compaction request diverges from the live lane (item)", {
+		index: failure.index,
+		baseline: structural(baselineItem),
+		compaction: structural(compactionItem),
+		differingFields: differingFields(baselineItem, compactionItem, new Set(["status"])),
+	});
+}
+
 async function openInitialCodexEventStream(
 	model: Model<"openai-codex-responses">,
 	options: OpenAICodexResponsesOptions | undefined,
@@ -1567,6 +1656,40 @@ async function openInitialCodexEventStream(
 	}
 	return openCodexSseTransport(model, requestContext, requestSetup, options, websocketState, transformedBody);
 }
+/** @internal Exported for tests. */
+export function codexPreparedInstructionsFromBody(body: unknown): string | undefined {
+	const record = asRecord(body);
+	if (!record) return undefined;
+	if (typeof record["instructions"] === "string" && record["instructions"].length > 0) {
+		return record["instructions"];
+	}
+	if (!Array.isArray(record["input"])) return undefined;
+	for (const item of record["input"]) {
+		const itemRecord = asRecord(item);
+		if (!itemRecord || itemRecord["role"] !== "developer" || !Array.isArray(itemRecord["content"])) continue;
+		const textParts: string[] = [];
+		for (const part of itemRecord["content"]) {
+			const partRecord = asRecord(part);
+			if (partRecord && partRecord["type"] === "input_text" && typeof partRecord["text"] === "string") {
+				textParts.push(partRecord["text"]);
+			}
+		}
+		const text = textParts.join("\n");
+		if (text !== "") return text;
+	}
+	return undefined;
+}
+
+function captureCodexPreparedInstructions(requestContext: CodexRequestContext, wireBody: unknown): void {
+	if (requestContext.requestKind !== "turn") return;
+	const instructions = codexPreparedInstructionsFromBody(wireBody);
+	if (instructions === undefined) return;
+	const session = requestContext.metadataSession;
+	if (!session) return;
+	session.lastPreparedInstructions = instructions;
+	session.lastPreparedTurnId = session.turnId;
+}
+
 async function openCodexWebSocketTransport(
 	model: Model<"openai-codex-responses">,
 	options: OpenAICodexResponsesOptions | undefined,
@@ -1598,10 +1721,17 @@ async function openCodexWebSocketTransport(
 		...chainedBody,
 		client_metadata: websocketClientMetadata,
 	};
+	// Capture the FULL prepared body before delta reduction: a Lite chained
+	// delta drops the developer-instructions item, and the pre-chain body is
+	// the only faithful view of the live turn's instructions.
+	captureCodexPreparedInstructions(requestContext, requestContext.transformedBody);
 	const replacementWebsocketRequest = await options?.onPayload?.(websocketRequest, model);
 	if (replacementWebsocketRequest !== undefined) {
 		websocketRequest = replacementWebsocketRequest as typeof websocketRequest;
 	}
+	// Post-hook overwrite only when the rewritten frame still carries an
+	// extractable instruction value (capture no-ops on undefined).
+	captureCodexPreparedInstructions(requestContext, websocketRequest);
 	recordCodexTurnRequestDiagnostics(websocketState, websocketRequest, "websocket", canAppendBeforeRequest);
 	const websocketHeaders = createCodexHeaders(
 		requestContext.requestHeaders,
@@ -1726,6 +1856,7 @@ async function openCodexSseTransport(
 	if (replacementWireBody !== undefined) {
 		wireBody = replacementWireBody as RequestBody;
 	}
+	captureCodexPreparedInstructions(requestContext, wireBody);
 	recordCodexTurnRequestDiagnostics(state, wireBody, "sse", canAppendBeforeRequest);
 	return { eventStream: await open(wireBody), requestBodyForState: structuredCloneJSON(wireBody), transport: "sse" };
 }
@@ -2279,15 +2410,13 @@ class CodexStreamProcessor {
 				// baseline, which no longer matches the transcript.
 				resetCodexWebSocketAppendState(state);
 			} else {
-				state.lastRequest = structuredCloneJSON(runtime.requestBodyForState);
-				if (responseId) {
-					state.lastResponseId = responseId;
-					state.lastResponseItems = stripInputItemIds(structuredCloneJSON(runtime.nativeOutputItems));
-					state.canAppend = rawEvent.type === "response.done" || rawEvent.type === "response.completed";
-				} else {
-					// Without a response id the append baseline cannot be trusted.
-					state.canAppend = false;
-				}
+				recordCodexWebSocketAppendState(
+					state,
+					runtime.requestBodyForState,
+					responseId,
+					runtime.nativeOutputItems,
+					rawEvent.type === "response.done" || rawEvent.type === "response.completed",
+				);
 			}
 		}
 
@@ -2791,7 +2920,15 @@ export async function prewarmOpenAICodexResponses(
 	options?: Pick<
 		OpenAICodexResponsesOptions,
 		"apiKey" | "headers" | "sessionId" | "signal" | "preferWebsockets" | "providerSessionState" | "responsesLite"
-	>,
+	> & {
+		/** When present, send a real `generate: false` warm request with this exact prompt/tools/messages so the server prompt cache and the WS continuation baseline are established for the next turn. */
+		warmRequest?: Pick<Context, "systemPrompt" | "tools" | "messages"> & {
+			reasoning?: OpenAICodexResponsesOptions["reasoning"];
+			reasoningSummary?: OpenAICodexResponsesOptions["reasoningSummary"];
+			textVerbosity?: OpenAICodexResponsesOptions["textVerbosity"];
+			serviceTier?: OpenAICodexResponsesOptions["serviceTier"];
+		};
+	},
 ): Promise<void> {
 	const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
 	if (!apiKey) return;
@@ -2841,6 +2978,89 @@ export async function prewarmOpenAICodexResponses(
 		options?.signal,
 	);
 	state.prewarmed = true;
+
+	// Request-equivalent warm (Howaboua's `prewarmOpenAICodexWebSocket`
+	// lifecycle): send a real `generate: false` request and consume it through
+	// completion so the server caches the prompt prefix and the continuation
+	// baseline records a chainable response id. Billed input/cache-write tokens.
+	if (options?.warmRequest && state.connection?.isHealthyForReuse()) {
+		const warmContext: Context = {
+			systemPrompt: options.warmRequest.systemPrompt,
+			tools: options.warmRequest.tools ?? [],
+			messages: options.warmRequest.messages ?? [],
+		};
+		const warmBody = await buildTransformedCodexRequestBody(
+			model,
+			warmContext,
+			{
+				sessionId: options?.sessionId,
+				responsesLite: options?.responsesLite,
+				reasoning: options.warmRequest.reasoning,
+				reasoningSummary: options.warmRequest.reasoningSummary,
+				textVerbosity: options.warmRequest.textVerbosity,
+				serviceTier: options.warmRequest.serviceTier,
+			},
+			promptCacheKey,
+		);
+		const chainedBody = buildCodexChainedRequestBody(warmBody, state);
+		const warmMetadata = { ...(chainedBody.client_metadata ?? {}) };
+		if (responsesLite) {
+			warmMetadata[CODEX_WS_RESPONSES_LITE_CLIENT_METADATA_KEY] = "true";
+		}
+		if (state.turnState) {
+			warmMetadata[X_CODEX_TURN_STATE_HEADER] = state.turnState;
+		}
+		const warmFrame = {
+			type: "response.create",
+			...chainedBody,
+			generate: false,
+			client_metadata: warmMetadata,
+		};
+		const warmController = new AbortController();
+		const connection = state.connection;
+		const warmSignal = options?.signal
+			? AbortSignal.any([options.signal, warmController.signal])
+			: warmController.signal;
+		let sawCompletedResponse = false;
+		try {
+			for await (const event of connection.streamRequest(
+				warmFrame,
+				{
+					idleTimeoutMs: CODEX_WEBSOCKET_IDLE_TIMEOUT_MS,
+					firstEventTimeoutMs: CODEX_WEBSOCKET_FIRST_EVENT_TIMEOUT_MS,
+				},
+				warmSignal,
+			)) {
+				if (event.type !== "response.completed" && event.type !== "response.done") continue;
+				const rawResponse = asRecord(event.response);
+				const responseId = typeof rawResponse?.id === "string" ? rawResponse.id : undefined;
+				if (!responseId) continue;
+				// Identity-guarded: a stale warm must never record into a
+				// replacement connection's baseline.
+				if (state.connection === connection) {
+					recordCodexWebSocketAppendState(state, warmBody, responseId, [], true);
+					sawCompletedResponse = true;
+				}
+				break;
+			}
+			if (!sawCompletedResponse) {
+				throw new Error("warm request ended without a completed response id");
+			}
+		} catch (error) {
+			// Half-warm socket: discard the connection and the continuation
+			// baseline so nothing chains off a failed warm. Only touch the lane
+			// when the captured connection is still the installed one.
+			if (state.connection === connection) {
+				connection.close("warm-failed");
+				state.connection = undefined;
+				state.prewarmed = false;
+				resetCodexWebSocketAppendState(state);
+			}
+			logger.debug("[codex] codex websocket warm request failed", { error: String(error) });
+		} finally {
+			warmController.abort();
+		}
+	}
 }
 
 function getCodexWebSocketSessionKey(
@@ -2885,6 +3105,30 @@ function resetCodexWebSocketAppendState(state: CodexWebSocketSessionState): void
 	state.lastRequest = undefined;
 	state.lastResponseId = undefined;
 	state.lastResponseItems = undefined;
+}
+
+/**
+ * Record the continuation baseline after a completed WebSocket request: the
+ * full sent body, the response id, and the stripped output items. Shared by
+ * the turn processor and the request-equivalent warm path so delta
+ * computation has the same baseline in both.
+ */
+function recordCodexWebSocketAppendState(
+	state: CodexWebSocketSessionState,
+	requestBody: RequestBody,
+	responseId: string | undefined,
+	outputItems: readonly Record<string, unknown>[],
+	completed: boolean,
+): void {
+	state.lastRequest = structuredCloneJSON(requestBody);
+	if (responseId) {
+		state.lastResponseId = responseId;
+		state.lastResponseItems = stripInputItemIds(structuredCloneJSON(outputItems) as Array<Record<string, unknown>>);
+		state.canAppend = completed;
+	} else {
+		// Without a response id the append baseline cannot be trusted.
+		state.canAppend = false;
+	}
 }
 
 function recordCodexWebSocketFailure(state: CodexWebSocketSessionState, activateFallback: boolean): void {
@@ -3252,10 +3496,11 @@ function recordCodexTurnUsageDiagnostics(
 function buildCodexChainedRequestBody(
 	requestBody: RequestBody,
 	state: CodexWebSocketSessionState | undefined,
+	onDeltaFailure?: (failure: ResponsesDeltaFailure) => void,
 ): RequestBody {
 	const chainable = state?.canAppend === true;
 	const appendInput = chainable
-		? buildResponsesDeltaInput(state.lastRequest, state.lastResponseItems, requestBody)
+		? buildResponsesDeltaInput(state.lastRequest, state.lastResponseItems, requestBody, onDeltaFailure)
 		: null;
 	if (appendInput && appendInput.length > 0 && state?.lastResponseId) {
 		return { ...requestBody, previous_response_id: state.lastResponseId, input: appendInput };

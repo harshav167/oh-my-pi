@@ -3413,19 +3413,29 @@ const ITEM_LIFECYCLE_EXCLUDE_MAP = {
  * `client_metadata` (e.g. rotating turn ids) is excluded from the option
  * comparison; codex-rs excludes it from the same check.
  */
+export type ResponsesDeltaFailure =
+	| { kind: "options-mismatch" }
+	| { kind: "input-not-extended" }
+	| { kind: "item-mismatch"; index: number };
+
 export function buildResponsesDeltaInput<TItem extends ResponseInputItem | InputItem>(
 	previous: { input?: TItem[] } | undefined,
 	previousResponseItems: readonly TItem[] | undefined,
 	current: { input?: TItem[] },
+	onFailure?: (failure: ResponsesDeltaFailure) => void,
 ): TItem[] | null {
 	if (!previous) return null;
 	if (!Array.isArray(previous.input) || !Array.isArray(current.input)) return null;
 	if (!deepEqualsWithout(previous, current, TOP_LEVEL_EXCLUDE_MAP)) {
+		onFailure?.({ kind: "options-mismatch" });
 		return null;
 	}
 
 	const baselineLen = (previous.input?.length ?? 0) + (previousResponseItems?.length ?? 0);
-	if (current.input.length <= baselineLen) return null;
+	if (current.input.length <= baselineLen) {
+		onFailure?.({ kind: "input-not-extended" });
+		return null;
+	}
 
 	let index = 0;
 	for (const series of [previous.input, previousResponseItems]) {
@@ -3434,6 +3444,7 @@ export function buildResponsesDeltaInput<TItem extends ResponseInputItem | Input
 			if (deepEqualsWithout(item, current.input[index], ITEM_LIFECYCLE_EXCLUDE_MAP)) {
 				index++;
 			} else {
+				onFailure?.({ kind: "item-mismatch", index });
 				return null;
 			}
 		}

@@ -64,6 +64,7 @@ export interface CompactionV2Usage {
 	outputTokens: number;
 	totalTokens: number;
 	cachedInputTokens?: number;
+	cacheWriteInputTokens?: number;
 	reasoningOutputTokens?: number;
 }
 
@@ -119,7 +120,7 @@ export function shouldUseCompactionV2Streaming(
 	return getCompactionV2Endpoint(model) !== undefined;
 }
 
-function compactionV2Api(model: Model): Api | undefined {
+export function compactionV2Api(model: Model): Api | undefined {
 	return model.remoteCompaction?.api ?? model.api;
 }
 
@@ -539,12 +540,14 @@ function parseCompactionV2Usage(event: Record<string, unknown>): CompactionV2Usa
 	const inputDetails = isRecord(usage.input_tokens_details) ? usage.input_tokens_details : undefined;
 	const outputDetails = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : undefined;
 	const cachedInputTokens = inputDetails ? numberField(inputDetails, "cached_tokens") : undefined;
+	const cacheWriteInputTokens = inputDetails ? numberField(inputDetails, "cache_write_tokens") : undefined;
 	const reasoningOutputTokens = outputDetails ? numberField(outputDetails, "reasoning_tokens") : undefined;
 	return {
 		inputTokens,
 		outputTokens,
 		totalTokens,
 		...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+		...(cacheWriteInputTokens !== undefined ? { cacheWriteInputTokens } : {}),
 		...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
 	};
 }
@@ -754,19 +757,48 @@ export function storeCompactionV2PreserveData(response: CompactionV2Response, mo
 }
 
 /** Retrieve preserved OpenAI replacement history that V2 can extend. */
-export function getCompactionV2PreserveData(
-	preserveData: Record<string, unknown> | undefined,
-): { provider: string; replacementHistory: Array<Record<string, unknown>>; usedTokens: number } | undefined {
+export function getCompactionV2PreserveData(preserveData: Record<string, unknown> | undefined):
+	| {
+			provider: string;
+			replacementHistory: Array<Record<string, unknown>>;
+			usedTokens: number;
+			usage: CompactionV2Usage | undefined;
+	  }
+	| undefined {
 	const candidate = preserveData?.[OPENAI_REMOTE_COMPACTION_PRESERVE_KEY];
 	if (!isRecord(candidate)) return undefined;
 	const provider = stringField(candidate, "provider");
 	if (!provider) return undefined;
 	if (!Array.isArray(candidate.replacementHistory)) return undefined;
 
+	// Persisted data is reloaded from session files; validate the numeric usage
+	// fields so malformed values cannot reach display formatting.
+	let usage: CompactionV2Usage | undefined;
+	const rawUsage = isRecord(candidate.usage) ? candidate.usage : undefined;
+	if (rawUsage) {
+		const inputTokens = numberField(rawUsage, "inputTokens");
+		const outputTokens = numberField(rawUsage, "outputTokens");
+		const totalTokens = numberField(rawUsage, "totalTokens");
+		if (inputTokens !== undefined && outputTokens !== undefined && totalTokens !== undefined) {
+			const cachedInputTokens = numberField(rawUsage, "cachedInputTokens");
+			const cacheWriteInputTokens = numberField(rawUsage, "cacheWriteInputTokens");
+			const reasoningOutputTokens = numberField(rawUsage, "reasoningOutputTokens");
+			usage = {
+				inputTokens,
+				outputTokens,
+				totalTokens,
+				...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+				...(cacheWriteInputTokens !== undefined ? { cacheWriteInputTokens } : {}),
+				...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
+			};
+		}
+	}
+
 	return {
 		provider,
 		replacementHistory: candidate.replacementHistory as Array<Record<string, unknown>>,
 		usedTokens: numberField(candidate, "usedTokens") ?? 0,
+		usage,
 	};
 }
 

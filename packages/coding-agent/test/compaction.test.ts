@@ -19,6 +19,7 @@ import * as ai from "@oh-my-pi/pi-ai";
 import { encodeTextSignatureV1 } from "@oh-my-pi/pi-ai/providers/openai-shared";
 import type { AssistantMessage, Model, ProviderPayload, Usage } from "@oh-my-pi/pi-ai/types";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
+import type { CompactionSummaryMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
 import { buildSessionContext } from "@oh-my-pi/pi-coding-agent/session/session-context";
 import type {
 	CompactionEntry,
@@ -1329,6 +1330,41 @@ describe("buildSessionContext", () => {
 		expect(dump).toContain("kept-user");
 		expect(dump).toContain("kept-assistant");
 		expect(dump).toContain("after-compact");
+	});
+
+	it("carries native V2 compaction usage onto the compactionSummary message", () => {
+		const uKept = createMessageEntry(createUserMessage("kept-user"));
+		const compaction = createCompactionEntry("Remote summary", uKept.id);
+		compaction.preserveData = {
+			openaiRemoteCompaction: {
+				provider: "openai-codex",
+				replacementHistory: [{ type: "compaction", encrypted_content: "enc" }],
+				compactionItem: { type: "compaction", encrypted_content: "enc" },
+				usedTokens: 146783,
+				usage: {
+					inputTokens: 366539,
+					cachedInputTokens: 365312,
+					cacheWriteInputTokens: 0,
+					outputTokens: 2175,
+					totalTokens: 368714,
+				},
+			},
+		};
+		const uAfter = createMessageEntry(createUserMessage("after-compact"));
+
+		const transcript = buildSessionContext([uKept, compaction, uAfter], undefined, undefined, {
+			transcript: true,
+		});
+		const summaryMessage = transcript.messages.find(
+			(message): message is CompactionSummaryMessage => message.role === "compactionSummary",
+		);
+		expect(summaryMessage?.compactionV2Usage).toEqual({
+			inputTokens: 366539,
+			cachedInputTokens: 365312,
+			cacheWriteInputTokens: 0,
+			outputTokens: 2175,
+			totalTokens: 368714,
+		});
 	});
 
 	it("should handle multiple compactions (only latest matters)", () => {

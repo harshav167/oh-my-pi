@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Codex V2 compaction now reuses the live cached WebSocket lane when one is healthy: new `openCodexCompactionV2WebSocket` (reuse-only, auth-verified, baseline-hydrated from the live turn's request so the strict delta comparator sees identical options) with a shared WS/SSE V2 event collector, and post-compaction baseline recording so the next request can chain from the compaction response.
+- Codex transport captures the final prepared primary instructions of every live turn (post-transform, post-Lite, pre-delta-reduction) on the metadata session, exposed via `getCodexPreparedInstructions`, so native V2 compaction sends the instructions the live turn actually sent instead of reconstructing them from the base prompt. Developer prompt blocks (`systemPrompt[1..]`, which the live turn emits as separate input items) are not part of this capture.
+- `prewarmOpenAICodexResponses` supports a request-equivalent `warmRequest` (`generate: false` lifecycle with reasoning/summary/verbosity/service-tier parity and continuation-baseline recording); the processor's append-state writes are shared via `recordCodexWebSocketAppendState`.
+
 ## [17.2.3] - 2026-08-01
 
 ### Added

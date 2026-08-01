@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `provider.codexWarmAfterCompaction` (default on): after native Codex compaction the session sends a request-equivalent `generate: false` warm request with the compacted prompt/messages and the live reasoning/summary/verbosity/service-tier options, awaited before the next turn, so the server sees the post-compaction prefix and the WebSocket lane records a chainable continuation baseline before the next turn runs. Bills input/cache-write tokens; set the setting to `false` to opt out.
+- The compaction card renders a `Compaction V2 · input … · cache read … (%) · cache write … · output …` metrics line from native remote-compaction usage (Howaboua-style), shown in the expanded `ctrl+o` detail.
+
+### Changed
+
+- Compaction's `remoteInstructions` now reuse the live turn's final prepared instructions when available (captured by the Codex provider), falling back to the base prompt otherwise.
+
 ## [17.2.3] - 2026-08-01
 
 ### Changed

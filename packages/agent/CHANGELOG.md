@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Codex V2 remote compaction sends its body over the live cached WebSocket when a healthy connection exists (delta + `compaction_trigger` when options match the live turn; full request otherwise), falling back to the existing SSE POST on any WS failure; the SSE and WS paths now share one event collector.
+- V2 compaction usage (input/cached/total/output tokens) is logged at `info` as `Codex V2 compaction usage` after a successful native compaction.
+
+### Fixed
+
+- Codex-lane V2 compaction now serializes tools with the same converter as the live turn (`convertOpenAICodexResponsesTools`, strict only when the tool opts in) instead of the generic strict-by-default converter, removing a prompt-prefix divergence that caused `cache read 0` on native compaction; native usage (including cache counters) is now surfaced by `getCompactionV2PreserveData`.
+
 ## [17.2.2] - 2026-07-31
 
 ### Fixed

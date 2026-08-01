@@ -8,6 +8,7 @@ import type {
 } from "@oh-my-pi/pi-ai";
 import { prompt } from "@oh-my-pi/pi-utils";
 import type { AgentMessage } from "../types";
+import type { CompactionV2Usage } from "./compaction-v2-streaming";
 import branchSummaryContextPrompt from "./prompts/branch-summary-context.md" with { type: "text" };
 import compactionSummaryContextPrompt from "./prompts/compaction-summary-context.md" with { type: "text" };
 
@@ -58,6 +59,8 @@ export interface CompactionSummaryMessage {
 	images?: ImageContent[];
 	/** Post-pass dead-end warning attached to this compaction (progress guard). */
 	warning?: string;
+	/** Native remote-compaction usage (input/cache-read/cache-write/output), display-only. */
+	compactionV2Usage?: CompactionV2Usage;
 	timestamp: number;
 }
 
@@ -108,6 +111,7 @@ export function createCompactionSummaryMessage(
 	images?: ImageContent[],
 	blocks?: (TextContent | ImageContent)[],
 	warning?: string,
+	compactionV2Usage?: CompactionV2Usage,
 ): CompactionSummaryMessage {
 	const imageBlocks =
 		blocks?.filter((block): block is ImageContent => block.type === "image") ??
@@ -121,6 +125,7 @@ export function createCompactionSummaryMessage(
 		blocks: blocks && blocks.length > 0 ? blocks : undefined,
 		images: imageBlocks && imageBlocks.length > 0 ? imageBlocks : undefined,
 		warning,
+		compactionV2Usage,
 		timestamp: new Date(timestamp).getTime(),
 	};
 }

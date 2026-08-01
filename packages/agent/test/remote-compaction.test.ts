@@ -22,13 +22,17 @@ import {
 } from "@oh-my-pi/pi-agent-core/compaction/openai";
 import * as ai from "@oh-my-pi/pi-ai";
 import * as AIError from "@oh-my-pi/pi-ai/error";
-import { getOpenAICodexTransportDetails } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
+import {
+	convertOpenAICodexResponsesTools,
+	getOpenAICodexTransportDetails,
+} from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import type {
 	AssistantMessage,
 	CodexCompactionContext,
 	FetchImpl,
 	Model,
 	ProviderSessionState,
+	Tool,
 	ToolResultMessage,
 } from "@oh-my-pi/pi-ai/types";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
@@ -1477,7 +1481,14 @@ describe("compact() remote compaction failure handling", () => {
 				{ type: "response.output_item.done", output_index: 0, item: compactionItem },
 				{
 					type: "response.completed",
-					response: { usage: { input_tokens: 55, output_tokens: 3, total_tokens: 58 } },
+					response: {
+						usage: {
+							input_tokens: 366539,
+							output_tokens: 2175,
+							total_tokens: 368714,
+							input_tokens_details: { cached_tokens: 365312, cache_write_tokens: 0 },
+						},
+					},
 				},
 			]);
 		};
@@ -1505,10 +1516,73 @@ describe("compact() remote compaction failure handling", () => {
 		// Reasoning effort is sent like a normal turn (gpt-5 is a reasoning model).
 		expect(requestBody?.reasoning).toMatchObject({ effort: "high", summary: "auto" });
 		const remote = getCompactionV2PreserveData(result.preserveData);
-		expect(remote?.usedTokens).toBe(55);
+		expect(remote?.usedTokens).toBe(366539);
 		expect(remote?.replacementHistory.at(-1)).toEqual(compactionItem);
+		// Parsed → stored → reloaded usage, including the cache counters the
+		// TUI metrics line renders.
+		expect(remote?.usage).toEqual({
+			inputTokens: 366539,
+			cachedInputTokens: 365312,
+			cacheWriteInputTokens: 0,
+			outputTokens: 2175,
+			totalTokens: 368714,
+		});
 		expect(result.summary).toContain("Remote compaction preserved provider-native history");
 		expect(completeSpy).not.toHaveBeenCalled();
+	});
+
+	test("serializes V2 compaction tools with the live Codex converter on the Codex lane", async () => {
+		const compactionItem = { type: "compaction", encrypted_content: "enc_v2" };
+		const model = buildModel({
+			id: "gpt-5.6-terra",
+			name: "GPT-5.6 Terra",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.example/backend-api",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 372000,
+			maxTokens: 128000,
+			remoteCompaction: {
+				enabled: true,
+				api: "openai-codex-responses",
+				v2StreamingEnabled: true,
+				v2Endpoint: "https://compact.example/v1/responses",
+			},
+		} as ModelSpec<"openai-codex-responses">);
+		const tools = [
+			{
+				name: "read_file",
+				description: "Read a file",
+				parameters: { type: "object", properties: { path: { type: "string" } } },
+			},
+		] as unknown as Tool[];
+		let requestBody: { tools?: unknown } | undefined;
+		const fetchMock: FetchImpl = async (_input, init) => {
+			requestBody = JSON.parse(String(init?.body)) as { tools?: unknown };
+			return sseResponse([
+				{ type: "response.output_item.done", output_index: 0, item: compactionItem },
+				{
+					type: "response.completed",
+					response: { usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 } },
+				},
+			]);
+		};
+
+		const preparation = makePreparation();
+		preparation.settings = { ...preparation.settings, remoteStreamingV2Enabled: true };
+		const result = await compact(preparation, model, "test-key", undefined, undefined, {
+			fetch: fetchMock,
+			tools,
+		});
+
+		expect(result.summary).toContain("Remote compaction preserved provider-native history");
+		// The compaction body's tools must be byte-identical to what the live
+		// Codex turn sends (same converter): a non-strict tool must NOT be
+		// blanket-marked `strict: true` (the generic converter would).
+		expect(requestBody?.tools).toEqual(convertOpenAICodexResponsesTools(tools, model));
+		expect(JSON.stringify(requestBody?.tools)).not.toContain('"strict":true');
 	});
 
 	test("rewrites an oversized trailing tool output before V2 streaming compaction", async () => {

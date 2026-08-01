@@ -402,4 +402,87 @@ describe("AgentSession eager prelude re-injection after compaction", () => {
 			phase: "pre_turn",
 		});
 	});
+
+	it("fires the post-compaction Codex warm request with the session prompt (default ON)", async () => {
+		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
+		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
+		const warmSpy = vi.spyOn(codexResponses, "prewarmOpenAICodexResponses").mockResolvedValue(undefined);
+		const { session, waitForCall } = await createHarness({}, { model });
+		stubCompaction();
+
+		await runToContinuation(session, waitForCall);
+
+		// The warm fires synchronously during compaction processing, well before
+		// the continuation's provider call resolves, so the spy is already set.
+		expect(warmSpy).toHaveBeenCalledTimes(1);
+		const warmOptions = warmSpy.mock.calls[0]?.[1];
+		expect(warmOptions?.warmRequest?.systemPrompt).toEqual(session.systemPrompt);
+		expect(warmOptions?.providerSessionState).toBe(session.providerSessionState);
+	});
+
+	it("skips the post-compaction Codex warm request when the setting is off", async () => {
+		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
+		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
+		const warmSpy = vi.spyOn(codexResponses, "prewarmOpenAICodexResponses").mockResolvedValue(undefined);
+		const { session, waitForCall } = await createHarness({ "provider.codexWarmAfterCompaction": false }, { model });
+		stubCompaction();
+
+		await runToContinuation(session, waitForCall);
+
+		expect(warmSpy).not.toHaveBeenCalled();
+	});
+
+	it("feeds the captured prepared instructions into the compaction request options", async () => {
+		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
+		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
+		const getterSpy = vi
+			.spyOn(codexResponses, "getCodexPreparedInstructions")
+			.mockReturnValue("captured-instructions");
+		const capturedOptions: Array<Record<string, unknown>> = [];
+		vi.spyOn(compactionModule, "compact").mockImplementation(
+			async (_prep, _model, _key, _signal, _options, summaryOptions) => {
+				capturedOptions.push(summaryOptions as unknown as Record<string, unknown>);
+				return {
+					summary: "compacted",
+					shortSummary: undefined,
+					firstKeptEntryId: _prep.firstKeptEntryId,
+					tokensBefore: _prep.tokensBefore,
+					details: {},
+				};
+			},
+		);
+		const { session, waitForCall } = await createHarness({}, { model });
+
+		await runToContinuation(session, waitForCall);
+
+		expect(capturedOptions).toHaveLength(1);
+		expect(capturedOptions[0]?.remoteInstructions).toBe("captured-instructions");
+		getterSpy.mockRestore();
+	});
+
+	it("falls back to the base prompt when no prepared instructions are captured", async () => {
+		const model = getBundledModel("openai-codex", "gpt-5.6-terra");
+		if (!model) throw new Error("Expected gpt-5.6-terra model to exist");
+		const getterSpy = vi.spyOn(codexResponses, "getCodexPreparedInstructions").mockReturnValue(undefined);
+		const capturedOptions: Array<Record<string, unknown>> = [];
+		vi.spyOn(compactionModule, "compact").mockImplementation(
+			async (_prep, _model, _key, _signal, _options, summaryOptions) => {
+				capturedOptions.push(summaryOptions as unknown as Record<string, unknown>);
+				return {
+					summary: "compacted",
+					shortSummary: undefined,
+					firstKeptEntryId: _prep.firstKeptEntryId,
+					tokensBefore: _prep.tokensBefore,
+					details: {},
+				};
+			},
+		);
+		const { session, waitForCall } = await createHarness({}, { model });
+
+		await runToContinuation(session, waitForCall);
+
+		expect(capturedOptions).toHaveLength(1);
+		expect(capturedOptions[0]?.remoteInstructions).toBe(session.agent.state.systemPrompt.join("\n\n"));
+		getterSpy.mockRestore();
+	});
 });

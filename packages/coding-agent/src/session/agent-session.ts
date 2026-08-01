@@ -79,7 +79,10 @@ import type {
 } from "@oh-my-pi/pi-ai";
 import { type Effort, streamSimple } from "@oh-my-pi/pi-ai";
 import * as AIError from "@oh-my-pi/pi-ai/error";
-import { resetOpenAICodexHistoryAfterCompaction } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
+import {
+	prewarmOpenAICodexResponses,
+	resetOpenAICodexHistoryAfterCompaction,
+} from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { toolWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
 import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
 import { MacOSPowerAssertion } from "@oh-my-pi/pi-natives";
@@ -571,6 +574,8 @@ export class AgentSession {
 	#onResponse: SimpleStreamOptions["onResponse"] | undefined;
 	#onSseEvent: SimpleStreamOptions["onSseEvent"] | undefined;
 	#sideStreamFn: StreamFn;
+	/** Post-compaction Codex warm request; awaited before the next turn's provider work. */
+	#codexPostCompactionWarmPromise?: Promise<void> | undefined;
 	#preferWebsockets: boolean | undefined;
 	#convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
 	#disconnectOwnedMcpManager: (() => Promise<void>) | undefined;
@@ -3803,6 +3808,13 @@ export class AgentSession {
 	 * or a waiting confirmation is released rather than pinning this promise.
 	 */
 	async #runUsageAwarePreflight(external?: AbortSignal): Promise<boolean> {
+		// A post-compaction Codex warm may still be in flight; the next turn
+		// must not race it (half-written continuation state). The warm closure
+		// catches internally, so this await never rejects.
+		const pendingWarm = this.#codexPostCompactionWarmPromise;
+		if (pendingWarm) {
+			await pendingWarm;
+		}
 		const generation = this.#promptGeneration;
 		const controller = new AbortController();
 		this.#usagePreflightAbortControllers.add(controller);
@@ -6896,6 +6908,45 @@ export class AgentSession {
 			sessionId: this.sessionId,
 			compaction,
 		});
+		// Request-equivalent warm of the new window (default ON; bills input
+		// tokens). The promise is awaited at the next turn's preflight seam.
+		const model = this.model;
+		if (this.settings.get("provider.codexWarmAfterCompaction") !== false && model?.api === "openai-codex-responses") {
+			const warmPrompt = this.agent.state.systemPrompt;
+			// `.api` equality doesn't narrow the generic; the guard makes this cast sound.
+			const codexModel = model as Model<"openai-codex-responses">;
+			const warmTask = (async () => {
+				try {
+					const apiKey = await this.#modelRegistry.getApiKey(codexModel, this.sessionId);
+					if (!apiKey) return;
+					const warmMessages = await this.#convertToLlm(this.agent.state.messages);
+					await prewarmOpenAICodexResponses(codexModel, {
+						apiKey,
+						sessionId: this.sessionId,
+						preferWebsockets: this.#preferWebsockets ?? codexModel.preferWebsockets,
+						providerSessionState: this.#providerSessionState,
+						warmRequest: {
+							systemPrompt: warmPrompt,
+							tools: this.agent.state.tools,
+							messages: warmMessages,
+							reasoning: toReasoningEffort(this.thinkingLevel),
+							reasoningSummary: this.agent.hideThinkingSummary ? null : "detailed",
+							textVerbosity: this.settings.get("textVerbosity"),
+							serviceTier: this.#models.effectiveServiceTier(codexModel),
+						},
+					});
+				} catch (error) {
+					logger.debug("Codex post-compaction warm request failed", { error: String(error) });
+				}
+			})();
+			// Identity-guarded: only the still-current warm clears the slot.
+			const warmPromise = warmTask.finally(() => {
+				if (this.#codexPostCompactionWarmPromise === warmPromise) {
+					this.#codexPostCompactionWarmPromise = undefined;
+				}
+			});
+			this.#codexPostCompactionWarmPromise = warmPromise;
+		}
 	}
 
 	#resetCurrentResponsesProviderSession(reason: string): void {
