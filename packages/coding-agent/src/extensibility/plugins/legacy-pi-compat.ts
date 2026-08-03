@@ -30,6 +30,7 @@ const BUNDLED_VIRTUAL_SCHEME = "omp-legacy-pi-bundled:";
 const BUNDLED_VIRTUAL_NAMESPACE = "omp-legacy-pi-bundled";
 const BUNDLED_MODULES_GLOBAL = "__ompLegacyPiBundledModules";
 const TYPEBOX_BUNDLED_MODULE_KEY = "typebox";
+const EXTENSION_DYNAMIC_IMPORT_GLOBAL = "__ompExtensionDynamicImport";
 
 type BundledModule = Readonly<Record<string, unknown>>;
 type BundledModules = Readonly<Record<string, BundledModule>>;
@@ -45,11 +46,28 @@ interface BundledVirtualResolveResult {
 	namespace: typeof BUNDLED_VIRTUAL_NAMESPACE;
 }
 
-interface ExtensionSpecifierReference {
+interface StaticExtensionSpecifierReference {
 	readonly kind: "import" | "require";
 	readonly specifier: string;
 	readonly start: number;
 	readonly end: number;
+}
+
+interface ComputedExtensionImportReference {
+	readonly kind: "computed-import";
+	readonly start: number;
+	readonly end: number;
+	readonly argumentStart: number;
+	readonly argumentEnd: number;
+}
+
+type ExtensionSpecifierReference = StaticExtensionSpecifierReference | ComputedExtensionImportReference;
+
+interface ExtensionSourceReplacement {
+	readonly start: number;
+	readonly end: number;
+	readonly replacement: string;
+	readonly raw?: boolean;
 }
 
 function parseExtensionSource(source: string, importerPath: string): ParseResult {
@@ -447,7 +465,37 @@ function collectExtensionSpecifierReferences(
 	ast: ParseResult = parseExtensionSource(source, importerPath),
 ): ExtensionSpecifierReference[] {
 	const references: ExtensionSpecifierReference[] = [];
-	const record = (kind: ExtensionSpecifierReference["kind"], literal: unknown): void => {
+	const computedBareImportBindings = new Map<BindingScope, Map<string, boolean>>();
+	for (const { node, scope } of collectScopedAstNodes(ast, candidate => candidate.type === "VariableDeclarator")) {
+		const identifier = asAstNode(node.id);
+		if (identifier?.type !== "Identifier" || typeof identifier.name !== "string") continue;
+		const initializer = asAstNode(node.init);
+		const consequent = initializer?.type === "ConditionalExpression" ? asAstNode(initializer.consequent) : null;
+		const alternate = initializer?.type === "ConditionalExpression" ? asAstNode(initializer.alternate) : null;
+		const isBareSelection =
+			consequent?.type === "StringLiteral" &&
+			typeof consequent.value === "string" &&
+			isBareExtensionDependencySpecifier(consequent.value) &&
+			alternate?.type === "StringLiteral" &&
+			typeof alternate.value === "string" &&
+			isBareExtensionDependencySpecifier(alternate.value);
+		let bindings = computedBareImportBindings.get(scope);
+		if (!bindings) {
+			bindings = new Map();
+			computedBareImportBindings.set(scope, bindings);
+		}
+		bindings.set(identifier.name, isBareSelection);
+	}
+	const isComputedBareImportBinding = (scope: BindingScope, name: string): boolean => {
+		let current: BindingScope | null = scope;
+		while (current) {
+			const binding = computedBareImportBindings.get(current)?.get(name);
+			if (binding !== undefined) return binding;
+			current = current.parent;
+		}
+		return false;
+	};
+	const record = (kind: StaticExtensionSpecifierReference["kind"], literal: unknown): void => {
 		const node = asAstNode(literal);
 		if (
 			node?.type === "StringLiteral" &&
@@ -456,6 +504,33 @@ function collectExtensionSpecifierReferences(
 			typeof node.end === "number"
 		) {
 			references.push({ kind, specifier: node.value, start: node.start, end: node.end });
+		}
+	};
+	const recordComputedImport = (
+		expression: StructuralAstNode,
+		argument: unknown,
+		scope: BindingScope,
+		options?: unknown,
+	): void => {
+		const argumentNode = asAstNode(argument);
+		const optionsNode = asAstNode(options);
+		if (
+			optionsNode === null &&
+			argumentNode?.type === "Identifier" &&
+			typeof argumentNode.name === "string" &&
+			isComputedBareImportBinding(scope, argumentNode.name) &&
+			typeof expression.start === "number" &&
+			typeof expression.end === "number" &&
+			typeof argumentNode?.start === "number" &&
+			typeof argumentNode.end === "number"
+		) {
+			references.push({
+				kind: "computed-import",
+				start: expression.start,
+				end: expression.end,
+				argumentStart: argumentNode.start,
+				argumentEnd: argumentNode.end,
+			});
 		}
 	};
 	for (const { node, scope } of collectScopedAstNodes(ast, isSpecifierReferenceNode)) {
@@ -467,6 +542,7 @@ function collectExtensionSpecifierReferences(
 			record("import", node.source);
 		} else if (node.type === "ImportExpression") {
 			record("import", node.source);
+			recordComputedImport(node, node.source, scope, node.options);
 		} else if (node.type === "TSImportEqualsDeclaration") {
 			const moduleReference = asAstNode(node.moduleReference);
 			if (moduleReference?.type === "TSExternalModuleReference") {
@@ -475,7 +551,9 @@ function collectExtensionSpecifierReferences(
 		} else if (node.type === "CallExpression") {
 			const callee = asAstNode(node.callee);
 			if (callee?.type === "Import") {
-				record("import", nodeArgument(node, 0));
+				const argument = nodeArgument(node, 0);
+				record("import", argument);
+				recordComputedImport(node, argument, scope, nodeArgument(node, 1));
 			} else if (isIdentifier(callee, "require") && !scopeHasBinding(scope, REQUIRE_BINDING)) {
 				record("require", nodeArgument(node, 0));
 			}
@@ -484,13 +562,11 @@ function collectExtensionSpecifierReferences(
 	return references;
 }
 
-function applySpecifierReplacements(
-	source: string,
-	replacements: ReadonlyArray<ExtensionSpecifierReference & { readonly replacement: string }>,
-): string {
+function applySpecifierReplacements(source: string, replacements: readonly ExtensionSourceReplacement[]): string {
 	let rewritten = source;
 	for (const reference of [...replacements].sort((left, right) => right.start - left.start)) {
-		rewritten = `${rewritten.slice(0, reference.start)}${JSON.stringify(reference.replacement)}${rewritten.slice(reference.end)}`;
+		const replacement = reference.raw ? reference.replacement : JSON.stringify(reference.replacement);
+		rewritten = `${rewritten.slice(0, reference.start)}${replacement}${rewritten.slice(reference.end)}`;
 	}
 	return rewritten;
 }
@@ -960,8 +1036,18 @@ async function rewriteLegacyExtensionSource(
 	// keys on first use; every rewrite path must see the full map.
 	await ensureLegacyPiOverridesReady();
 	const references = collectExtensionSpecifierReferences(source, importerPath);
-	const replacements: Array<ExtensionSpecifierReference & { replacement: string }> = [];
+	const replacements: ExtensionSourceReplacement[] = [];
 	for (const reference of references) {
+		if (reference.kind === "computed-import") {
+			const argument = source.slice(reference.argumentStart, reference.argumentEnd);
+			replacements.push({
+				start: reference.start,
+				end: reference.end,
+				replacement: `globalThis[${JSON.stringify(EXTENSION_DYNAMIC_IMPORT_GLOBAL)}](${argument}, ${JSON.stringify(importerPath)})`,
+				raw: true,
+			});
+			continue;
+		}
 		if (reference.kind !== "import") continue;
 
 		const specifier = reference.specifier;
@@ -1576,6 +1662,29 @@ async function resolveExtensionBareDependencyUncached(specifier: string, importe
 	return null;
 }
 
+async function importExtensionDependency(specifier: unknown, importerPath: string): Promise<unknown> {
+	if (typeof specifier !== "string") {
+		throw new TypeError(`Extension dynamic import specifier must be a string, received ${typeof specifier}`);
+	}
+	let resolved: string | null = null;
+	if (specifier.startsWith("#")) {
+		resolved = await resolvePackageImportSpecifier(specifier, importerPath);
+	} else if (isBareExtensionDependencySpecifier(specifier)) {
+		resolved = await resolveExtensionBareDependency(specifier, importerPath);
+	} else if (/^\.\.?\//.test(specifier)) {
+		resolved = await resolveSourceModuleFile(path.resolve(path.dirname(importerPath), specifier));
+	}
+	if (resolved) {
+		return loadLegacyPiModule(resolved);
+	}
+	throw new Error(`Cannot resolve extension dynamic import '${specifier}' from '${importerPath}'`);
+}
+type ExtensionDynamicImportGlobal = typeof globalThis & {
+	__ompExtensionDynamicImport?: (specifier: unknown, importerPath: string) => Promise<unknown>;
+};
+
+(globalThis as ExtensionDynamicImportGlobal).__ompExtensionDynamicImport = importExtensionDependency;
+
 const NATIVE_ADDON_EXTENSION = ".node";
 
 /**
@@ -1689,6 +1798,7 @@ async function rewriteExtensionSpecifiers(
 	const resolvedSpecifierTargets = new Map<string, string>();
 	const replacements: Array<ExtensionSpecifierReference & { replacement: string }> = [];
 	for (const reference of references) {
+		if (reference.kind === "computed-import") continue;
 		let resolved: string | null = null;
 		if (reference.kind === "require") {
 			resolved = await resolveExtensionCommonJsRequire(reference.specifier, importerPath);
@@ -1718,6 +1828,7 @@ function rewriteExtensionSpecifiersFromCache(source: string, importerPath: strin
 	}
 	const replacements: Array<ExtensionSpecifierReference & { replacement: string }> = [];
 	for (const reference of collectExtensionSpecifierReferences(source, importerPath)) {
+		if (reference.kind === "computed-import") continue;
 		const replacement = resolvedSpecifierTargets.get(`${reference.kind}\0${reference.specifier}`);
 		if (replacement) {
 			replacements.push({ ...reference, replacement });
@@ -1962,6 +2073,7 @@ async function collectExtensionModules(entryRealPath: string): Promise<Extension
 		const dir = path.dirname(file);
 		const references = collectExtensionSpecifierReferences(source, file, ast);
 		for (const reference of references) {
+			if (reference.kind === "computed-import") continue;
 			const specifier = reference.specifier;
 			try {
 				let resolved: string | null = null;

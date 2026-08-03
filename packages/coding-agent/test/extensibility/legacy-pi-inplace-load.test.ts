@@ -1294,6 +1294,27 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		expect(rewritten).toContain(`require("${punycodeEntry}")`);
 	});
 
+	it("resolves computed bare imports against the extension package", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "computed-import-ext", version: "1.0.0", type: "module" }),
+			"node_modules/runtime-dep/package.json": JSON.stringify({
+				name: "runtime-dep",
+				version: "1.0.0",
+				type: "module",
+				exports: "./index.js",
+			}),
+			"node_modules/runtime-dep/index.js": 'export const value = "runtime-ok";',
+			"index.ts": [
+				'const packageName = true ? "runtime-dep" : "unused-dep";',
+				"export const loaded = (await import(packageName)).value;",
+			].join("\n"),
+		});
+		const importer = path.join(dir, "index.ts");
+		const module = (await loadLegacyPiModule(importer)) as { loaded: string };
+
+		expect(module.loaded).toBe("runtime-ok");
+	});
+
 	it("honors export pattern specificity and package encapsulation", async () => {
 		const dir = await writePackage({
 			"package.json": JSON.stringify({ name: "exports-contract-ext", version: "1.0.0", type: "module" }),
