@@ -47,18 +47,6 @@ import {
 	ForceBackgroundSubagentResultSchema,
 	ForceBackgroundSubagentStatus,
 	GetBlobResultSchema,
-	GrepContentMatchSchema,
-	GrepContentResultSchema,
-	GrepCountResultSchema,
-	GrepErrorSchema,
-	type GrepFileCount,
-	GrepFileCountSchema,
-	GrepFileMatchSchema,
-	GrepFilesResultSchema,
-	GrepResultSchema,
-	GrepSuccessSchema,
-	type GrepUnionResult,
-	GrepUnionResultSchema,
 	KvClientMessageSchema,
 	type KvServerMessage,
 	ListMcpResourcesErrorSchema,
@@ -90,15 +78,11 @@ import {
 	McpToolResultContentItemSchema,
 	McpToolResultSchema,
 	ModelDetailsSchema,
-	ReadErrorSchema,
 	ReadMcpResourceErrorSchema,
 	type ReadMcpResourceExecResult,
 	ReadMcpResourceExecResultSchema,
 	ReadMcpResourceNotFoundSchema,
 	ReadMcpResourceSuccessSchema,
-	ReadRejectedSchema,
-	ReadResultSchema,
-	ReadSuccessSchema,
 	RecordScreenFailureSchema,
 	RecordScreenResultSchema,
 	RequestContextResultSchema,
@@ -191,6 +175,16 @@ import { connectProxiedSocket, getProxyForProvider, shouldBypassProxy } from "..
 import { createRequestDebugSession, isRequestDebugEnabled, type RequestDebugResponseLog } from "../utils/request-debug";
 import { toolWireSchema } from "../utils/schema/wire";
 import {
+	buildLegacyGrepError as buildGrepErrorResult,
+	buildLegacyGrepResult as buildGrepResultFromToolResult,
+	legacyMutationToolName,
+} from "./cursor/exec-legacy";
+import {
+	buildLegacyReadError as buildReadErrorResult,
+	buildLegacyReadRejected as buildReadRejectedResult,
+	buildLegacyReadResult as buildReadResultFromToolResult,
+} from "./cursor/exec-legacy-read";
+import {
 	buildMcpStateResult,
 	buildNeutralHookResult,
 	buildPiBashError,
@@ -216,7 +210,9 @@ import {
 	piLsPath,
 	piReadDisplayPath,
 	piTimeout,
+	piOutputText as toolResultToText,
 } from "./cursor/exec-modern";
+import { shouldDropTruncatedThinkingOnlyAssistant } from "./transform-messages";
 
 export const CURSOR_API_URL = "https://api2.cursor.sh";
 export const CURSOR_CLIENT_VERSION = "cli-2026.07.23-e383d2b";
@@ -1306,16 +1302,19 @@ async function handleExecServerMessage(
 		case "readArgs": {
 			const args = execMsg.message.value;
 			if (!args.toolCallId) args.toolCallId = crypto.randomUUID();
+			const isMutationPreflight = legacyMutationToolName(args.toolCallId) !== undefined;
 			// The same composed selector the bridge executes: showing a bare path
 			// for a ranged read makes the returned slice look like the whole
 			// file in every rebuilt transcript.
-			synthesizeCursorExecToolCall(output, stream, state, args.toolCallId, "read", {
-				path: piReadDisplayPath(args.path, args.offset, args.limit),
-			});
+			if (!isMutationPreflight) {
+				synthesizeCursorExecToolCall(output, stream, state, args.toolCallId, "read", {
+					path: piReadDisplayPath(args.path, args.offset, args.limit),
+				});
+			}
 			const { execResult } = await resolveExecHandler(
 				args,
 				execHandlers?.read?.bind(execHandlers),
-				onToolResult,
+				isMutationPreflight ? undefined : onToolResult,
 				toolResult =>
 					buildReadResultFromToolResult(
 						args.path,
@@ -1324,7 +1323,7 @@ async function handleExecServerMessage(
 					),
 				reason => buildReadRejectedResult(args.path, reason),
 				error => buildReadErrorResult(args.path, error),
-				{ toolCallId: args.toolCallId, toolName: "read" },
+				isMutationPreflight ? null : { toolCallId: args.toolCallId, toolName: "read" },
 			);
 			sendExecClientMessage(h2Request, execMsg, "readResult", execResult);
 			return;
@@ -1387,16 +1386,21 @@ async function handleExecServerMessage(
 		case "writeArgs": {
 			const args = execMsg.message.value;
 			if (!args.toolCallId) args.toolCallId = crypto.randomUUID();
+			const logicalToolName = legacyMutationToolName(args.toolCallId) ?? "write";
 			// Match the bridge: prefer `fileText`, fall back to decoded `fileBytes`.
 			const content = args.fileText ?? new TextDecoder().decode(args.fileBytes ?? new Uint8Array());
-			synthesizeCursorExecToolCall(output, stream, state, args.toolCallId, "write", {
+			synthesizeCursorExecToolCall(output, stream, state, args.toolCallId, logicalToolName, {
 				path: args.path,
 				content,
 			});
+			const resultHandler =
+				logicalToolName === "edit" && onToolResult
+					? (result: ToolResultMessage) => onToolResult({ ...result, toolName: logicalToolName })
+					: onToolResult;
 			const { execResult } = await resolveExecHandler(
 				args,
 				execHandlers?.write?.bind(execHandlers),
-				onToolResult,
+				resultHandler,
 				toolResult =>
 					buildWriteResultFromToolResult(
 						{
@@ -1409,7 +1413,7 @@ async function handleExecServerMessage(
 					),
 				reason => buildWriteRejectedResult(args.path, reason),
 				error => buildWriteErrorResult(args.path, error),
-				{ toolCallId: args.toolCallId, toolName: "write" },
+				{ toolCallId: args.toolCallId, toolName: logicalToolName },
 			);
 			sendExecClientMessage(h2Request, execMsg, "writeResult", execResult);
 			return;
@@ -1565,9 +1569,10 @@ async function handleExecServerMessage(
 			}
 			if (execHandlers?.mcp) {
 				const existingBlock = output.content.find(
-					block => block.type === "toolCall" && block.id === mcpCall.toolCallId,
+					(block): block is ToolCall => block.type === "toolCall" && block.id === mcpCall.toolCallId,
 				);
 				if (existingBlock) {
+					existingBlock.arguments = mergeCursorMcpToolCallArgs(existingBlock.arguments, mcpCall.args);
 					markCursorExecResolved(existingBlock);
 				} else {
 					synthesizeCursorExecToolCall(
@@ -1606,7 +1611,7 @@ async function handleExecServerMessage(
 			const toolCallId = execHandlers?.listMcpResources ? crypto.randomUUID() : undefined;
 			if (toolCallId) {
 				synthesizeCursorExecToolCall(output, stream, state, toolCallId, "list_mcp_resources", {
-					server: args.server,
+					...(args.server && { server: args.server }),
 				});
 			}
 			try {
@@ -1670,9 +1675,9 @@ async function handleExecServerMessage(
 			const toolCallId = execHandlers?.readMcpResource ? crypto.randomUUID() : undefined;
 			if (toolCallId) {
 				synthesizeCursorExecToolCall(output, stream, state, toolCallId, "read_mcp_resource", {
-					server: args.server,
+					...(args.server && { server: args.server }),
 					uri: args.uri,
-					download_path: args.downloadPath,
+					...(args.downloadPath && { download_path: args.downloadPath }),
 				});
 			}
 			try {
@@ -2393,10 +2398,6 @@ async function applyToolResultHandler(
 	return updated ?? toolResult;
 }
 
-function toolResultToText(toolResult: ToolResultMessage): string {
-	return toolResult.content.map(item => (item.type === "text" ? item.text : `[${item.mimeType} image]`)).join("\n");
-}
-
 /**
  * The catalog as the paired transcript result records it.
  *
@@ -2416,91 +2417,6 @@ function formatListedMcpResources(
 		return qualifiers ? `- ${server}${resource.uri} (${qualifiers})` : `- ${server}${resource.uri}`;
 	});
 	return [`Listed ${resources.length} MCP resource(s):`, ...lines].join("\n");
-}
-
-function toolResultWasTruncated(toolResult: ToolResultMessage): boolean {
-	if (!toolResult.details || typeof toolResult.details !== "object") {
-		return false;
-	}
-	const truncation = (toolResult.details as { truncation?: { truncated?: boolean } }).truncation;
-	return !!truncation?.truncated;
-}
-
-function toolResultDetailBoolean(toolResult: ToolResultMessage, key: string): boolean {
-	if (!toolResult.details || typeof toolResult.details !== "object") {
-		return false;
-	}
-	const value = (toolResult.details as Record<string, unknown>)[key];
-	return typeof value === "boolean" ? value : false;
-}
-
-/**
- * The file's own line count, when the tool recorded one.
- *
- * `details.meta.truncation.totalLines` is the whole file; the flat
- * `details.truncation.totalLines` counts from the window's start line and is
- * deliberately not consulted here. Absent for a read that returned the file
- * whole, where the payload IS the file and counting it is exact.
- */
-function readTotalLinesFromDetails(toolResult: ToolResultMessage): number | undefined {
-	if (!toolResult.details || typeof toolResult.details !== "object") return undefined;
-	const meta = (toolResult.details as { meta?: { truncation?: { totalLines?: unknown } } }).meta;
-	const totalLines = meta?.truncation?.totalLines;
-	return typeof totalLines === "number" && Number.isFinite(totalLines) ? totalLines : undefined;
-}
-
-function readFileSizeFromDetails(toolResult: ToolResultMessage): number | undefined {
-	const details = toolResult.details;
-	if (!details || typeof details !== "object" || !("fileSize" in details)) return undefined;
-	const { fileSize } = details;
-	return typeof fileSize === "number" && Number.isSafeInteger(fileSize) && fileSize >= 0 ? fileSize : undefined;
-}
-
-function buildReadResultFromToolResult(path: string, toolResult: ToolResultMessage, rangeApplied = false) {
-	const text = toolResultToText(toolResult);
-	if (toolResult.isError) {
-		return buildReadErrorResult(path, text || "Read failed");
-	}
-	// Counting the payload is only the file's length when the payload is the
-	// whole file. Under a composed window it is the window's, and answering a
-	// 20-line page of a 100-line file with `total_lines: 20` tells a paginating
-	// server it has reached the end.
-	const totalLines = readTotalLinesFromDetails(toolResult) ?? (text ? text.split("\n").length : 0);
-	return create(ReadResultSchema, {
-		result: {
-			case: "success",
-			value: create(ReadSuccessSchema, {
-				path,
-				totalLines,
-				fileSize: BigInt(readFileSizeFromDetails(toolResult) ?? Buffer.byteLength(text, "utf-8")),
-				truncated: toolResultWasTruncated(toolResult),
-				output: { case: "content", value: text },
-				// Set when this client composed the frame's window onto the read,
-				// left false when it read the file whole. The proto names the
-				// field but nothing here pins the server's use of it, so the only
-				// safe contract is that it describes what we actually did.
-				rangeApplied,
-			}),
-		},
-	});
-}
-
-function buildReadErrorResult(path: string, error: string) {
-	return create(ReadResultSchema, {
-		result: {
-			case: "error",
-			value: create(ReadErrorSchema, { path, error }),
-		},
-	});
-}
-
-function buildReadRejectedResult(path: string, reason: string) {
-	return create(ReadResultSchema, {
-		result: {
-			case: "rejected",
-			value: create(ReadRejectedSchema, { path, reason }),
-		},
-	});
 }
 
 function buildWriteResultFromToolResult(
@@ -2700,144 +2616,6 @@ function buildLsRejectedResult(path: string, reason: string) {
 		result: {
 			case: "rejected",
 			value: create(LsRejectedSchema, { path, reason }),
-		},
-	});
-}
-
-function buildGrepResultFromToolResult(
-	args: { pattern: string; path?: string; outputMode?: string; offset?: number },
-	toolResult: ToolResultMessage,
-) {
-	const text = toolResultToText(toolResult);
-	if (toolResult.isError) {
-		return buildGrepErrorResult(text || "Grep failed");
-	}
-
-	const outputMode = args.outputMode || "content";
-	const clientTruncated = toolResultDetailBoolean(toolResult, "truncated");
-	const lines = text
-		.split("\n")
-		.map(line => line.trimEnd())
-		.filter(line => line.length > 0 && !line.startsWith("[") && !line.toLowerCase().startsWith("no matches"));
-
-	const workspaceKey = args.path || ".";
-	let unionResult: GrepUnionResult;
-
-	if (outputMode === "files_with_matches") {
-		const files = lines;
-		unionResult = create(GrepUnionResultSchema, {
-			result: {
-				case: "files",
-				value: create(GrepFilesResultSchema, {
-					files,
-					totalFiles: files.length,
-					clientTruncated,
-					ripgrepTruncated: false,
-					// Echoes the offset this client actually applied; absent when
-					// the frame requested none. The proto names the field but
-					// nothing here pins the server's use of it, so it reports what
-					// we did rather than asserting a pagination protocol.
-					offsetApplied: args.offset,
-				}),
-			},
-		});
-	} else if (outputMode === "count") {
-		const counts = lines
-			.map(line => {
-				const separatorIndex = line.lastIndexOf(":");
-				if (separatorIndex === -1) {
-					return null;
-				}
-				const file = line.slice(0, separatorIndex);
-				const count = Number.parseInt(line.slice(separatorIndex + 1), 10);
-				if (!file || Number.isNaN(count)) {
-					return null;
-				}
-				return create(GrepFileCountSchema, { file, count });
-			})
-			.filter((entry): entry is GrepFileCount => entry !== null);
-		const totalMatches = counts.reduce((sum, entry) => sum + entry.count, 0);
-		unionResult = create(GrepUnionResultSchema, {
-			result: {
-				case: "count",
-				value: create(GrepCountResultSchema, {
-					counts,
-					totalFiles: counts.length,
-					totalMatches,
-					clientTruncated,
-					ripgrepTruncated: false,
-					offsetApplied: args.offset,
-				}),
-			},
-		});
-	} else {
-		const matchMap = new Map<string, Array<{ line: number; content: string; isContextLine: boolean }>>();
-		let totalMatchedLines = 0;
-
-		for (const line of lines) {
-			const matchLine = line.match(/^(.+?):(\d+):\s?(.*)$/);
-			const contextLine = line.match(/^(.+?)-(\d+)-\s?(.*)$/);
-			const match = matchLine ?? contextLine;
-			if (!match) {
-				continue;
-			}
-			const [, file, lineNumber, content] = match;
-			const isContextLine = Boolean(contextLine);
-			const list = matchMap.get(file) ?? [];
-			list.push({ line: Number(lineNumber), content, isContextLine });
-			matchMap.set(file, list);
-			if (!isContextLine) {
-				totalMatchedLines += 1;
-			}
-		}
-
-		const matches = Array.from(matchMap.entries()).map(([file, matches]) =>
-			create(GrepFileMatchSchema, {
-				file,
-				matches: matches.map(entry =>
-					create(GrepContentMatchSchema, {
-						lineNumber: entry.line,
-						content: entry.content,
-						contentTruncated: false,
-						isContextLine: entry.isContextLine,
-					}),
-				),
-			}),
-		);
-		const totalLines = matches.reduce((sum, entry) => sum + entry.matches.length, 0);
-		unionResult = create(GrepUnionResultSchema, {
-			result: {
-				case: "content",
-				value: create(GrepContentResultSchema, {
-					matches,
-					totalLines,
-					totalMatchedLines,
-					clientTruncated,
-					ripgrepTruncated: false,
-					offsetApplied: args.offset,
-				}),
-			},
-		});
-	}
-
-	return create(GrepResultSchema, {
-		result: {
-			case: "success",
-			value: create(GrepSuccessSchema, {
-				pattern: args.pattern,
-				path: args.path || "",
-				outputMode,
-				workspaceResults: { [workspaceKey]: unionResult },
-			}),
-		},
-	});
-}
-
-function buildGrepErrorResult(error: string) {
-	return create(GrepResultSchema, {
-		result: {
-			case: "error",
-			value: create(GrepErrorSchema, { error }),
 		},
 	});
 }
@@ -3958,7 +3736,7 @@ function readCursorBlob(blobStore: Map<string, Uint8Array>, blobId: Uint8Array):
  * `implementation`, `type_definition`, `symbols`, ... — have no native frame at
  * all, so filtering the whole tool out hid every one of them from the model.
  */
-const CURSOR_NATIVE_TOOL_NAMES = new Set(["bash", "read", "write", "delete", "ls", "grep", "todo"]);
+const CURSOR_NATIVE_TOOL_NAMES = new Set(["bash", "read", "write", "edit", "delete", "ls", "grep", "todo"]);
 
 export function buildMcpToolDefinitions(tools: Tool[] | undefined): McpToolDefinition[] {
 	if (!tools || tools.length === 0) {
@@ -3970,13 +3748,10 @@ export function buildMcpToolDefinitions(tools: Tool[] | undefined): McpToolDefin
 		return [];
 	}
 
-	// The `write` tool doubles as the xd:// transport: forwarded devices such as
-	// `ast_edit` stage previews finalized only by writing a reason to xd://resolve
-	// or xd://reject. Cursor's native catalog may expose no write path, so
-	// re-include the built-in `write` (dropped as native above) whenever pi-agent
-	// devices are advertised — otherwise a staged preview can never be resolved
-	// and the SoftToolRequirement('write') escalation aborts the turn.
-	const writeTool = tools.find(tool => tool.name === "write");
+	// Deferrable xd:// devices stage previews that only the local write transport
+	// can resolve or reject. Ordinary MCP tools need no duplicate writer.
+	const needsWriteTransport = advertisedTools.some(tool => "deferrable" in tool && tool.deferrable === true);
+	const writeTool = needsWriteTransport ? tools.find(tool => tool.name === "write") : undefined;
 	const forwarded = writeTool ? [...advertisedTools, writeTool] : advertisedTools;
 
 	return forwarded.map(tool => {
@@ -4116,11 +3891,17 @@ function assertCursorKimiK3HistoryReplayable(
 	for (let i = 0; i < historyEnd; i++) {
 		const msg = messages[i];
 		if (msg.role !== "assistant") continue;
+		if (shouldDropTruncatedThinkingOnlyAssistant(msg)) continue;
 		const isSameCursorModel = msg.api === "cursor-agent" && msg.provider === "cursor" && msg.model === targetModelId;
 		const hasThinking = msg.content.some(item => item.type === "thinking" && item.thinking.length > 0);
-		if (!isSameCursorModel || !hasThinking) {
+		if (!isSameCursorModel) {
 			throw new AIError.ValidationError(
 				`Cursor ${targetModelId} requires complete same-model thinking history; start a new session instead of continuing history from ${msg.provider}/${msg.model}.`,
+			);
+		}
+		if (!hasThinking) {
+			throw new AIError.ValidationError(
+				`Cursor ${targetModelId} requires complete same-model thinking history; a prior same-model assistant turn has no thinking.`,
 			);
 		}
 	}

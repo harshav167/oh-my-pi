@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { create, fromBinary, fromJson, toBinary } from "@bufbuild/protobuf";
+import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import {
 	type BlockState,
 	CURSOR_CLIENT_VERSION,
@@ -64,6 +65,7 @@ import {
 	SubagentAwaitArgsSchema,
 	ToolCallSchema,
 	WebFetchAllowlistPrecheckArgsSchema,
+	WriteArgsSchema,
 } from "@oh-my-pi/pi-catalog/discovery/cursor-gen/agent_pb";
 
 /**
@@ -75,13 +77,27 @@ import {
  * `ExecClientMessage` whose oneof never got set still looks like a populated
  * object in memory.
  */
+interface DispatchExecOptions {
+	execHandlers?: CursorExecHandlers;
+	requestContextTools?: McpToolDefinition[];
+	prepare?: (output: AssistantMessage, state: BlockState) => void;
+}
+
 async function dispatchExec(
 	message: ExecServerMessage,
-	options: { execHandlers?: CursorExecHandlers; requestContextTools?: McpToolDefinition[] } = {},
+	options: DispatchExecOptions = {},
+): Promise<{ frames: AgentClientMessage[]; output: AssistantMessage; results: ToolResultMessage[] }> {
+	return dispatchExecSequence([message], options);
+}
+
+async function dispatchExecSequence(
+	messages: readonly ExecServerMessage[],
+	options: DispatchExecOptions = {},
 ): Promise<{ frames: AgentClientMessage[]; output: AssistantMessage; results: ToolResultMessage[] }> {
 	const output = cursorAssistantMessage();
 	const stream = new AssistantMessageEventStream();
 	const state = newBlockState();
+	options.prepare?.(output, state);
 	const written: Buffer[] = [];
 	const h2Request = {
 		write: (chunk: Buffer) => {
@@ -91,21 +107,23 @@ async function dispatchExec(
 	} as unknown as Parameters<typeof handleServerMessage>[5];
 	const results: ToolResultMessage[] = [];
 
-	await handleServerMessage(
-		create(AgentServerMessageSchema, { message: { case: "execServerMessage", value: message } }),
-		output,
-		stream,
-		state,
-		new Map(),
-		h2Request,
-		options.execHandlers,
-		result => {
-			results.push(result);
-			return result;
-		},
-		{ sawTokenDelta: false },
-		options.requestContextTools ?? [],
-	);
+	for (const message of messages) {
+		await handleServerMessage(
+			create(AgentServerMessageSchema, { message: { case: "execServerMessage", value: message } }),
+			output,
+			stream,
+			state,
+			new Map(),
+			h2Request,
+			options.execHandlers,
+			result => {
+				results.push(result);
+				return result;
+			},
+			{ sawTokenDelta: false },
+			options.requestContextTools ?? [],
+		);
+	}
 
 	return { frames: written.map(decodeClientFrame), output, results };
 }
@@ -792,6 +810,16 @@ describe("Cursor MCP resource frames answer from the host's servers", () => {
 		expect(blocks[0].name).toBe("list_mcp_resources");
 		expect(results.map(r => r.toolCallId)).toEqual([blocks[0].id]);
 		expect(results[0].isError).toBe(false);
+	});
+
+	it("omits an absent server filter from the synthesized listing arguments", async () => {
+		const { output } = await dispatchExec(
+			buildExecMessage({ case: "listMcpResourcesExecArgs", value: create(ListMcpResourcesExecArgsSchema, {}) }),
+			{ execHandlers: { listMcpResources: async () => [] } },
+		);
+
+		const call = output.content.find(block => block.type === "toolCall");
+		expect(call?.arguments).toEqual({});
 	});
 
 	it("leaves no block for a listing no handler answered", async () => {
@@ -1645,6 +1673,92 @@ describe("Cursor modern exec frames: server-resolved tool calls leave a paired b
 	});
 });
 
+describe("Cursor legacy Write preflight", () => {
+	it("maps a missing destination read to fileNotFound", async () => {
+		const path = "/repo/new.ts";
+		const { frames } = await dispatchExec(
+			buildExecMessage({
+				case: "readArgs",
+				value: create(ReadArgsSchema, { path, toolCallId: "Write:0-create" }),
+			}),
+			{
+				execHandlers: {
+					async read() {
+						return toolResult(`Path '${path}' not found`, { isError: true });
+					},
+				},
+			},
+		);
+
+		const answer = soleResult(frames);
+		if (answer.case !== "readResult") throw new Error(`got ${answer.case}`);
+		expect(answer.value.result.case).toBe("fileNotFound");
+	});
+
+	it("persists only the logical write when read and write share a Write call id", async () => {
+		const path = "/repo/new.ts";
+		const toolCallId = "Write_0-create";
+		const { frames, output, results } = await dispatchExecSequence(
+			[
+				buildExecMessage({ case: "readArgs", value: create(ReadArgsSchema, { path, toolCallId }) }),
+				buildExecMessage({
+					case: "writeArgs",
+					value: create(WriteArgsSchema, { path, toolCallId, fileText: "created\n" }),
+				}),
+			],
+			{
+				execHandlers: {
+					async read() {
+						return toolResult(`Path '${path}' not found`, { isError: true });
+					},
+					async write() {
+						return toolResult("Successfully wrote new.ts", { toolCallId, toolName: "write" });
+					},
+				},
+			},
+		);
+
+		expect(frames).toHaveLength(2);
+		expect(output.content.filter(block => block.type === "toolCall")).toEqual([
+			expect.objectContaining({ id: toolCallId, name: "write" }),
+		]);
+		expect(results.map(result => ({ id: result.toolCallId, name: result.toolName }))).toEqual([
+			{ id: toolCallId, name: "write" },
+		]);
+	});
+
+	it("persists a legacy native edit as one logical edit", async () => {
+		const path = "/repo/existing.ts";
+		const toolCallId = "StrReplace_0-edit";
+		const { output, results } = await dispatchExecSequence(
+			[
+				buildExecMessage({ case: "readArgs", value: create(ReadArgsSchema, { path, toolCallId }) }),
+				buildExecMessage({
+					case: "writeArgs",
+					value: create(WriteArgsSchema, { path, toolCallId, fileText: "updated\n" }),
+				}),
+			],
+			{
+				execHandlers: {
+					async read() {
+						return toolResult("original", { toolCallId, toolName: "read" });
+					},
+					async write() {
+						return toolResult("updated", { toolCallId, toolName: "write" });
+					},
+				},
+			},
+		);
+
+		expect(output.content.filter(block => block.type === "toolCall")).toEqual([
+			expect.objectContaining({ id: toolCallId, name: "edit" }),
+		]);
+		expect(results.map(result => ({ id: result.toolCallId, name: result.toolName }))).toEqual([
+			{ id: toolCallId, name: "edit" },
+		]);
+	});
+});
+
 describe("Cursor legacy read frame: range reporting", () => {
 	it("reports rangeApplied only when the frame asked for a window", async () => {
 		// The field reports whether the frame's window was actually composed
@@ -1782,6 +1896,64 @@ describe("Cursor legacy grep frame: offset reporting", () => {
 		const call = output.content.find(block => block.type === "toolCall");
 		expect(call?.arguments).toMatchObject({ pattern: "needle", path: "src", skip: 20 });
 	});
+
+	it("converts grouped plain and hashline output into typed matches", async () => {
+		const { frames } = await dispatchExec(
+			buildExecMessage({
+				case: "grepArgs",
+				value: create(GrepArgsSchema, { pattern: "needle", path: ".", toolCallId: "grep-grouped" }),
+			}),
+			{
+				execHandlers: {
+					async grep() {
+						return toolResult(
+							"# src/\n## a.ts\n*3|needle one\n 4|context\n\n## nested/\n### b.ts\n*9:needle two",
+							{ details: { matchCount: 2 } },
+						);
+					},
+				},
+			},
+		);
+
+		const answer = soleResult(frames);
+		if (answer.case !== "grepResult") throw new Error(`got ${answer.case}`);
+		if (answer.value.result.case !== "success") throw new Error(`got ${answer.value.result.case}`);
+		const content = answer.value.result.value.workspaceResults["."]?.result;
+		if (content?.case !== "content") throw new Error(`got ${content?.case}`);
+		expect(content.value.matches).toMatchObject([
+			{
+				file: "src/a.ts",
+				matches: [
+					{ lineNumber: 3, content: "needle one", contentTruncated: false, isContextLine: false },
+					{ lineNumber: 4, content: "context", contentTruncated: false, isContextLine: true },
+				],
+			},
+			{
+				file: "src/nested/b.ts",
+				matches: [{ lineNumber: 9, content: "needle two", contentTruncated: false, isContextLine: false }],
+			},
+		]);
+	});
+
+	it("returns an error instead of empty success when non-empty matches cannot be decoded", async () => {
+		const { frames } = await dispatchExec(
+			buildExecMessage({
+				case: "grepArgs",
+				value: create(GrepArgsSchema, { pattern: "needle", path: ".", toolCallId: "grep-unknown" }),
+			}),
+			{
+				execHandlers: {
+					async grep() {
+						return toolResult("opaque match output", { details: { matchCount: 1 } });
+					},
+				},
+			},
+		);
+
+		const answer = soleResult(frames);
+		if (answer.case !== "grepResult") throw new Error(`got ${answer.case}`);
+		expect(answer.value.result.case).toBe("error");
+	});
 });
 
 describe("Cursor MCP frame: approval-only probes", () => {
@@ -1918,6 +2090,45 @@ describe("Cursor MCP frame: approval-only probes", () => {
 		if (answer.case !== "mcpResult") throw new Error(`got ${answer.case}`);
 		expect(answer.value.result.case).toBe("success");
 	});
+
+	it("merges exec arguments into an existing streamed MCP block", async () => {
+		let executedArgs: Record<string, unknown> | undefined;
+		const encode = (value: string) => toBinary(ValueSchema, fromJson(ValueSchema, value));
+		const { output } = await dispatchExec(
+			buildExecMessage({
+				case: "mcpArgs",
+				value: create(McpArgsSchema, {
+					name: "write",
+					toolName: "write",
+					toolCallId: "mcp-merge",
+					providerIdentifier: "pi-agent",
+					args: { path: encode("new.txt"), content: encode("created") },
+				}),
+			}),
+			{
+				prepare: output => {
+					output.content.push({
+						type: "toolCall",
+						id: "mcp-merge",
+						name: "write",
+						arguments: { path: "stale.txt" },
+					});
+				},
+				execHandlers: {
+					async mcp(call) {
+						executedArgs = call.args;
+						return toolResult("written");
+					},
+				},
+			},
+		);
+
+		const call = output.content.find(
+			(block): block is ToolCallState => block.type === "toolCall" && block.id === "mcp-merge",
+		);
+		expect(call?.arguments).toEqual({ path: "new.txt", content: "created" });
+		expect(executedArgs).toEqual({ path: "new.txt", content: "created" });
+	});
 });
 
 describe("Cursor exec answers: what the result claims about the work", () => {
@@ -1954,6 +2165,42 @@ describe("Cursor exec answers: what the result claims about the work", () => {
 		expect(answer.value.result.value.totalLines).toBe(101);
 		expect(answer.value.result.value.rangeApplied).toBe(true);
 		expect(answer.value.result.value.fileSize).toBe(4096n);
+	});
+
+	it("uses an explicit whole-file count for an untruncated EOF range", async () => {
+		const { frames } = await dispatchExec(
+			buildExecMessage({
+				case: "readArgs",
+				value: create(ReadArgsSchema, { path: "/repo/small.ts", toolCallId: "range-eof", offset: 4, limit: 20 }),
+			}),
+			{
+				execHandlers: {
+					async read() {
+						return toolResult("line4\nline5", { details: { totalFileLines: 5 } });
+					},
+				},
+			},
+		);
+
+		const answer = soleResult(frames);
+		if (answer.case !== "readResult") throw new Error(`got ${answer.case}`);
+		if (answer.value.result.case !== "success") throw new Error(`got ${answer.value.result.case}`);
+		expect(answer.value.result.value.totalLines).toBe(5);
+	});
+
+	it("reports an unknown whole-file count as zero for a ranged read", async () => {
+		const { frames } = await dispatchExec(
+			buildExecMessage({
+				case: "readArgs",
+				value: create(ReadArgsSchema, { path: "/repo/big.ts", toolCallId: "range-unknown", offset: 4, limit: 2 }),
+			}),
+			{ execHandlers: { read: async () => toolResult("line4\nline5") } },
+		);
+
+		const answer = soleResult(frames);
+		if (answer.case !== "readResult") throw new Error(`got ${answer.case}`);
+		if (answer.value.result.case !== "success") throw new Error(`got ${answer.value.result.case}`);
+		expect(answer.value.result.value.totalLines).toBe(0);
 	});
 
 	it("counts the payload when the read returned the file whole", async () => {

@@ -17,6 +17,8 @@ import type {
 	CursorExecHandlers as ICursorExecHandlers,
 	ToolResultMessage,
 } from "@oh-my-pi/pi-ai";
+import { validateToolArguments } from "@oh-my-pi/pi-ai";
+import { legacyMutationToolName } from "@oh-my-pi/pi-ai/providers/cursor/exec-legacy";
 import {
 	piEscapeRegexLiteral,
 	piGrepSkip,
@@ -86,10 +88,7 @@ interface CursorExecBridgeOptions {
 	 *
 	 * This is a grant, not a policy: it answers "did the session hand this
 	 * channel a file-writing tool", which callers derive from their own roster
-	 * before any bridge-specific rewriting. The primary Cursor session moves
-	 * `edit` out of {@link tools} and serves it through
-	 * {@link getEditReplaceTool}, so reading the map here would deny an
-	 * edit-only session. Defaults to allowed
+	 * before any bridge-specific rewriting. Defaults to allowed
 	 * to preserve the primary agent's behavior; callers with a restricted tool
 	 * set (advisors) opt out. The user's approval policy is resolved separately,
 	 * per call.
@@ -226,6 +225,49 @@ function buildToolErrorResult(message: string): AgentToolResult<unknown> {
 	};
 }
 
+function definedToolArgs(args: Record<string, unknown>): Record<string, unknown> {
+	let normalized: Record<string, unknown> | undefined;
+	for (const [key, value] of Object.entries(args)) {
+		if (value !== undefined) continue;
+		normalized ??= { ...args };
+		delete normalized[key];
+	}
+	return normalized ?? args;
+}
+
+type CursorExecutionCall = {
+	readonly id: string;
+	readonly name: string;
+	readonly args: Record<string, unknown>;
+};
+
+type CursorArgumentValidation =
+	| { readonly valid: true; readonly args: Record<string, unknown> }
+	| { readonly valid: false; readonly message: string };
+
+function validateCursorArguments(tool: CursorBridgeTool, call: CursorExecutionCall): CursorArgumentValidation {
+	const args = definedToolArgs(call.args);
+	try {
+		return {
+			valid: true,
+			args: validateToolArguments(tool, {
+				type: "toolCall",
+				id: call.id,
+				name: call.name,
+				arguments: args,
+			}),
+		};
+	} catch (error) {
+		if (!tool.lenientArgValidation) {
+			return { valid: false, message: error instanceof Error ? error.message : String(error) };
+		}
+		const fallback = { ...args };
+		delete fallback.__parseError;
+		delete fallback.__rawJson;
+		return { valid: true, args: fallback };
+	}
+}
+
 async function executeTool(
 	options: CursorExecBridgeOptions,
 	toolName: string,
@@ -239,7 +281,13 @@ async function executeTool(
 		return createToolResultMessage(toolCallId, toolName, result, true);
 	}
 
-	options.emitEvent?.({ type: "tool_execution_start", toolCallId, toolName, args });
+	const validation = validateCursorArguments(tool, { id: toolCallId, name: toolName, args });
+	if (!validation.valid) {
+		return createToolResultMessage(toolCallId, toolName, buildToolErrorResult(validation.message), true);
+	}
+	const effectiveArgs = validation.args;
+
+	options.emitEvent?.({ type: "tool_execution_start", toolCallId, toolName, args: effectiveArgs });
 
 	let result: AgentToolResult<unknown>;
 	let isError = false;
@@ -254,20 +302,14 @@ async function executeTool(
 					type: "tool_execution_update",
 					toolCallId,
 					toolName,
-					args,
+					args: effectiveArgs,
 					partialResult: sanitizedResult,
 				});
 			}
 		: undefined;
 
 	try {
-		result = await tool.execute(
-			toolCallId,
-			args as Record<string, unknown>,
-			undefined,
-			onUpdate,
-			options.getToolContext?.(),
-		);
+		result = await tool.execute(toolCallId, effectiveArgs, undefined, onUpdate, options.getToolContext?.());
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		result = buildToolErrorResult(message);
@@ -424,6 +466,29 @@ function buildTodoSyncResult(
 	};
 }
 
+function legacyMutationReadOptions(options: CursorExecBridgeOptions, toolCallId: string): CursorExecBridgeOptions {
+	return legacyMutationToolName(toolCallId) && options.emitEvent ? { ...options, emitEvent: undefined } : options;
+}
+
+function legacyMutationWriteOptions(options: CursorExecBridgeOptions, toolCallId: string): CursorExecBridgeOptions {
+	if (legacyMutationToolName(toolCallId) !== "edit" || !options.emitEvent) return options;
+	const emitEvent = options.emitEvent;
+	return {
+		...options,
+		emitEvent: event => {
+			switch (event.type) {
+				case "tool_execution_start":
+				case "tool_execution_update":
+				case "tool_execution_end":
+					emitEvent({ ...event, toolName: "edit" });
+					return;
+				default:
+					emitEvent(event);
+			}
+		},
+	};
+}
+
 export class CursorExecHandlers implements ICursorExecHandlers {
 	constructor(private options: CursorExecBridgeOptions) {}
 
@@ -441,7 +506,9 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		if (composed === null) {
 			return createToolResultMessage(toolCallId, "read", { content: [{ type: "text", text: "" }] }, false);
 		}
-		return await executeTool(this.options, "read", toolCallId, { path: composed });
+		return await executeTool(legacyMutationReadOptions(this.options, toolCallId), "read", toolCallId, {
+			path: composed,
+		});
 	}
 
 	async ls(args: Parameters<NonNullable<ICursorExecHandlers["ls"]>>[0]) {
@@ -472,10 +539,15 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 	async write(args: Parameters<NonNullable<ICursorExecHandlers["write"]>>[0]) {
 		const toolCallId = decodeToolCallId(args.toolCallId);
 		const content = args.fileText ?? new TextDecoder().decode(args.fileBytes ?? new Uint8Array());
-		const toolResultMessage = await executeTool(this.options, "write", toolCallId, {
-			path: args.path,
-			content,
-		});
+		const toolResultMessage = await executeTool(
+			legacyMutationWriteOptions(this.options, toolCallId),
+			"write",
+			toolCallId,
+			{
+				path: args.path,
+				content,
+			},
+		);
 		return toolResultMessage;
 	}
 
@@ -514,8 +586,13 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 			cwd: args.workingDirectory || undefined,
 			timeout: timeoutSeconds,
 		};
+		const validation = validateCursorArguments(tool, { id: toolCallId, name: toolName, args: toolArgs });
+		if (!validation.valid) {
+			return createToolResultMessage(toolCallId, toolName, buildToolErrorResult(validation.message), true);
+		}
+		const effectiveArgs = validation.args;
 
-		this.options.emitEvent?.({ type: "tool_execution_start", toolCallId, toolName, args: toolArgs });
+		this.options.emitEvent?.({ type: "tool_execution_start", toolCallId, toolName, args: effectiveArgs });
 
 		let result: AgentToolResult<unknown>;
 		let isError = false;
@@ -539,7 +616,7 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 				type: "tool_execution_update",
 				toolCallId,
 				toolName,
-				args: toolArgs,
+				args: effectiveArgs,
 				partialResult: sanitizedPartialResult,
 			});
 			if (!canStreamSanitizedDelta) {
@@ -560,7 +637,7 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		};
 
 		try {
-			result = await tool.execute(toolCallId, toolArgs, undefined, onUpdate, this.options.getToolContext?.());
+			result = await tool.execute(toolCallId, effectiveArgs, undefined, onUpdate, this.options.getToolContext?.());
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			result = buildToolErrorResult(message);

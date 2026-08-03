@@ -737,6 +737,8 @@ export interface ReadToolDetails {
 	meta?: OutputMeta;
 	/** Full on-disk byte size recorded before applying a file range. */
 	fileSize?: number;
+	/** Whole source line count when the read inspected the complete source. */
+	totalFileLines?: number;
 	/** Raw text + start line for user-visible TUI rendering, set when content is text-like.
 	 * Mirrors the same lines the model receives but without hashline/line-number prefixes,
 	 * so the TUI can render the file content with its own gutter without re-parsing the formatted text. */
@@ -1397,6 +1399,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		const details = options.details ?? {};
 		const allLines = text.split("\n");
 		const totalLines = allLines.length;
+		details.totalFileLines = totalLines;
 		// User-requested 0-indexed range start. Lines BEFORE this are leading
 		// context (added below if offset is explicit).
 		const requestedStart = offset ? Math.max(0, offset - 1) : 0;
@@ -1592,6 +1595,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		const details = options.details ?? {};
 		const allLines = text.split("\n");
 		const totalLines = allLines.length;
+		details.totalFileLines = totalLines;
 		const shouldAddHashLines = displayMode.hashLines;
 		const shouldAddLineNumbers = shouldAddHashLines ? false : displayMode.lineNumbers;
 		const hashContext =
@@ -2908,6 +2912,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 						details = {};
 						sourcePath = absolutePath;
 					}
+					if (reachedEof) details.totalFileLines = totalFileLines;
 
 					if (hashContext?.tag) {
 						recordSeenLinesFromBody(this.session, absolutePath, hashContext.tag, outputText);

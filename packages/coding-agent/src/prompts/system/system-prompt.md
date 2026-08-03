@@ -63,6 +63,9 @@ Special URLs for internal resources; with most FS/bash tools they auto-resolve t
 - `security://scans[/<id>/…]`: read-only OMP security scans, findings, coverage, reports, SARIF, and provenance
 {{/if}}
 - `local://<name>.md`: plan artifacts or shared content for subagents
+{{#if autoQaEnabled}}
+- `xd://report_issue`: report unexpected tool behavior by writing `<tool>: <concise description>`
+{{/if}}
 {{#if hasObsidian}}
 - `vault://<vault>/<path>`: Obsidian vault (read/edit). `vault://` lists vaults; `vault://_/…` targets the active vault. File ops `?op=outline|backlinks|links|tags|properties|tasks|base|…`; vault ops `?op=search&q=…|daily|tasks|orphans|unresolved|bases|…`.
 {{/if}}

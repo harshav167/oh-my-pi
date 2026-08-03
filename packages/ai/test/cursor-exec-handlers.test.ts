@@ -761,6 +761,33 @@ describe("Cursor history encoding", () => {
 		);
 	});
 
+	it("ignores an empty aborted same-model K3 turn during replay", () => {
+		const messages: Context["messages"] = [
+			{ role: "user", content: "Start the task.", timestamp: 1 },
+			cursorAssistant("kimi-k3-high", [], 2, "aborted"),
+			{ role: "user", content: "Continue.", timestamp: 3 },
+		];
+
+		const history = buildCursorHistoryForTest(messages, undefined, "kimi-k3-high");
+
+		expect(history.rootPromptMessagesJson).toEqual([
+			{ role: "user", content: [{ type: "text", text: "Start the task." }] },
+		]);
+		expect(history.turnStepMessagesJson).toEqual([[]]);
+	});
+
+	it("rejects non-empty same-model K3 history without thinking", () => {
+		const messages: Context["messages"] = [
+			{ role: "user", content: "Start the task.", timestamp: 1 },
+			cursorAssistant("kimi-k3-high", [{ type: "text", text: "Visible but incomplete." }], 2, "error"),
+			{ role: "user", content: "Continue.", timestamp: 3 },
+		];
+
+		expect(() => buildCursorHistoryForTest(messages, undefined, "kimi-k3-high")).toThrow(
+			"requires complete same-model thinking history",
+		);
+	});
+
 	it("keeps non-K3 Cursor thinking out of model-facing history", () => {
 		const messages: Context["messages"] = [
 			{ role: "user", content: "Inspect package.json", timestamp: 1 },

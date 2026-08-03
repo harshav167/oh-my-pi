@@ -2,10 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { buildMcpToolDefinitions } from "@oh-my-pi/pi-ai/providers/cursor";
 import type { Tool } from "@oh-my-pi/pi-ai/types";
 
-const tool = (name: string): Tool => ({
+const tool = (name: string, deferrable = false): Tool & { deferrable?: boolean } => ({
 	name,
 	description: `${name} tool`,
 	parameters: { type: "object", properties: {} },
+	...(deferrable ? { deferrable: true } : {}),
 });
 
 describe("cursor buildMcpToolDefinitions", () => {
@@ -18,7 +19,7 @@ describe("cursor buildMcpToolDefinitions", () => {
 			tool("write"),
 			tool("bash"),
 			tool("todo"),
-			tool("ast_edit"),
+			tool("ast_edit", true),
 			tool("task"),
 		]);
 		const names = defs.map(def => def.name);
@@ -40,8 +41,16 @@ describe("cursor buildMcpToolDefinitions", () => {
 		expect(writeDef?.toolName).toBe("write");
 	});
 
+	it("does not add the write transport for ordinary non-native tools", () => {
+		const names = buildMcpToolDefinitions([tool("read"), tool("write"), tool("lsp")]).map(def => def.name);
+
+		expect(names).toEqual(["lsp"]);
+	});
+
 	it("keeps write out when only native tools are advertised (no pi-agent device needs resolution)", () => {
-		const names = buildMcpToolDefinitions([tool("read"), tool("write"), tool("bash")]).map(def => def.name);
+		const names = buildMcpToolDefinitions([tool("read"), tool("write"), tool("edit"), tool("bash")]).map(
+			def => def.name,
+		);
 		expect(names).toEqual([]);
 	});
 

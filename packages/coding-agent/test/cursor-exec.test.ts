@@ -30,6 +30,7 @@ import { ExtensionToolWrapper } from "@oh-my-pi/pi-coding-agent/extensibility/ex
 import { BUILTIN_TOOLS, GrepTool, ReadTool, type Tool, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { BashTool } from "@oh-my-pi/pi-coding-agent/tools/bash";
 import type { TruncationMeta } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
+import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
 import { removeWithRetries } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import { AdviseTool } from "../src/advisor/advise-tool";
@@ -729,6 +730,31 @@ describe("CursorExecHandlers mounted tool bridge", () => {
 
 		expect(result.isError).toBe(false);
 		expect(result.content).toEqual([{ type: "text", text: "reported" }]);
+	});
+
+	it("rejects malformed MCP arguments before entering the tool", async () => {
+		const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cursor-invalid-write-"));
+		const target = path.join(cwd, "new.txt");
+		try {
+			const handlers = new CursorExecHandlers({
+				cwd,
+				tools: new Map<string, Tool>([["write", new WriteTool(createTestSession(cwd))]]),
+			});
+			const result = await handlers.mcp({
+				name: "write",
+				providerIdentifier: "pi-agent",
+				toolName: "write",
+				toolCallId: "call-invalid-write",
+				args: { path: target },
+				rawArgs: {},
+			});
+
+			expect(result.isError).toBe(true);
+			expect(await Bun.file(target).exists()).toBe(false);
+			expect(result.content.find(block => block.type === "text")?.text).toContain("content");
+		} finally {
+			await removeWithRetries(cwd);
+		}
 	});
 
 	it("routes wrapped mounted devices through the approval gate", async () => {
@@ -1527,6 +1553,56 @@ describe("CursorExecHandlers Pi frame translation", () => {
 		return { handlers, calls };
 	}
 
+	it("emits only logical write and edit events for legacy mutations", async () => {
+		const calls: string[] = [];
+		const events: AgentEvent[] = [];
+		const readTool: AgentTool = {
+			name: "read",
+			label: "Read",
+			description: "records reads",
+			parameters: type({ path: "string" }),
+			execute: async () => {
+				calls.push("read");
+				return { content: [{ type: "text", text: "original" }] };
+			},
+		};
+		const writeTool: AgentTool = {
+			name: "write",
+			label: "Write",
+			description: "records writes",
+			parameters: type({ path: "string", content: "string" }),
+			execute: async () => {
+				calls.push("write");
+				return { content: [{ type: "text", text: "updated" }] };
+			},
+		};
+		const handlers = new CursorExecHandlers({
+			cwd,
+			tools: new Map([
+				["read", readTool],
+				["write", writeTool],
+			]),
+			emitEvent: event => events.push(event),
+		});
+
+		for (const toolCallId of ["Write_0-create", "StrReplace_0-edit"]) {
+			await handlers.read({ toolCallId, path: "a.txt" } as never);
+			await handlers.write({ toolCallId, path: "a.txt", fileText: "updated" } as never);
+		}
+
+		expect(calls).toEqual(["read", "write", "read", "write"]);
+		expect(
+			events.map(event =>
+				"toolName" in event ? { type: event.type, toolName: event.toolName } : { type: event.type },
+			),
+		).toEqual([
+			{ type: "tool_execution_start", toolName: "write" },
+			{ type: "tool_execution_end", toolName: "write" },
+			{ type: "tool_execution_start", toolName: "edit" },
+			{ type: "tool_execution_end", toolName: "edit" },
+		]);
+	});
+
 	it("inverts pi_grep's ignore_case into the local tool's case-sensitivity flag", async () => {
 		// `ignore_case` and `case` are opposites. Passing the frame's value
 		// straight through would flip every search's matching.
@@ -1650,6 +1726,23 @@ describe("CursorExecHandlers Pi frame translation", () => {
 				.join("");
 
 			expect(text.trimEnd().split("\n")).toEqual(Array.from({ length: 20 }, (_, i) => `line${i + 5}`));
+		} finally {
+			await removeWithRetries(cwd);
+		}
+	});
+
+	it("records the whole-file line count when a ranged read reaches EOF", async () => {
+		const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cursor-read-eof-"));
+		try {
+			await Bun.write(path.join(cwd, "n.txt"), "line1\nline2\nline3\nline4\nline5");
+			const handlers = new CursorExecHandlers({
+				cwd,
+				tools: new Map<string, Tool>([["read", new ReadTool(createTestSession(cwd))]]),
+			});
+
+			const result = await handlers.read({ toolCallId: "read-eof", path: "n.txt", offset: 4, limit: 20 } as never);
+
+			expect((result.details as { totalFileLines?: number } | undefined)?.totalFileLines).toBe(5);
 		} finally {
 			await removeWithRetries(cwd);
 		}

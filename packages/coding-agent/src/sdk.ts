@@ -2673,11 +2673,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		for (const tool of toolRegistry.values()) {
 			toolRegistry.set(tool.name, new ExtensionToolWrapper(tool, extensionRunner));
 		}
-		// Cursor's own client owns file edits, so `edit` is not advertised to the
-		// model (commit 8ba0498eb: full-file `write` is used instead). The exec
-		// bridge is a different consumer: the server sends native `pi_edit`
-		// frames regardless of the advertised catalog, and answering them needs
-		// a real tool.
+		// Cursor owns edit invocation through native `pi_edit` frames. Keep the
+		// granted registry tool for capability accounting and model switches; the
+		// provider filters it from the duplicate lower-case MCP catalog.
 		//
 		// It must be a `replace`-mode instance. `PiEditExecArgs` carries
 		// `old_string`/`new_string` replacements, which is exactly `replace`'s schema and
@@ -2685,8 +2683,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// not match the tool's parameters at all. The registry instance follows
 		// the session's configured mode, so the bridge builds its own.
 		//
-		// The grant is captured HERE, before the Cursor branch below deletes
-		// `edit` from the registry, and independently of the session's provider:
+		// The grant is captured independently of the session's provider:
 		// a session that starts on another provider can switch to Cursor later,
 		// and the roster is built once, at session creation. Reading the registry
 		// at frame time would see the switched-to state, not the grant.
@@ -2710,11 +2707,6 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// resource-download frames that mutate files without running a registry
 		// tool, so it needs the grant as the session actually made it.
 		const cursorCanMutateFiles = editWasGranted || toolRegistry.has("write");
-		if (model?.provider === "cursor") {
-			toolRegistry.delete("edit");
-			builtInRegistryToolNames.delete("edit");
-		}
-
 		let writeRegistration: Promise<boolean> | undefined;
 		const ensureWriteRegistered = (): Promise<boolean> => {
 			if (toolRegistry.has("write")) return Promise.resolve(builtInRegistryToolNames.has("write"));
@@ -2858,11 +2850,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				appendParts.push(
 					prompt
 						.render(cursorToolSurfacePrompt, {
-							hasAnyHarness: toolNames.some(name => ["read", "grep", "glob", "write", "bash"].includes(name)),
+							hasAnyHarness: toolNames.some(name =>
+								["read", "grep", "glob", "write", "edit", "bash"].includes(name),
+							),
 							hasRead: toolNames.includes("read"),
 							hasGrep,
 							hasGlob,
 							hasWrite: toolNames.includes("write"),
+							hasEdit: toolNames.includes("edit"),
 							hasBash: toolNames.includes("bash"),
 							hasSearch: hasGrep || hasGlob,
 						})

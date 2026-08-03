@@ -165,6 +165,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 
 		try {
 			await session.refreshMCPTools([externalMcpTool]);
+			expect(session.getActiveToolNames()).toContain("edit");
 			const deviceNames = session.getXdevToolEntries().map(entry => entry.name);
 			expect(deviceNames).toEqual(expect.arrayContaining(["ast_edit", "mcp__fixture_report"]));
 			expect(session.getActiveToolNames()).not.toContain("mcp__fixture_report");
@@ -177,42 +178,32 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		}
 	});
 
-	it("injects Cursor tool-surface guidance into Cursor sessions and provider-facing prompt packing", async () => {
+	it("injects Cursor-native tool guidance only into Cursor prompt packing", async () => {
 		const tempDir = makeTempDir();
 		const cursorModel = getBundledModel("cursor", "composer-1.5");
 		if (!cursorModel) throw new Error("expected bundled Cursor model");
-
-		const { session: cursorSession } = await createAgentSession({
-			...baseOptions(tempDir),
-			model: cursorModel,
-		});
+		const { session: cursorSession } = await createAgentSession({ ...baseOptions(tempDir), model: cursorModel });
 		const { session: otherSession } = await createAgentSession(baseOptions(makeTempDir()));
 
 		try {
 			const cursorPrompt = cursorSession.systemPrompt.join("\n");
-			expect(cursorPrompt).toContain("Cursor Transport Tool Surface");
-			expect(cursorPrompt).toContain("StrReplace");
-			expect(cursorPrompt).toContain("Prefer `grep` / `glob` / `read`");
-			expect(cursorPrompt).toContain("Mutate: `write`");
-			expect(cursorPrompt).toContain("Shell: `bash`");
-
+			expect(cursorPrompt).toContain("native `Read`");
+			expect(cursorPrompt).toContain("native `Write`");
+			expect(cursorPrompt).toContain("native `Edit`");
+			expect(cursorPrompt).toContain("native `Shell`");
 			const packed = buildCursorSystemPromptJsons(cursorSession.systemPrompt);
-			expect(packed.some(json => json.includes("Cursor Transport Tool Surface"))).toBe(true);
-			expect(packed.some(json => json.includes("StrReplace"))).toBe(true);
-
-			const otherPrompt = otherSession.systemPrompt.join("\n");
-			expect(otherPrompt).not.toContain("Cursor Transport Tool Surface");
+			expect(packed.some(json => json.includes("native `Edit`"))).toBe(true);
+			expect(otherSession.systemPrompt.join("\n")).not.toContain("native `Edit`");
 		} finally {
 			await cursorSession.dispose();
 			await otherSession.dispose();
 		}
 	});
 
-	it("scopes Cursor tool-surface guidance to the session's active tools", async () => {
+	it("scopes Cursor-native tool guidance to active tools", async () => {
 		const tempDir = makeTempDir();
 		const cursorModel = getBundledModel("cursor", "composer-1.5");
 		if (!cursorModel) throw new Error("expected bundled Cursor model");
-
 		const { session } = await createAgentSession({
 			...baseOptions(tempDir),
 			model: cursorModel,
@@ -222,12 +213,10 @@ describe("createAgentSession defaultInactive tool activation", () => {
 
 		try {
 			const promptText = session.systemPrompt.join("\n");
-			expect(promptText).toContain("Cursor Transport Tool Surface");
-			expect(promptText).toContain("StrReplace");
-			expect(promptText).toContain("Read: `read`");
-			expect(promptText).not.toContain("Mutate: `write`");
-			expect(promptText).not.toContain("Shell: `bash`");
-			expect(promptText).not.toContain("Prefer `grep`");
+			expect(promptText).toContain("native `Read`");
+			expect(promptText).not.toContain("native `Write`");
+			expect(promptText).not.toContain("native `Edit`");
+			expect(promptText).not.toContain("native `Shell`");
 		} finally {
 			await session.dispose();
 		}
@@ -688,10 +677,9 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		}
 	});
 
-	// A session created on another provider keeps its configured-mode `edit` in
-	// the registry (only a Cursor-created session moves it out) and the tool
-	// roster is built once, at creation — switching to Cursor later does not
-	// rebuild it. These two cover both directions of that wiring: the granted
+	// The tool roster is built once at session creation — switching to Cursor
+	// later does not rebuild it. These two cover both directions of that wiring:
+	// the granted
 	// session must still reach a replace-mode instance for `pi_edit` (whose
 	// `old_string`/`new_string` args do not validate against the default `hashline`
 	// schema), and the restricted one must still be refused.

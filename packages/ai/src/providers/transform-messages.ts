@@ -227,7 +227,7 @@ function sanitizeMalformedToolCalls(messages: Message[]): Message[] {
 	return result;
 }
 
-function shouldDropTruncatedThinkingOnlyAssistant(msg: AssistantMessage): boolean {
+export function shouldDropTruncatedThinkingOnlyAssistant(msg: AssistantMessage): boolean {
 	const isTruncatedStop = msg.stopReason === "length" || msg.stopReason === "error" || msg.stopReason === "aborted";
 	return isTruncatedStop && !msg.content.some(block => block.type === "toolCall" || block.type === "text");
 }
