@@ -7,16 +7,18 @@ export const OUTPUT_RELEASE_MS = 400;
 /**
  * Debounced assistant-speech detector over native output-level windows (~50 ms each).
  *
- * Rises on the first loud window and falls only after {@link OUTPUT_RELEASE_MS} without
+ * Rises on the first loud window and falls only after the configured release hold without
  * another, so pauses between words do not flip the live phase between `speaking` and
  * `listening`. Used by `LiveSessionController`, which re-derives its phase on `onRelease`.
  */
 export class OutputActivity {
 	readonly #onRelease: () => void;
+	readonly #releaseMs: number;
 	#releaseTimer: NodeJS.Timeout | undefined;
 
-	constructor(onRelease: () => void) {
+	constructor(onRelease: () => void, releaseMs = OUTPUT_RELEASE_MS) {
 		this.#onRelease = onRelease;
+		this.#releaseMs = releaseMs;
 	}
 
 	/** Whether the assistant is speaking, including the release hold. */
@@ -31,7 +33,7 @@ export class OutputActivity {
 		this.#releaseTimer = setTimeout(() => {
 			this.#releaseTimer = undefined;
 			this.#onRelease();
-		}, OUTPUT_RELEASE_MS);
+		}, this.#releaseMs);
 	}
 
 	/** Cancels a pending release without notifying. */

@@ -12,6 +12,7 @@ import {
 	LIVE_VOICE_END_INSTRUCTIONS,
 	spokenSinceLastRequest,
 } from "./delegation";
+import { OUTPUT_ACTIVE_LEVEL, OutputActivity } from "./output-activity";
 import liveInstructionsTemplate from "./prompts/live-instructions.md" with { type: "text" };
 import {
 	buildDelegationContextAppend,
@@ -30,8 +31,6 @@ import { CodexLiveTransport, LiveStartupInterruptedError } from "./transport";
 import { cfgLiveAnswerLength } from "./settings";
 import { DEFAULT_LIVE_VOICE } from "./voices";
 
-/** Speaker level above which the voice counts as audibly speaking. */
-const OUTPUT_ACTIVE_LEVEL = 0.015;
 /** Codex keeps the speaker counted as active this long after its last audible level. */
 const SPEAKER_ACTIVITY_HOLD_MS = 500;
 
@@ -141,7 +140,10 @@ export class LiveSessionController {
 	/** Last pair passed to `onLevels`; repeated identical levels are not re-emitted. */
 	#emittedInputLevel = -1;
 	#emittedOutputLevel = -1;
-	#speakerActiveUntil = 0;
+	readonly #outputActivity = new OutputActivity(
+		() => this.#guardEvent(() => this.#refreshAudioPhase()),
+		SPEAKER_ACTIVITY_HOLD_MS,
+	);
 	#activeDelegationId: string | undefined;
 	#userTranscript = "";
 	#assistantTranscript = "";
@@ -270,6 +272,7 @@ export class LiveSessionController {
 
 	async #stop(): Promise<void> {
 		this.#stopped = true;
+		this.#outputActivity.dispose();
 		this.#unsubscribeSession?.();
 		this.#unsubscribeSession = undefined;
 		let cleanupError: Error | undefined;
@@ -635,7 +638,7 @@ export class LiveSessionController {
 		this.#speakerSuppressionGeneration = this.#inputGeneration;
 		this.#setSpeakerSuppressed(true);
 		this.#outputLevel = 0;
-		this.#speakerActiveUntil = 0;
+		this.#outputActivity.dispose();
 		this.#emitLevels();
 		if (this.#delegatedRun) this.#delegatedRun.maySpeak = false;
 		this.#pendingAnswers = [];
@@ -685,13 +688,13 @@ export class LiveSessionController {
 	#handleLevels(input: number, output: number): void {
 		this.#inputLevel = this.#muted ? 0 : input;
 		this.#outputLevel = output;
-		if (this.#outputLevel > OUTPUT_ACTIVE_LEVEL) this.#speakerActiveUntil = Date.now() + SPEAKER_ACTIVITY_HOLD_MS;
+		this.#outputActivity.observe(this.#outputLevel);
 		this.#emitLevels();
 		if (!this.#delegatedRun) this.#refreshAudioPhase();
 	}
 
 	#speakerActive(): boolean {
-		return this.#outputLevel > OUTPUT_ACTIVE_LEVEL || Date.now() < this.#speakerActiveUntil;
+		return this.#outputLevel > OUTPUT_ACTIVE_LEVEL || this.#outputActivity.active;
 	}
 
 	/** Interrupts only output that may answer older input. */
@@ -709,7 +712,7 @@ export class LiveSessionController {
 		this.#speakerSuppressionGeneration = this.#inputGeneration;
 		this.#setSpeakerSuppressed(true);
 		this.#outputLevel = 0;
-		this.#speakerActiveUntil = 0;
+		this.#outputActivity.dispose();
 		this.#emitLevels();
 	}
 

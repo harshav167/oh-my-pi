@@ -35,6 +35,7 @@ async function flushVoiceQueue(): Promise<void> {
 
 async function startedController(answerLength = "normal") {
 	const sent: LiveClientMessage[] = [];
+	const phases: string[] = [];
 	let transportOptions: LiveTransportOptions | undefined;
 	spyOn(transportModule, "CodexLiveTransport").mockImplementation(function (options: LiveTransportOptions) {
 		transportOptions = options;
@@ -92,13 +93,19 @@ async function startedController(answerLength = "normal") {
 	const controller = new LiveSessionController({
 		session,
 		extractAssistantText: message => message.content.map(part => (part.type === "text" ? part.text : "")).join(""),
-		callbacks: { onPhase: () => {}, onLevels: () => {}, onTranscript: () => {}, onTerminal: () => {} },
+		callbacks: {
+			onPhase: phase => phases.push(phase),
+			onLevels: () => {},
+			onTranscript: () => {},
+			onTerminal: () => {},
+		},
 	});
 	await controller.start();
 	if (!transportOptions) throw new Error("The controller opened no transport");
 	const options = transportOptions;
 	return {
 		controller,
+		phases,
 		sent,
 		session,
 		customMessages,
@@ -114,6 +121,7 @@ async function startedController(answerLength = "normal") {
 			return () => pending.resolve(true);
 		},
 		instructions: options.instructions,
+		levels: (input: number, output: number) => options.callbacks.onLevels(input, output),
 		voice: (event: LiveServerEvent) => options.callbacks.onEvent(event),
 		agent: (event: AgentSessionEvent) => {
 			for (const listener of listeners) listener(event);
@@ -122,7 +130,35 @@ async function startedController(answerLength = "normal") {
 }
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.restoreAllMocks();
+});
+
+describe("speaker activity phases", () => {
+	test("releases speaking after the hold with no further level callbacks", async () => {
+		vi.useFakeTimers();
+		const { controller, phases, levels } = await startedController();
+		try {
+			levels(0, 0.1);
+			expect(controller.phase).toBe("speaking");
+			expect(phases.at(-1)).toBe("speaking");
+
+			vi.advanceTimersByTime(499);
+			levels(0, 0);
+			expect(controller.phase).toBe("speaking");
+
+			const beforeRelease = phases.length;
+			vi.advanceTimersByTime(1);
+			expect(controller.phase).toBe("listening");
+			expect(phases.slice(beforeRelease)).toEqual(["listening"]);
+
+			vi.advanceTimersByTime(500);
+			expect(phases.slice(beforeRelease)).toEqual(["listening"]);
+		} finally {
+			await controller.stop();
+			vi.useRealTimers();
+		}
+	});
 });
 
 describe("voice request delivery", () => {
