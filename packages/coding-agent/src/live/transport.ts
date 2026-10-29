@@ -87,6 +87,8 @@ export interface LiveTransportCallbacks {
 export interface LiveTransportOptions {
 	authStorage: AuthStorage;
 	sessionId: string;
+	/** Local credential owner, distinct from the provider-facing session id when supplied. */
+	authSessionId?: string;
 	instructions: string;
 	voice: string;
 	callbacks: LiveTransportCallbacks;
@@ -262,7 +264,7 @@ export class CodexLiveTransport {
 			LIVE_PROVIDER,
 			access => this.#signalWithAccess(offer, access, attestation),
 			{
-				sessionId: this.#options.sessionId,
+				sessionId: this.#options.authSessionId ?? this.#options.sessionId,
 				signal: this.#options.signal,
 				missingAccessMessage: "No Codex OAuth credential is available for a live call.",
 			},
@@ -465,7 +467,10 @@ export class CodexLiveTransport {
 				this.#options.authStorage,
 				LIVE_PROVIDER,
 				access => this.#connectSideband(call.callId, access, call.attestation),
-				{ sessionId: this.#options.sessionId, signal: this.#options.signal },
+				{
+					sessionId: this.#options.authSessionId ?? this.#options.sessionId,
+					signal: this.#options.signal,
+				},
 			);
 		} catch (cause) {
 			this.#reconnecting = false;

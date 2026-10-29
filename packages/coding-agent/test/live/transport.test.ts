@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test, vi } from "bun:test";
-import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import { AuthStorage, resolveCredentialIdentityKey } from "@oh-my-pi/pi-ai/auth-storage";
+import { OPENAI_HEADERS } from "@oh-my-pi/pi-catalog/wire/codex";
 import * as natives from "@oh-my-pi/pi-natives";
 import { buildSessionClose, buildSessionContextAppend, type LiveServerEvent } from "../../src/live/protocol";
-import { CodexLiveTransport } from "../../src/live/transport";
+import { CodexLiveTransport, type LiveTransportOptions } from "../../src/live/transport";
 
 /** Codex's first sideband reconnect backoff. */
 const FIRST_RECONNECT_DELAY_MS = 200;
@@ -110,7 +111,7 @@ const authStorage = {
 	limits: { rotate: async () => ({ switched: false }) },
 } as unknown as AuthStorage;
 
-function setup() {
+function setup(options: Partial<Pick<LiveTransportOptions, "authStorage" | "sessionId" | "authSessionId">> = {}) {
 	const peer = new FakePeer();
 	spyOn(natives, "LiveWebRtcPeer").mockImplementation(function () {
 		return peer;
@@ -120,6 +121,7 @@ function setup() {
 	const transport = new CodexLiveTransport({
 		authStorage,
 		sessionId: "session-1",
+		...options,
 		instructions: "Be brief.",
 		voice: "sol",
 		callbacks: {
@@ -133,8 +135,7 @@ function setup() {
 	return { transport, peer, events, ended: () => ended };
 }
 
-async function connected() {
-	const harness = setup();
+async function connected(harness = setup()) {
 	const connecting = harness.transport.connect();
 	await harness.peer.waiting.promise;
 	harness.peer.open.resolve();
@@ -269,6 +270,81 @@ describe("CodexLiveTransport sideband close codes", () => {
 		const headers = rejoined.options?.headers as Record<string, string>;
 		expect(headers.Authorization).toBe("Bearer token-2");
 		await transport.close();
+	});
+
+	test("rejoin keeps the local OAuth owner when the shared wire session changes accounts", async () => {
+		const storage = await AuthStorage.create(":memory:", {
+			usageProviderResolver: () => undefined,
+			rankingStrategyResolver: () => undefined,
+		});
+		let transport: CodexLiveTransport | undefined;
+		try {
+			const provider = "openai-codex";
+			const sessionId = "shared-wire-session";
+			const authSessionId = "local-auth-owner";
+			const expires = Date.now() + 3_600_000;
+			const credentialB = {
+				type: "oauth" as const,
+				access: "live-access-b",
+				refresh: "live-refresh-b",
+				expires,
+				accountId: "live-account-b",
+			};
+			await storage.credentials.set(provider, [
+				{
+					type: "oauth",
+					access: "live-access-a",
+					refresh: "live-refresh-a",
+					expires,
+					accountId: "live-account-a",
+				},
+				credentialB,
+			]);
+			const accounts = storage.oauth.accounts(provider);
+			const accountA = accounts.find(account => account.accountId === "live-account-a");
+			const accountB = accounts.find(account => account.accountId === "live-account-b");
+			const ownerIdentity = resolveCredentialIdentityKey(provider, credentialB);
+			if (!accountA || !accountB || !ownerIdentity) throw new Error("Expected two identified fake OAuth accounts");
+			storage.sessions.restrict(provider, authSessionId, [ownerIdentity]);
+			expect(storage.sessions.pin(provider, authSessionId, accountB.credentialId)).toBe(true);
+			expect(storage.sessions.pin(provider, sessionId, accountB.credentialId)).toBe(true);
+
+			const signaling = spyOn(globalThis, "fetch");
+			const harness = setup({ authStorage: storage, sessionId, authSessionId });
+			transport = harness.transport;
+			const { socket } = await connected(harness);
+			expect(signaling).toHaveBeenCalledTimes(1);
+			const signalingHeaders = new Headers(signaling.mock.calls[0]?.[1]?.headers);
+			expect(signalingHeaders.get("Authorization")).toBe("Bearer live-access-b");
+			expect(signalingHeaders.get(OPENAI_HEADERS.SCOPED_SESSION_ID)).toBe(sessionId);
+			expect(signalingHeaders.get(OPENAI_HEADERS.THREAD_ID)).toBe(sessionId);
+			const initialHeaders = socket.options?.headers as Record<string, string>;
+			expect(initialHeaders.Authorization).toBe("Bearer live-access-b");
+			expect(initialHeaders[OPENAI_HEADERS.SCOPED_SESSION_ID]).toBe(sessionId);
+			expect(initialHeaders[OPENAI_HEADERS.THREAD_ID]).toBe(sessionId);
+
+			// Only the shared store's pin changes; this call's local owner stays restricted to B.
+			expect(storage.sessions.pin(provider, sessionId, accountA.credentialId)).toBe(true);
+			expect(storage.oauth.identity(provider, sessionId)?.accountId).toBe("live-account-a");
+			expect(storage.oauth.identity(provider, authSessionId)?.accountId).toBe("live-account-b");
+			socket.closeFromServer(1006);
+			sleeps[0]?.release();
+			const rejoined = await socketAt(1);
+			rejoined.accept();
+			await drainContinuations();
+
+			const headers = rejoined.options?.headers as Record<string, string>;
+			expect(headers.Authorization).toBe("Bearer live-access-b");
+			expect(headers[OPENAI_HEADERS.SCOPED_SESSION_ID]).toBe(sessionId);
+			expect(headers[OPENAI_HEADERS.THREAD_ID]).toBe(sessionId);
+			expect(storage.oauth.identity(provider, authSessionId)?.accountId).toBe("live-account-b");
+		} finally {
+			try {
+				await transport?.close();
+			} finally {
+				storage.close();
+			}
+		}
 	});
 });
 

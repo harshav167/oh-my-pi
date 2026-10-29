@@ -269,6 +269,7 @@ describe("LiveSessionController with a caller-owned peer", () => {
 			modelRegistry: { authStorage: {} },
 			settings: Settings.isolated(),
 			sessionId: "s1",
+			getAuthSessionId: () => "s1",
 			subscribe: () => () => {},
 			dropPendingNextTurnMessages: () => 0,
 			sendCustomMessage: async (message: { content: string }) => {

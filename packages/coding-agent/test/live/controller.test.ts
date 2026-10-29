@@ -59,6 +59,7 @@ async function startedController(answerLength = "normal") {
 	const session = {
 		settings: Settings.isolated({ "live.answerLength": answerLength }),
 		sessionId: "session-1",
+		getAuthSessionId: () => "session-1",
 		modelRegistry: { authStorage: {} },
 		sessionManager: { appendCustomEntry: () => {} },
 		dropPendingNextTurnMessages: () => 0,
@@ -341,6 +342,7 @@ function startupSession(): AgentSession {
 	return {
 		settings: Settings.isolated(),
 		sessionId: "startup-session",
+		getAuthSessionId: () => "startup-session",
 		modelRegistry: { authStorage: {} },
 		sessionManager: { appendCustomEntry: () => {} },
 		dropPendingNextTurnMessages: () => 0,
