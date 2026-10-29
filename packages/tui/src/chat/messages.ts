@@ -35,6 +35,20 @@ export const DEFAULT_CUSTOM_MESSAGE_TYPE = "custom-message";
 /** Custom message carrying a coding request delegated by the live voice model. */
 export const LIVE_DELEGATION_MESSAGE_TYPE = "live-delegation";
 
+/** Details persisted with a delegated voice request. */
+export interface LiveDelegationDetails {
+	/** Conversation since the previous delegation, one `role: text` line per utterance. */
+	transcriptDelta?: string;
+	/** First delegation of a voice session: the main agent receives the voice start instructions first. */
+	voiceStart?: boolean;
+	/**
+	 * What the user said since the previous delegation, one utterance per entry, minus any
+	 * utterance identical to the request text. Shown on screen above the request; the model
+	 * reads the same speech through `transcriptDelta`.
+	 */
+	spoken?: string[];
+}
+
 /** Content shape accepted for extension-injected messages. */
 export type CustomMessageContent = string | (TextContent | ImageContent)[];
 

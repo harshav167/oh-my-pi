@@ -15,6 +15,7 @@ bytes.workspace = true
 flume.workspace = true
 opus.workspace = true
 parking_lot.workspace = true
+sonora.workspace = true
 tokio.workspace = true
 webrtc.workspace = true
 

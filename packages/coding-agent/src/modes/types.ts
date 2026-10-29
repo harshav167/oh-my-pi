@@ -539,6 +539,8 @@ export interface InteractiveModeContext {
 	handleLiveCommand(): Promise<void>;
 	/** Start a live session whose audio runs on an extension's own WebRTC peer (`ctx.startLive`). */
 	startRemoteLive(options: ExtensionLiveStartOptions): Promise<ExtensionLiveSession>;
+	/** Whether the Codex-backed realtime voice session is active. */
+	isLiveActive(): boolean;
 	/** Start a `/record` screen capture, or stop the running one. */
 	toggleRecording(): Promise<void>;
 	executeCompaction(

@@ -20,7 +20,11 @@ import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm, USER_INTERRUPT_LABEL } from "@oh-my-pi/pi-coding-agent/session/messages";
+import {
+	convertToLlm,
+	LIVE_DELEGATION_MESSAGE_TYPE,
+	USER_INTERRUPT_LABEL,
+} from "@oh-my-pi/pi-coding-agent/session/messages";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@oh-my-pi/pi-utils";
 
@@ -153,6 +157,29 @@ describe("AgentSession editor-restoring interrupt", () => {
 		expect(card1).toBeGreaterThan(-1);
 		expect(card2).toBeGreaterThan(card1);
 		expect(request.indexOf("next prompt")).toBeGreaterThan(card2);
+	});
+
+	it("starts a delegated voice turn immediately after aborting active work", async () => {
+		const { session, mock, streamStarted } = await createParkedSession([{ content: ["replacement answered"] }]);
+		const running = session.prompt("first task");
+		await streamStarted;
+
+		await session.abort({ reason: USER_INTERRUPT_LABEL });
+		await running.catch(() => {});
+		const started = await session.sendCustomMessage(
+			{
+				customType: LIVE_DELEGATION_MESSAGE_TYPE,
+				content: "replacement voice request",
+				display: true,
+				attribution: "agent",
+			},
+			{ triggerTurn: true },
+		);
+		await session.waitForIdle();
+
+		expect(started).toBe(true);
+		expect(mock.calls).toHaveLength(2);
+		expect(JSON.stringify(mock.calls[1]!.context.messages)).toContain("replacement voice request");
 	});
 
 	it("records the messages ahead of a prompt that another source started while the interrupt settled", async () => {

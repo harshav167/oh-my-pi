@@ -13,10 +13,29 @@
 //!   with a mono `f32` buffer roughly every [`DeviceConfig::period_ms`]. The
 //!   callback runs on a backend-owned audio thread and must not block. Queue
 //!   depth varies by backend and stream config; [`playback_drain_periods`]
-//!   reports the bound used by the engine's drain accounting.
+//!   reports the bound used by the engine's drain accounting. The `Instant`
+//!   passed to `fill` is when the buffer's first sample reaches the output
+//!   device, derived from the OS clock and the backend's reported queue
+//!   position or latency.
 //! - [`CaptureDevice::start`] opens the default microphone and invokes `sink`
 //!   with non-empty mono `f32` chunks at the requested sample rate, also from a
-//!   backend-owned thread.
+//!   backend-owned thread. The `Instant` passed to `sink` is when the chunk's
+//!   first sample was captured, derived from the OS capture timestamp or the
+//!   backend's reported input latency.
+//! - When the OS reading is unavailable for a buffer (invalid timestamp flags,
+//!   a failed latency query, a missing optional symbol, the queue not yet
+//!   started), each backend falls back to an estimate from its own queue
+//!   accounting or configured buffer size, documented at the fallback site.
+//! - Known biases: device latency the backend does not report (`AudioQueue`
+//!   output latency, WASAPI engine latency, OS resampler delay) is excluded, so
+//!   playback stamps run early and capture stamps run late by a roughly
+//!   constant offset that the echo canceller's delay estimator absorbs.
+//!   `PulseAudio` and ALSA stamps are per-read latency measurements and jitter
+//!   with them.
+//! - Timestamps of consecutive buffers advance by the buffer duration while a
+//!   stream runs uninterrupted; underruns, overruns, and device resets show up
+//!   as discontinuities instead of being smoothed over. Echo cancellation
+//!   aligns speaker output with microphone input through these timestamps.
 //! - `stop` is idempotent, callable from any thread, and guarantees no callback
 //!   is running or will run after it returns — except when invoked from within
 //!   a device callback itself: the calling thread cannot await its own
@@ -42,16 +61,20 @@ use linux as imp;
 
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 mod unsupported;
+use std::time::Instant;
+
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 use unsupported as imp;
 
 use crate::VoiceResult;
 
 /// Render callback: fill the whole output buffer with mono `f32` samples.
-pub type PlaybackFill = Box<dyn FnMut(&mut [f32]) + Send + 'static>;
+/// The `Instant` is when `output[0]` reaches the output device.
+pub type PlaybackFill = Box<dyn FnMut(&mut [f32], Instant) + Send + 'static>;
 
 /// Capture callback: consume a non-empty chunk of mono `f32` samples.
-pub type CaptureSink = Box<dyn FnMut(&[f32]) + Send + 'static>;
+/// The `Instant` is when `samples[0]` was captured by the input device.
+pub type CaptureSink = Box<dyn FnMut(&[f32], Instant) + Send + 'static>;
 
 /// Stream parameters shared by both device directions.
 #[derive(Clone, Copy)]

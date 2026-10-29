@@ -7,6 +7,7 @@ import { type Component, replaceTabs, Spacer, Text } from "@oh-my-pi/pi-tui";
 import { getMCPConfigPath, getProjectDir } from "@oh-my-pi/pi-utils";
 import { formatKeyHint } from "@oh-my-pi/pi-tui/app-keybindings";
 import { appKey } from "@oh-my-pi/pi-tui/chrome/keybinding-hints";
+import { editorSurfaceFor } from "./editor-surface";
 import { clearCache as clearFsCache } from "../../capability/fs";
 import type { SourceMeta } from "../../capability/types";
 import {
@@ -718,11 +719,9 @@ export class MCPCommandController {
 			return;
 		}
 
-		// Save current editor state
+		// Restore the persistent editor surface when the wizard finishes.
 		const done = () => {
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(this.ctx.editor);
-			this.ctx.ui.setFocus(this.ctx.editor);
+			editorSurfaceFor(this.ctx).restore();
 		};
 
 		// Create wizard with OAuth handler and connection test
@@ -749,10 +748,7 @@ export class MCPCommandController {
 		);
 
 		// Replace editor with wizard
-		this.ctx.editorContainer.clear();
-		this.ctx.editorContainer.addChild(wizard);
-		this.ctx.ui.setFocus(wizard);
-		this.ctx.ui.requestRender();
+		editorSurfaceFor(this.ctx).present([wizard], wizard);
 	}
 
 	/**

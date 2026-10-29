@@ -68,6 +68,8 @@ describe("InteractiveMode.setEditorComponent", () => {
 
 		expect(mode.editor).toBeInstanceOf(TestModalEditor);
 		expect(mode.editor).not.toBe(previousEditor);
+		expect(mode.editorContainer.children).toEqual([mode.editor]);
+		expect(mode.ui.getFocused()).toBe(mode.editor);
 		expect(mode.editor.getText()).toBe("draft prompt");
 		expect(mode.editor.onSubmit).toBeDefined();
 		expect(mode.editor.onEscape).toBeDefined();

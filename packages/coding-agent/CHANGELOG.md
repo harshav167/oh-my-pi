@@ -53,6 +53,7 @@
 
 ### Fixed
 
+- Live voice now interrupts active agent work on new speech, forwards utterances even when the realtime model omits a delegation, and retries answers that were not spoken
 - Fixed `omp auth-gateway serve` routing a bare model id (e.g. Claude Code's `claude-opus-5-5`) to a mirror provider such as Cursor after a catalog refresh; a bare id now goes to the highest-priority credentialed provider (`modelProviderOrder`, then the built-in native-first order), and among equally ranked providers prefers one speaking the route's wire format
 - Fixed table charts marking the worse value "best" when a column or row name suggests the wrong direction (a GPU's memory bandwidth and L2 cache read as costs). Charts no longer guess which way is better from header wording; under `tui.autoGraph: smart` the judge decides, for single-measure tables and every metric row too, and can decline a chart of page numbers, step numbers or figures quoted in prose
 - Fixed background bash job widgets showing binary mojibake as the stage and counting it as hundreds of thousands of lines when a pipe carries binary data (`git archive | tar -x`, `curl | gunzip`); such pipes are now left out of the widget
@@ -457,6 +458,24 @@
 - Fixed `<path>:conflicts` on a file past the 10 MiB scan cap reporting no conflicts with no hint: it now names the line the scan stopped at and the ranged `read` that registers the blocks after it ([#16269](https://github.com/can1357/oh-my-pi/pull/16269))
 - Fixed the `ts-set-map` rule stalling tool-call streaming for seconds on a long single-line `Map` literal, and missing `Map` entries written `["key", value] as const` ([#16242](https://github.com/can1357/oh-my-pi/pull/16242))
 - Fixed the `ts-import-type` rule missing inline type imports whose member name is non-ASCII, such as `import("./units").温度` ([#16242](https://github.com/can1357/oh-my-pi/pull/16242))
+### Added
+
+- Added the `live.answerLength` setting (Brief, Normal, Detailed) for how much the live voice says when the agent finishes a task
+
+### Changed
+
+- Live voice (`/live`) now uses Codex's own voice instructions, so the voice hands every request and correction to the agent instead of answering coding-only requests itself
+- The agent now receives each spoken request with the conversation that led to it, marked as a voice transcript that may contain recognition errors, plus Codex's start and end-of-voice instructions
+- Live voice tells you the agent's full final answer in its own words, including when the agent leaves a background job running, and stays silent when you type instead
+- Live voice keeps what both sides said in the session file, survives a dropped connection by reconnecting instead of ending the call, and ends cleanly when the server closes the call
+- A live voice call that times out or closes while connecting now retries once
+- The live voice panel stays on "speaking" through short pauses between words instead of flickering to "listening"
+- A spoken request's row in the chat now shows everything you said and the voice model's request text as plain, unquoted text
+
+### Fixed
+
+- Kept live voice visible beneath dialogs and restored pending Ask dialogs after closing history search
+- Fixed live voice reconnects to refresh OAuth credentials and close transports after startup cancellation
 
 ## [18.12.4] - 2026-10-20
 

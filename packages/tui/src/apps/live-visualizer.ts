@@ -2,7 +2,7 @@ import { formatKeyHint } from "../app-keybindings";
 import type { Component } from "../tui";
 import { OverlayPanel, PanelRows } from "../chrome/overlay-box";
 import { type KeyId, matchesKey } from "../keys";
-import { sliceWithWidth, truncateToWidth, visibleWidth } from "../utils";
+import { sliceWithWidth, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils";
 import { sanitizeDisplaySingleLine } from "../overlays/extensions/display-text";
 import { type ThemeColor, theme } from "../theme/theme";
 import type { TspTone } from "@oh-my-pi/pi-wire";
@@ -41,6 +41,8 @@ const PHASE_TONES: Record<LivePhase, TspTone> = {
 const SPECTRUM_BLOCKS = [" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
 /** Native mic meter resolution: the level snaps to 1/20 steps so decay ticks don't rebuild every frame. */
 const METER_STEPS = 20;
+/** Lines of the user's latest speech kept visible; older wrapped lines scroll off. */
+const TRANSCRIPT_MAX_LINES = 3;
 
 /** Configuration callbacks for user interactions in the visualizer. */
 export interface LiveVisualizerOptions {
@@ -58,7 +60,7 @@ function truncateFromStart(text: string, width: number): string {
 	return `…${sliceWithWidth(text, textWidth - width + 1, width - 1, true).text}`;
 }
 
-/** A compact, fixed-height terminal component for displaying a realtime call. */
+/** A compact terminal component for displaying a realtime call; its speech row grows to three lines. */
 export class LiveVisualizer implements Component {
 	readonly wantsKeyRelease = false;
 
@@ -237,26 +239,31 @@ export class LiveVisualizer implements Component {
 			return [
 				top,
 				...spectrum.map(row => border(theme.fg(spectrumColor, row))),
-				border(this.#renderTranscript(this.#userTranscript, innerWidth)),
+				...this.#renderTranscript(this.#userTranscript, innerWidth).map(border),
 				this.#renderFooter(width, innerWidth),
 			];
 		}
 
 		const contentWidth = width - 4;
 		const spectrum = this.#generateSpectrum(contentWidth, 2);
-		this.#body.setLines([
-			...spectrum.map(row => theme.fg(spectrumColor, row)),
-			this.#renderTranscript(this.#userTranscript, contentWidth),
-		]);
+		const transcript = this.#renderTranscript(this.#userTranscript, contentWidth);
+		this.#body.setHeight(spectrum.length + transcript.length);
+		this.#body.setLines([...spectrum.map(row => theme.fg(spectrumColor, row)), ...transcript]);
 		const lines = [...this.#panel.render(width)];
 		lines[lines.length - 1] = this.#renderFooter(width, width - 2);
 		return lines;
 	}
 
-	#renderTranscript(transcript: string, width: number): string {
-		const content = truncateFromStart(transcript, width);
-		const padding = " ".repeat(Math.max(0, width - visibleWidth(content)));
-		return theme.fg("accent", content) + padding;
+	/** Latest speech wrapped to the panel, keeping its last lines so long utterances stay readable. */
+	#renderTranscript(transcript: string, width: number): string[] {
+		const pad = (content: string): string =>
+			theme.fg("accent", content) + " ".repeat(Math.max(0, width - visibleWidth(content)));
+		if (width <= 0 || !transcript) return [pad("")];
+		const lines = wrapTextWithAnsi(transcript, width);
+		if (lines.length <= TRANSCRIPT_MAX_LINES) return lines.map(pad);
+		const tail = lines.slice(-TRANSCRIPT_MAX_LINES);
+		tail[0] = truncateFromStart(`…${tail[0] ?? ""}`, width);
+		return tail.map(pad);
 	}
 
 	#renderFooter(width: number, innerWidth: number): string {

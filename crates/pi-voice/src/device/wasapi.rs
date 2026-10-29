@@ -10,7 +10,7 @@ use std::{
 		mpsc::{self, Sender},
 	},
 	thread::{self, JoinHandle},
-	time::Duration,
+	time::{Duration, Instant},
 };
 
 use windows_sys::{
@@ -18,7 +18,8 @@ use windows_sys::{
 		Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT},
 		Media::{
 			Audio::{
-				AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_SHAREMODE_SHARED,
+				AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR,
+				AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_SHAREMODE_SHARED,
 				AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
 				AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, WAVEFORMATEX, eCapture, eConsole, eRender,
 			},
@@ -28,6 +29,7 @@ use windows_sys::{
 			Com::{
 				CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
 			},
+			Performance::{QueryPerformanceCounter, QueryPerformanceFrequency},
 			Threading::{CreateEventW, SetEvent, WaitForSingleObject},
 		},
 	},
@@ -45,6 +47,7 @@ const IID_IMMDEVICE_ENUMERATOR: GUID = GUID::from_u128(0xa956_64d2_9614_4f35_a74
 const IID_IAUDIO_CLIENT: GUID = GUID::from_u128(0x1cb9_ad4c_dbfa_4c32_b178_c2f5_68a7_03b2);
 const IID_IAUDIO_RENDER_CLIENT: GUID = GUID::from_u128(0xf294_acfc_3146_4483_a7bf_addc_a7c2_60e2);
 const IID_IAUDIO_CAPTURE_CLIENT: GUID = GUID::from_u128(0xc8ad_bd64_e71e_48a0_a4de_185c_395c_d317);
+const IID_IAUDIO_CLOCK: GUID = GUID::from_u128(0xcd63_314f_3fba_4a1b_812c_ef96_3587_28e7);
 
 #[repr(C)]
 struct RawComInterface<V> {
@@ -169,6 +172,21 @@ impl ComVtable for AudioCaptureClientVtable {
 	}
 }
 
+#[repr(C)]
+#[allow(dead_code, reason = "all slots are required to preserve the COM vtable layout")]
+struct AudioClockVtable {
+	base:                IUnknown_Vtbl,
+	get_frequency:       unsafe extern "system" fn(*mut c_void, *mut u64) -> HRESULT,
+	get_position:        unsafe extern "system" fn(*mut c_void, *mut u64, *mut u64) -> HRESULT,
+	get_characteristics: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
+}
+
+impl ComVtable for AudioClockVtable {
+	fn unknown(&self) -> &IUnknown_Vtbl {
+		&self.base
+	}
+}
+
 struct ComPtr<V: ComVtable> {
 	ptr: *mut RawComInterface<V>,
 }
@@ -261,12 +279,57 @@ impl Drop for ComApartment {
 	}
 }
 
+/// Maps WASAPI performance-counter positions (`QueryPerformanceCounter`
+/// readings scaled to 100 ns units) onto `Instant`.
+#[derive(Clone, Copy)]
+struct QpcClock {
+	frequency: u64,
+}
+
+impl QpcClock {
+	fn new() -> VoiceResult<Self> {
+		let mut frequency = 0;
+		// SAFETY: the output pointer is valid for the call.
+		let ok = unsafe { QueryPerformanceFrequency(&mut frequency) };
+		match u64::try_from(frequency) {
+			Ok(frequency) if ok != 0 && frequency != 0 => Ok(Self { frequency }),
+			_ => Err("QueryPerformanceFrequency failed".to_owned()),
+		}
+	}
+
+	/// The `Instant` of a WASAPI performance-counter position, or `None` when
+	/// WASAPI left no reading (zero) or the counter cannot be read now.
+	fn instant(self, position: u64) -> Option<Instant> {
+		if position == 0 {
+			return None;
+		}
+		let mut counter = 0;
+		// SAFETY: the output pointer is valid for the call.
+		let ok = unsafe { QueryPerformanceCounter(&mut counter) };
+		let now = Instant::now();
+		if ok == 0 {
+			return None;
+		}
+		// The same scaling WASAPI applies: 10^7 * counter / frequency.
+		let now_position =
+			u128::from(u64::try_from(counter).ok()?) * 10_000_000 / u128::from(self.frequency);
+		let now_position = u64::try_from(now_position).ok()?;
+		if position <= now_position {
+			now.checked_sub(hundred_ns(now_position - position))
+		} else {
+			now.checked_add(hundred_ns(position - now_position))
+		}
+	}
+}
+
 struct BaseStream {
 	client:      ComPtr<AudioClientVtable>,
 	_device:     ComPtr<MmDeviceVtable>,
 	_enumerator: ComPtr<MmDeviceEnumeratorVtable>,
 	event:       Arc<OwnedEvent>,
 	buffer_size: u32,
+	sample_rate: u32,
+	qpc:         QpcClock,
 	_apartment:  ComApartment,
 }
 
@@ -276,6 +339,7 @@ impl BaseStream {
 		data_flow: i32,
 		event: Option<Arc<OwnedEvent>>,
 	) -> VoiceResult<Self> {
+		let qpc = QpcClock::new()?;
 		let apartment = ComApartment::initialize()?;
 
 		let mut enumerator_raw = null_mut();
@@ -399,6 +463,8 @@ impl BaseStream {
 			_enumerator: enumerator,
 			event,
 			buffer_size,
+			sample_rate: config.sample_rate,
+			qpc,
 			_apartment: apartment,
 		})
 	}
@@ -420,10 +486,12 @@ impl BaseStream {
 }
 
 struct PlaybackStream {
-	render:        ComPtr<AudioRenderClientVtable>,
-	base:          BaseStream,
-	period_frames: u32,
-	started:       bool,
+	render:          ComPtr<AudioRenderClientVtable>,
+	clock:           ComPtr<AudioClockVtable>,
+	base:            BaseStream,
+	period_frames:   u32,
+	clock_frequency: u64,
+	started:         bool,
 }
 
 impl Stream for PlaybackStream {
@@ -455,7 +523,27 @@ impl Stream for PlaybackStream {
 		};
 		check_hresult(hr, "IAudioClient::GetService(IAudioRenderClient)")?;
 		let render = ComPtr::new(render_raw, "IAudioClient::GetService(IAudioRenderClient)")?;
-		let mut stream = Self { render, base, period_frames, started: false };
+		let mut clock_raw = null_mut();
+		// SAFETY: the initialized client is live and `clock_raw` receives the
+		// requested service interface.
+		let hr = unsafe {
+			(base.client.vtable().get_service)(
+				base.client.as_void(),
+				&IID_IAUDIO_CLOCK,
+				&mut clock_raw,
+			)
+		};
+		check_hresult(hr, "IAudioClient::GetService(IAudioClock)")?;
+		let clock: ComPtr<AudioClockVtable> =
+			ComPtr::new(clock_raw, "IAudioClient::GetService(IAudioClock)")?;
+		let mut clock_frequency = 0;
+		// SAFETY: the clock service is live and the output pointer is valid.
+		let hr = unsafe { (clock.vtable().get_frequency)(clock.as_void(), &mut clock_frequency) };
+		check_hresult(hr, "IAudioClock::GetFrequency")?;
+		if clock_frequency == 0 {
+			return Err("IAudioClock::GetFrequency returned zero".to_owned());
+		}
+		let mut stream = Self { render, clock, base, period_frames, clock_frequency, started: false };
 		stream.base.start()?;
 		stream.started = true;
 		Ok(stream)
@@ -632,6 +720,8 @@ fn run_playback(
 	stop: &AtomicBool,
 	fill: &mut PlaybackFill,
 ) -> Result<(), RunError> {
+	// Stream offset of the next frame written; see `playback_instant`.
+	let mut next_frame = 0;
 	loop {
 		if stop.load(Ordering::Acquire) {
 			return Ok(());
@@ -696,16 +786,51 @@ fn run_playback(
 			return Ok(());
 		}
 
+		let presented_at = playback_instant(stream, &mut next_frame, padding);
 		// SAFETY: WASAPI returned exactly `frames` writable mono IEEE-float
 		// samples for the format used to initialize this client.
 		let output = unsafe { slice::from_raw_parts_mut(data.cast::<f32>(), frames as usize) };
-		fill(output);
+		fill(output, presented_at);
 		// SAFETY: release balances the successful acquisition after `fill`
 		// initialized the complete fixed-quantum buffer.
 		let hr =
 			unsafe { (stream.render.vtable().release_buffer)(stream.render.as_void(), frames, 0) };
 		check_run_hresult(hr, "IAudioRenderClient::ReleaseBuffer")?;
+		next_frame += u64::from(frames);
 	}
+}
+
+/// When the first frame of the buffer about to be written reaches the speaker.
+/// `next_frame` is that frame's offset from the start of the stream.
+fn playback_instant(stream: &PlaybackStream, next_frame: &mut u64, padding: u32) -> Instant {
+	let sample_rate = stream.base.sample_rate;
+	let mut position = 0;
+	let mut qpc_position = 0;
+	// SAFETY: the clock service is live and both output pointers are valid.
+	let hr = unsafe {
+		(stream.clock.vtable().get_position)(stream.clock.as_void(), &mut position, &mut qpc_position)
+	};
+	if hr >= 0
+		&& let Some(read_at) = stream.base.qpc.instant(qpc_position)
+	{
+		// The device position is the frame playing through the speaker at
+		// `read_at`, so the distance to it spans the endpoint buffer plus the
+		// engine and device latency behind it.
+		let played =
+			u128::from(position) * u128::from(sample_rate) / u128::from(stream.clock_frequency);
+		let played = u64::try_from(played).unwrap_or(u64::MAX);
+		// If the device has played past everything written (an underrun), the
+		// next frame cannot start before the current device position.
+		*next_frame = (*next_frame).max(played);
+		return read_at
+			.checked_add(frames_duration(*next_frame - played, sample_rate))
+			.unwrap_or(read_at);
+	}
+	// Without a clock reading only the frames still queued in the endpoint
+	// buffer are known; the engine and device latency behind them is omitted.
+	let now = Instant::now();
+	now.checked_add(frames_duration(u64::from(padding), sample_rate))
+		.unwrap_or(now)
 }
 
 fn run_capture(
@@ -743,7 +868,8 @@ fn run_capture(
 			let mut data = null_mut();
 			let mut frames = 0;
 			let mut flags = 0;
-			// SAFETY: all outputs are valid and device/QPC positions are optional.
+			let mut qpc_position = 0;
+			// SAFETY: all outputs are valid and the device position is optional.
 			let hr = unsafe {
 				(stream.capture.vtable().get_buffer)(
 					stream.capture.as_void(),
@@ -751,7 +877,7 @@ fn run_capture(
 					&mut frames,
 					&mut flags,
 					null_mut(),
-					null_mut(),
+					&mut qpc_position,
 				)
 			};
 			check_run_hresult(hr, "IAudioCaptureClient::GetBuffer")?;
@@ -766,6 +892,7 @@ fn run_capture(
 			}
 
 			if frames != 0 {
+				let captured_at = capture_instant(stream, flags, qpc_position, frames);
 				if flags & AUDCLNT_BUFFERFLAGS_SILENT as u32 != 0 {
 					let Some(samples) = silent.get(..frames as usize) else {
 						// SAFETY: release balances the successful buffer acquisition.
@@ -776,7 +903,7 @@ fn run_capture(
 							"WASAPI capture packet exceeds the endpoint buffer".to_owned(),
 						));
 					};
-					sink(samples);
+					sink(samples, captured_at);
 				} else {
 					if data.is_null() {
 						// SAFETY: release balances the successful buffer acquisition.
@@ -790,7 +917,7 @@ fn run_capture(
 					// SAFETY: WASAPI returned `frames` readable mono IEEE-float
 					// samples for the format used to initialize this client.
 					let samples = unsafe { slice::from_raw_parts(data.cast::<f32>(), frames as usize) };
-					sink(samples);
+					sink(samples, captured_at);
 				}
 			}
 
@@ -801,6 +928,29 @@ fn run_capture(
 		}
 	}
 	Ok(())
+}
+
+/// When the first frame of the packet just acquired was recorded. A data
+/// discontinuity keeps its valid timestamp, so a glitch shows up as a jump
+/// between consecutive packet timestamps.
+fn capture_instant(stream: &CaptureStream, flags: u32, qpc_position: u64, frames: u32) -> Instant {
+	if flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR as u32 == 0
+		&& let Some(captured_at) = stream.base.qpc.instant(qpc_position)
+	{
+		return captured_at;
+	}
+	// Without a trustworthy device timestamp the packet is at least as old as
+	// the audio queued from its first frame onward (a capture buffer's padding);
+	// the input latency ahead of the endpoint buffer is omitted.
+	let mut padding = 0;
+	// SAFETY: the initialized client is live and the output pointer is valid.
+	let hr = unsafe {
+		(stream.base.client.vtable().get_current_padding)(stream.base.client.as_void(), &mut padding)
+	};
+	let queued = if hr >= 0 { padding.max(frames) } else { frames };
+	let now = Instant::now();
+	now.checked_sub(frames_duration(u64::from(queued), stream.base.sample_rate))
+		.unwrap_or(now)
 }
 
 // We deliberately omit `IMMNotificationClient`: a live endpoint stays selected
@@ -883,4 +1033,15 @@ fn check_run_hresult(hr: HRESULT, what: &str) -> Result<(), RunError> {
 	} else {
 		check_hresult(hr, what).map_err(RunError::Other)
 	}
+}
+
+fn frames_duration(frames: u64, sample_rate: u32) -> Duration {
+	let nanos = (u128::from(frames) * 1_000_000_000)
+		.checked_div(u128::from(sample_rate))
+		.unwrap_or(0);
+	Duration::from_nanos(u64::try_from(nanos).unwrap_or(u64::MAX))
+}
+
+const fn hundred_ns(units: u64) -> Duration {
+	Duration::new(units / 10_000_000, (units % 10_000_000) as u32 * 100)
 }

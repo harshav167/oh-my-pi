@@ -22,6 +22,7 @@ import {
 	wrapTextWithAnsi,
 } from "@oh-my-pi/pi-tui";
 import { formatDuration, logger, Snowflake, sanitizeText } from "@oh-my-pi/pi-utils";
+import { editorSurfaceFor } from "./editor-surface";
 import { getActiveProfile, getConfigDirName } from "@oh-my-pi/pi-utils/dirs";
 import { classifyTerminalMultiplexer } from "@oh-my-pi/pi-tui/terminal-multiplexer";
 import { shouldEnableAppendOnlyContext } from "../../config/append-only-context-mode";
@@ -492,16 +493,11 @@ export class CommandController {
 		}
 
 		const loader = new BorderedLoader(this.ctx.ui, theme, "Sharing session...");
-		this.ctx.editorContainer.clear();
-		this.ctx.editorContainer.addChild(loader);
-		this.ctx.ui.setFocus(loader);
-		this.ctx.ui.requestRender();
+		editorSurfaceFor(this.ctx).present([loader], loader);
 
 		const restoreEditor = () => {
 			loader.dispose();
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(this.ctx.editor);
-			this.ctx.ui.setFocus(this.ctx.editor);
+			editorSurfaceFor(this.ctx).restore();
 		};
 		loader.onAbort = () => {
 			restoreEditor();

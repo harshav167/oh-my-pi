@@ -35,4 +35,21 @@ describe("CountdownTimer", () => {
 		vi.advanceTimersByTime(1);
 		expect(onExpire).toHaveBeenCalledTimes(1);
 	});
+
+	it("pause preserves the remaining window and ignores resets until resumed", () => {
+		const onExpire = vi.fn();
+		const timer = new CountdownTimer(1_000, undefined, () => {}, onExpire);
+
+		vi.advanceTimersByTime(400);
+		timer.pause();
+		timer.reset();
+		vi.advanceTimersByTime(5_000);
+		expect(onExpire).not.toHaveBeenCalled();
+
+		timer.resume();
+		vi.advanceTimersByTime(599);
+		expect(onExpire).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(1);
+		expect(onExpire).toHaveBeenCalledTimes(1);
+	});
 });

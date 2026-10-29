@@ -1,23 +1,34 @@
 //! N-API bindings for the Codex live WebRTC peer.
 //!
 //! The TypeScript host owns authenticated signaling and the sideband protocol;
-//! the realtime peer, Opus media, and speaker playback live in
-//! `pi_voice::live`. This class adapts its callbacks to non-blocking
-//! threadsafe functions and its PCM input to `Float32Array`.
+//! the realtime peer, Opus media, and device streams live in `pi_voice::live`.
+//! The microphone remains native and never passes through JavaScript.
 
 use std::sync::Arc;
 
 use napi::{
-	bindgen_prelude::{Float32Array, Result},
+	bindgen_prelude::Result,
 	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode, UnknownReturnValue},
 };
 use napi_derive::napi;
 use pi_voice::live::{DEFAULT_OPEN_TIMEOUT_MS, LiveCallbacks, LivePeerCore};
 
 type StringCallback = ThreadsafeFunction<String, UnknownReturnValue>;
-type LevelCallback = ThreadsafeFunction<f64, UnknownReturnValue>;
+/// Root-mean-square microphone input and speaker output levels.
+#[napi(object)]
+pub struct LiveAudioLevels {
+	/// Input RMS of the latest 20 ms of microphone audio after echo
+	/// cancellation, noise suppression, and gain control; zero while muted.
+	pub input:  f64,
+	/// Output RMS of the latest 2,400 samples (50 ms) the speaker played; zero
+	/// while suppressed.
+	pub output: f64,
+}
 
-/// WebRTC peer that accepts 16 kHz mono PCM and renders remote Opus audio.
+type LevelCallback = ThreadsafeFunction<LiveAudioLevels, UnknownReturnValue>;
+
+/// WebRTC peer that captures the default microphone and renders remote Opus
+/// audio.
 #[napi]
 pub struct LiveWebRtcPeer {
 	inner: Arc<LivePeerCore>,
@@ -25,13 +36,14 @@ pub struct LiveWebRtcPeer {
 
 #[napi]
 impl LiveWebRtcPeer {
-	/// Create an idle peer and register its event, output-level, and failure
+	/// Create a peer and register event, input/output-level, and failure
 	/// callbacks.
 	#[napi(constructor)]
 	pub fn new(
 		#[napi(ts_arg_type = "(error: Error | null, payload: string) => void")]
 		on_event: StringCallback,
-		#[napi(ts_arg_type = "(error: Error | null, level: number) => void")] on_level: LevelCallback,
+		#[napi(ts_arg_type = "(error: Error | null, levels: LiveAudioLevels) => void")]
+		on_levels: LevelCallback,
 		#[napi(ts_arg_type = "(error: Error | null, message: string) => void")]
 		on_failure: StringCallback,
 	) -> Self {
@@ -40,8 +52,11 @@ impl LiveWebRtcPeer {
 				event:   Box::new(move |payload| {
 					on_event.call(Ok(payload), ThreadsafeFunctionCallMode::NonBlocking);
 				}),
-				level:   Box::new(move |level| {
-					on_level.call(Ok(level), ThreadsafeFunctionCallMode::NonBlocking);
+				levels:  Box::new(move |input, output| {
+					on_levels.call(
+						Ok(LiveAudioLevels { input, output }),
+						ThreadsafeFunctionCallMode::NonBlocking,
+					);
 				}),
 				failure: Box::new(move |message| {
 					on_failure.call(Ok(message), ThreadsafeFunctionCallMode::NonBlocking);
@@ -80,15 +95,6 @@ impl LiveWebRtcPeer {
 			.map_err(napi::Error::from_reason)
 	}
 
-	/// Queue 16 kHz mono floating-point PCM for Opus transmission.
-	#[napi]
-	pub fn push_audio(&self, samples: Float32Array) -> Result<()> {
-		self
-			.inner
-			.push_audio(&samples)
-			.map_err(napi::Error::from_reason)
-	}
-
 	/// Enable or disable microphone transmission, discarding partial muted
 	/// frames.
 	#[napi]
@@ -99,7 +105,17 @@ impl LiveWebRtcPeer {
 			.map_err(napi::Error::from_reason)
 	}
 
-	/// Close media, the data channel, the peer connection, and speaker playback.
+	/// While suppressed, drop queued speaker audio immediately and discard
+	/// incoming audio; resume playback when unsuppressed.
+	#[napi]
+	pub fn set_speaker_suppressed(&self, suppressed: bool) -> Result<()> {
+		self
+			.inner
+			.set_speaker_suppressed(suppressed)
+			.map_err(napi::Error::from_reason)
+	}
+
+	/// Close the peer and release the microphone and speaker devices.
 	#[napi]
 	pub async fn close(&self) {
 		self.inner.close().await;

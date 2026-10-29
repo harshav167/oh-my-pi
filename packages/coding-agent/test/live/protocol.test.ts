@@ -69,16 +69,31 @@ describe("Frameless Bidi server events", () => {
 		expect(parseLiveServerEvent({ type: "turn.done", turn: { role: "tool", transcript: "no" } })).toBeNull();
 		expect(parseLiveServerEvent("not json")).toBeNull();
 	});
+
+	test("keeps a transcript delta's audio frame only when both bounds are whole milliseconds", () => {
+		expect(
+			parseLiveServerEvent({ type: "input_transcript.added", item: { text: "hi" }, start_ms: 0, end_ms: 200 }),
+		).toEqual({ type: "input_transcript.added", item: { text: "hi" }, frame: { startMs: 0, endMs: 200 } });
+		for (const bounds of [{ start_ms: -1, end_ms: 200 }, { start_ms: 1.5, end_ms: 200 }, { start_ms: 0 }]) {
+			expect(parseLiveServerEvent({ type: "output_transcript.added", item: { text: "ok" }, ...bounds })).toEqual({
+				type: "output_transcript.added",
+				item: { text: "ok" },
+			});
+		}
+	});
 });
 
 describe("Frameless Bidi client payloads", () => {
-	test("builds the exact live call session JSON", () => {
+	test("builds the client-delegated session without unsupported top-level tool fields", () => {
 		const payload = buildLiveSessionPayload("Be concise.", "marin");
 
 		expect(LIVE_MODEL).toBe("gpt-live-1-codex");
-		expect(JSON.stringify(payload)).toBe(
-			'{"model":"gpt-live-1-codex","instructions":"Be concise.","audio":{"output":{"voice":"marin"}},"delegation":{"type":"client"}}',
-		);
+		expect(payload).toEqual({
+			model: "gpt-live-1-codex",
+			instructions: "Be concise.",
+			audio: { output: { voice: "marin" } },
+			delegation: { type: "client" },
+		});
 	});
 
 	test("builds the exact delegation context JSON", () => {

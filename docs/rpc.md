@@ -1481,8 +1481,9 @@ dispatched concurrently like `bash`; `live_stop` sent meanwhile cancels the
 connection and the pending `live_start` then fails. `voice` defaults to the
 `live.voice` setting and the response reports the voice used. `instructions`
 replaces the bundled live prompt; it is rendered as a Handlebars template with
-`{{username}}` and `{{firstName}}` of the local OS account. Starting while a
-session is connecting, active, or closing, or while dictation is active, fails.
+`{{username}}`, `{{firstName}}` and `{{ user_first_name }}` of the local OS account, and
+`{{answerLength}}` (`brief`, `normal` or `detailed`, from the `live.answerLength` setting).
+Starting while a session is connecting, active, or closing, or while dictation is active, fails.
 
 `live_connect` starts the same session with the audio on the client's own
 WebRTC peer instead of the host's microphone and speakers. `sdpOffer` is that
@@ -1511,7 +1512,7 @@ omitted, and fails when no session is active.
 Live frames are not session events: `set_event_filter` never drops them.
 
 - `{ type: "live_phase", phase }` on every phase change; `phase` is one of `connecting`, `listening`, `working`, `speaking`, `muted`, `error`.
-- `{ type: "live_levels", input: number, output: number }` — microphone and speaker RMS in `[0, 1]`, at most one frame per 100 ms. Intermediate values are dropped; the latest values are always delivered. Not sent for `live_connect` sessions.
+- `{ type: "live_levels", input: number, output: number }` — microphone and speaker RMS in `[0, 1]`, at most one frame per 100 ms. `input` is the microphone after echo cancellation, noise suppression and gain control (0 while muted); `output` is the audio the speaker actually played (0 while speaker output is suppressed). Intermediate values are dropped; the latest values are always delivered. Not sent for `live_connect` sessions.
 - `{ type: "live_transcript", role: "user" | "assistant", turn: number, text: string, final: boolean }` — the accumulated text of one turn; later frames for the same `role` and `turn` replace earlier ones until `final: true`.
 - `{ type: "live_end", error?: string }` — exactly once per session when it ends, carrying the failure when it ended on one (including a failed `live_start` or `live_connect`).
 

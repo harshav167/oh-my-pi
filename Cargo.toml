@@ -306,6 +306,7 @@ xxhash-rust = { version = "0.8", features = ["xxh64", "xxh32"] }
 # Audio & Realtime Media
 # ──────────────────────────────────────────────────────────────────────────────
 opus = "0.4.0"
+sonora = { version = "=0.2.0", default-features = false }
 webrtc = "0.17.2"
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -324,6 +325,7 @@ windows-sys = { version = "0.61", features = [
    "Win32_System_LibraryLoader",
    "Win32_System_IO",
    "Win32_System_Ioctl",
+   "Win32_System_Performance",
    "Win32_System_Threading",
 ] }
 # Transitive-only pin (wired through crates/pi-natives' `cfg(false)` target

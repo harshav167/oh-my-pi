@@ -23,3 +23,25 @@ export const cfgLiveVoice = register({
 export function resolveLiveVoice(scope: ScopeLike, voice?: string): string {
 	return voice?.trim() || cfgLiveVoice.get(scope) || DEFAULT_LIVE_VOICE;
 }
+/** How much the live voice says when the agent finishes a task; rendered into the voice instructions. */
+export const cfgLiveAnswerLength = register({
+	id: "live.answerLength",
+	type: "enum",
+	values: ["brief", "normal", "detailed"] as const,
+	default: "normal",
+	ui: {
+		tab: "providers",
+		group: "Services",
+		label: "Live Voice Answer Length",
+		description: "How much the live voice says when the agent finishes a task",
+		options: [
+			{ value: "brief", label: "Brief", description: "The outcome and anything you must do, in a sentence or two" },
+			{ value: "normal", label: "Normal", description: "The key takeaway, status or next step" },
+			{
+				value: "detailed",
+				label: "Detailed",
+				description: "The main findings and changes, in the voice's own words",
+			},
+		],
+	},
+});

@@ -32,7 +32,7 @@ impl AudioCapture {
 		#[napi(ts_arg_type = "(error: Error | null, samples: Float32Array) => void")]
 		on_audio: CaptureCallback,
 	) -> Result<Self> {
-		let stream = CaptureStream::start(sample_rate, move |samples| {
+		let stream = CaptureStream::start(sample_rate, move |samples, _captured_at| {
 			on_audio
 				.call(Ok(Float32Array::new(samples.to_vec())), ThreadsafeFunctionCallMode::NonBlocking);
 		})
@@ -63,9 +63,7 @@ impl AudioPlayback {
 	/// Open the default speaker at the requested logical sample rate.
 	#[napi(constructor)]
 	pub fn new(sample_rate: u32) -> Result<Self> {
-		// Local producers queue whole chunks ahead of playback; no jitter
-		// reserve.
-		let stream = PlaybackStream::start(sample_rate, 0).map_err(napi::Error::from_reason)?;
+		let stream = PlaybackStream::start(sample_rate).map_err(napi::Error::from_reason)?;
 		let state = stream.state();
 		Ok(Self { stream: Mutex::new(Some(stream)), state })
 	}

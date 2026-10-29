@@ -9,7 +9,7 @@ use std::{
 		mpsc,
 	},
 	thread::{self, JoinHandle},
-	time::Duration,
+	time::{Duration, Instant},
 };
 
 use super::{CaptureSink, DeviceConfig, PlaybackFill};
@@ -61,14 +61,19 @@ type PaSimpleNew = unsafe extern "C" fn(
 type PaSimpleFree = unsafe extern "C" fn(*mut c_void);
 type PaSimpleWrite = unsafe extern "C" fn(*mut c_void, *const c_void, usize, *mut c_int) -> c_int;
 type PaSimpleRead = unsafe extern "C" fn(*mut c_void, *mut c_void, usize, *mut c_int) -> c_int;
+/// Returns `pa_usec_t`, with `(pa_usec_t)-1` reporting failure.
+type PaSimpleGetLatency = unsafe extern "C" fn(*mut c_void, *mut c_int) -> u64;
 type PaStrerror = unsafe extern "C" fn(c_int) -> *const c_char;
 
 struct PulseApi {
-	simple_new:   PaSimpleNew,
-	simple_free:  PaSimpleFree,
-	simple_write: PaSimpleWrite,
-	simple_read:  PaSimpleRead,
-	strerror:     PaStrerror,
+	simple_new:         PaSimpleNew,
+	simple_free:        PaSimpleFree,
+	simple_write:       PaSimpleWrite,
+	simple_read:        PaSimpleRead,
+	/// Optional: streams without it time buffers by their requested
+	/// attributes.
+	simple_get_latency: Option<PaSimpleGetLatency>,
+	strerror:           PaStrerror,
 }
 
 static PULSE_API: LazyLock<Result<PulseApi, String>> = LazyLock::new(PulseApi::load);
@@ -102,12 +107,24 @@ impl PulseApi {
 		let simple_read = unsafe {
 			std::mem::transmute::<*mut c_void, PaSimpleRead>(symbol(simple, c"pa_simple_read")?)
 		};
+		let simple_get_latency = optional_symbol(simple, c"pa_simple_get_latency").map(|address| {
+			// SAFETY: the symbol is resolved from the library defining this exact
+			// C API.
+			unsafe { std::mem::transmute::<*mut c_void, PaSimpleGetLatency>(address) }
+		});
 		// SAFETY: each symbol is resolved from the library defining this exact C
 		// API.
 		let strerror =
 			unsafe { std::mem::transmute::<*mut c_void, PaStrerror>(symbol(pulse, c"pa_strerror")?) };
 
-		Ok(Self { simple_new, simple_free, simple_write, simple_read, strerror })
+		Ok(Self {
+			simple_new,
+			simple_free,
+			simple_write,
+			simple_read,
+			simple_get_latency,
+			strerror,
+		})
 	}
 
 	fn error(&self, code: c_int) -> String {
@@ -125,6 +142,7 @@ type SndPcmIo = unsafe extern "C" fn(*mut c_void, *mut c_void, c_long) -> c_long
 type SndPcmRecover = unsafe extern "C" fn(*mut c_void, c_int, c_int) -> c_int;
 type SndPcmWait = unsafe extern "C" fn(*mut c_void, c_int) -> c_int;
 type SndPcmControl = unsafe extern "C" fn(*mut c_void) -> c_int;
+type SndPcmDelay = unsafe extern "C" fn(*mut c_void, *mut c_long) -> c_int;
 type SndStrerror = unsafe extern "C" fn(c_int) -> *const c_char;
 
 struct AlsaApi {
@@ -136,6 +154,8 @@ struct AlsaApi {
 	pcm_wait:       SndPcmWait,
 	pcm_start:      SndPcmControl,
 	pcm_close:      SndPcmControl,
+	/// Optional: streams without it time buffers by their requested latency.
+	pcm_delay:      Option<SndPcmDelay>,
 	strerror:       SndStrerror,
 }
 
@@ -191,6 +211,11 @@ impl AlsaApi {
 		let pcm_close = unsafe {
 			std::mem::transmute::<*mut c_void, SndPcmControl>(symbol(library, c"snd_pcm_close")?)
 		};
+		let pcm_delay = optional_symbol(library, c"snd_pcm_delay").map(|address| {
+			// SAFETY: the symbol is resolved from the library defining this exact
+			// C API.
+			unsafe { std::mem::transmute::<*mut c_void, SndPcmDelay>(address) }
+		});
 		// SAFETY: each symbol is resolved from the library defining this exact C
 		// API.
 		let strerror = unsafe {
@@ -206,6 +231,7 @@ impl AlsaApi {
 			pcm_wait,
 			pcm_start,
 			pcm_close,
+			pcm_delay,
 			strerror,
 		})
 	}
@@ -248,6 +274,14 @@ fn symbol(library: *mut c_void, name: &CStr) -> Result<*mut c_void, String> {
 	}
 }
 
+/// Resolves a symbol whose absence degrades a feature instead of failing the
+/// backend.
+fn optional_symbol(library: *mut c_void, name: &CStr) -> Option<*mut c_void> {
+	symbol(library, name)
+		.ok()
+		.filter(|address| !address.is_null())
+}
+
 fn dlerror() -> String {
 	// SAFETY: dlerror returns either null or a thread-local NUL-terminated
 	// string.
@@ -267,7 +301,44 @@ fn cstring_lossy(value: *const c_char, fallback: &str) -> String {
 	}
 }
 
-struct PulseStream(*mut c_void);
+/// Converts a stream's OS-reported queue depth into contract timestamps.
+#[derive(Clone, Copy)]
+struct StreamClock {
+	sample_rate:     u32,
+	/// Queue depth requested from the OS, in frames. It stands in for the
+	/// measured latency whenever the backend cannot report one.
+	fallback_frames: u64,
+}
+
+impl StreamClock {
+	fn duration(self, frames: u64) -> Duration {
+		let nanos = u128::from(frames) * 1_000_000_000 / u128::from(self.sample_rate.max(1));
+		Duration::from_nanos(u64::try_from(nanos).unwrap_or(u64::MAX))
+	}
+
+	fn fallback(self) -> Duration {
+		self.duration(self.fallback_frames)
+	}
+}
+
+/// When audio queued `lead` ahead of the device reaches it. The clock is read
+/// after `lead` is evaluated, so pass the latency query result directly.
+fn presented_after(lead: Duration) -> Instant {
+	let now = Instant::now();
+	now.checked_add(lead).unwrap_or(now)
+}
+
+/// When audio that has waited `age` since capture was recorded. The clock is
+/// read after `age` is evaluated, so pass the latency query result directly.
+fn captured_before(age: Duration) -> Instant {
+	let now = Instant::now();
+	now.checked_sub(age).unwrap_or(now)
+}
+
+struct PulseStream {
+	handle: *mut c_void,
+	clock:  StreamClock,
+}
 
 // SAFETY: the pointer is transferred to and exclusively dereferenced by its
 // worker thread.
@@ -304,12 +375,46 @@ impl PulseStream {
 		if stream.is_null() {
 			Err(format!("PulseAudio open failed: {}", api.error(error)))
 		} else {
-			Ok(Self(stream))
+			// `pa_simple` connects with PA_STREAM_ADJUST_LATENCY, so the server
+			// aims for `tlength` of unplayed playback audio and `fragsize` of
+			// record latency: the best estimate when a latency query fails.
+			let target = if direction == PA_STREAM_RECORD {
+				attr.fragsize
+			} else {
+				attr.tlength
+			};
+			let fallback_frames = u64::from(target) / size_of::<f32>() as u64;
+			Ok(Self {
+				handle: stream,
+				clock:  StreamClock { sample_rate: config.sample_rate, fallback_frames },
+			})
+		}
+	}
+
+	/// `pa_simple_get_latency`: for playback, how far ahead of the device the
+	/// next written sample is; for record, how long ago the next unread sample
+	/// was captured (it discounts what `pa_simple_read` already returned from a
+	/// partially consumed fragment).
+	fn latency(&self, api: &PulseApi) -> Duration {
+		let latency = api.simple_get_latency.map_or(u64::MAX, |get_latency| {
+			// SAFETY: the handle is open and used only by this worker thread;
+			// the error out-pointer may be null.
+			unsafe { get_latency(self.handle, ptr::null_mut()) }
+		});
+		if latency == u64::MAX {
+			// A failed query means the stream broke; the next read or write
+			// reports why.
+			self.clock.fallback()
+		} else {
+			Duration::from_micros(latency)
 		}
 	}
 }
 
-struct AlsaStream(*mut c_void);
+struct AlsaStream {
+	handle: *mut c_void,
+	clock:  StreamClock,
+}
 
 // SAFETY: the pointer is transferred to and exclusively dereferenced by its
 // worker thread.
@@ -351,12 +456,23 @@ impl AlsaStream {
 				api.error(status)
 			)));
 		}
-		let stream = Self(pcm);
+		// Playback writes keep the requested ring topped up and capture reads
+		// drain it once per period, so those bound the queue when
+		// `snd_pcm_delay` cannot measure it.
+		let fallback_frames = if direction == SND_PCM_STREAM_CAPTURE {
+			config.period_samples() as u64
+		} else {
+			u64::from(latency) * u64::from(config.sample_rate) / 1_000_000
+		};
+		let stream = Self {
+			handle: pcm,
+			clock:  StreamClock { sample_rate: config.sample_rate, fallback_frames },
+		};
 		// SAFETY: pcm is an open handle owned by this thread and all enum values
 		// match ALSA.
 		let status = unsafe {
 			(api.pcm_set_params)(
-				stream.0,
+				stream.handle,
 				SND_PCM_FORMAT_FLOAT_NATIVE,
 				SND_PCM_ACCESS_RW_INTERLEAVED,
 				1,
@@ -367,7 +483,7 @@ impl AlsaStream {
 		};
 		if status < 0 {
 			// SAFETY: stream owns this open handle and it has not been closed.
-			unsafe { (api.pcm_close)(stream.0) };
+			unsafe { (api.pcm_close)(stream.handle) };
 			Err(AlsaOpenError::Params(format!(
 				"ALSA parameter setup on {} failed: {}",
 				name.to_string_lossy(),
@@ -376,6 +492,19 @@ impl AlsaStream {
 		} else {
 			Ok(stream)
 		}
+	}
+
+	/// `snd_pcm_delay` in frames: for playback, how long a frame written next
+	/// takes to become audible; for capture, how long ago the oldest unread
+	/// frame was digitized. Errors carry ALSA's negative status.
+	fn delay(&self, api: &AlsaApi) -> Result<c_long, c_int> {
+		let Some(pcm_delay) = api.pcm_delay else {
+			return Err(-libc::ENOSYS);
+		};
+		let mut frames = 0;
+		// SAFETY: the handle is open and frames is valid output storage.
+		let status = unsafe { pcm_delay(self.handle, &raw mut frames) };
+		if status < 0 { Err(status) } else { Ok(frames) }
 	}
 }
 
@@ -507,7 +636,12 @@ fn remember_error(slot: &Mutex<Option<String>>, error: String) {
 
 type DeliveryGate = (AtomicBool, parking_lot::Mutex<()>);
 
-fn fill_if_armed(gate: &DeliveryGate, fill: &mut PlaybackFill, buffer: &mut [f32]) -> bool {
+fn fill_if_armed(
+	gate: &DeliveryGate,
+	fill: &mut PlaybackFill,
+	buffer: &mut [f32],
+	presented_at: Instant,
+) -> bool {
 	if !gate.0.load(Ordering::Acquire) {
 		return false;
 	}
@@ -515,11 +649,16 @@ fn fill_if_armed(gate: &DeliveryGate, fill: &mut PlaybackFill, buffer: &mut [f32
 	if !gate.0.load(Ordering::Acquire) {
 		return false;
 	}
-	fill(buffer);
+	fill(buffer, presented_at);
 	gate.0.load(Ordering::Acquire)
 }
 
-fn sink_if_armed(gate: &DeliveryGate, sink: &mut CaptureSink, buffer: &[f32]) -> bool {
+fn sink_if_armed(
+	gate: &DeliveryGate,
+	sink: &mut CaptureSink,
+	buffer: &[f32],
+	captured_at: Instant,
+) -> bool {
 	if !gate.0.load(Ordering::Acquire) {
 		return false;
 	}
@@ -527,7 +666,7 @@ fn sink_if_armed(gate: &DeliveryGate, sink: &mut CaptureSink, buffer: &[f32]) ->
 	if !gate.0.load(Ordering::Acquire) {
 		return false;
 	}
-	sink(buffer);
+	sink(buffer, captured_at);
 	gate.0.load(Ordering::Acquire)
 }
 
@@ -541,7 +680,10 @@ fn pulse_playback_loop(
 ) -> Result<(), String> {
 	let mut buffer = vec![0.0_f32; samples];
 	while !stop.load(Ordering::Acquire) {
-		if !fill_if_armed(gate, fill, &mut buffer) {
+		// The next write queues behind everything not yet played. Measured
+		// outside the delivery gate so a stalled server cannot hold up `stop`.
+		let presented_at = presented_after(stream.latency(api));
+		if !fill_if_armed(gate, fill, &mut buffer, presented_at) {
 			break;
 		}
 		let mut error = 0;
@@ -549,7 +691,7 @@ fn pulse_playback_loop(
 		// count.
 		let status = unsafe {
 			(api.simple_write)(
-				stream.0,
+				stream.handle,
 				buffer.as_ptr().cast(),
 				size_of_val(buffer.as_slice()),
 				&raw mut error,
@@ -557,12 +699,12 @@ fn pulse_playback_loop(
 		};
 		if status < 0 {
 			// SAFETY: stream is still open and exclusively owned by this thread.
-			unsafe { (api.simple_free)(stream.0) };
+			unsafe { (api.simple_free)(stream.handle) };
 			return Err(format!("PulseAudio playback failed: {}", api.error(error)));
 		}
 	}
 	// SAFETY: stream is still open and exclusively owned by this thread.
-	unsafe { (api.simple_free)(stream.0) };
+	unsafe { (api.simple_free)(stream.handle) };
 	Ok(())
 }
 
@@ -575,13 +717,14 @@ fn pulse_capture_loop(
 	samples: usize,
 ) -> Result<(), String> {
 	let mut buffer = vec![0.0_f32; samples];
+	let chunk = stream.clock.duration(samples as u64);
 	while !stop.load(Ordering::Acquire) {
 		let mut error = 0;
 		// SAFETY: stream is open and buffer has writable storage for the supplied
 		// byte count.
 		let status = unsafe {
 			(api.simple_read)(
-				stream.0,
+				stream.handle,
 				buffer.as_mut_ptr().cast(),
 				size_of_val(buffer.as_slice()),
 				&raw mut error,
@@ -589,21 +732,24 @@ fn pulse_capture_loop(
 		};
 		if status < 0 {
 			// SAFETY: stream is still open and exclusively owned by this thread.
-			unsafe { (api.simple_free)(stream.0) };
+			unsafe { (api.simple_free)(stream.handle) };
 			return Err(format!("PulseAudio capture failed: {}", api.error(error)));
 		}
-		if !sink_if_armed(gate, sink, &buffer) {
+		// Measured after the read, the latency covers only audio captured
+		// since this chunk's last sample.
+		let captured_at = captured_before(stream.latency(api).saturating_add(chunk));
+		if !sink_if_armed(gate, sink, &buffer, captured_at) {
 			break;
 		}
 	}
 	// SAFETY: stream is still open and exclusively owned by this thread.
-	unsafe { (api.simple_free)(stream.0) };
+	unsafe { (api.simple_free)(stream.handle) };
 	Ok(())
 }
 
 fn close_alsa_with_error(api: &AlsaApi, stream: &AlsaStream, error: String) -> Result<(), String> {
 	// SAFETY: stream is open and exclusively owned by this thread.
-	unsafe { (api.pcm_close)(stream.0) };
+	unsafe { (api.pcm_close)(stream.handle) };
 	Err(error)
 }
 
@@ -614,24 +760,48 @@ fn recover_alsa(
 	context: &str,
 ) -> Result<(), String> {
 	// SAFETY: stream is open and error came from an operation on this stream.
-	let recovered = unsafe { (api.pcm_recover)(stream.0, error, 1) };
+	let recovered = unsafe { (api.pcm_recover)(stream.handle, error, 1) };
 	if recovered < 0 {
 		return Err(format!("{context}: {}", api.error(recovered)));
 	}
 	// SAFETY: stream is prepared after successful recovery and remains
 	// worker-owned.
-	let _ = unsafe { (api.pcm_start)(stream.0) };
+	let _ = unsafe { (api.pcm_start)(stream.handle) };
 	Ok(())
 }
 
 fn wait_for_alsa(api: &AlsaApi, stream: &AlsaStream, timeout_ms: c_int) -> Result<(), String> {
 	// SAFETY: stream is open and timeout_ms is a valid non-negative timeout.
-	let status = unsafe { (api.pcm_wait)(stream.0, timeout_ms) };
+	let status = unsafe { (api.pcm_wait)(stream.handle, timeout_ms) };
 	if status >= 0 || status == -libc::EINTR {
 		Ok(())
 	} else {
 		recover_alsa(api, stream, status, "ALSA wait recovery failed")
 	}
+}
+
+/// How far ahead of the device the next written frame is, given the
+/// `snd_pcm_delay` result measured just before filling its buffer.
+fn alsa_playback_lead(clock: StreamClock, delay: Result<c_long, c_int>) -> Duration {
+	match delay {
+		// A negative delay is an underrun not yet flagged as an xrun; the frame
+		// plays as soon as it lands.
+		Ok(frames) => clock.duration(u64::try_from(frames).unwrap_or(0)),
+		// The xrun drained the queue; the write that follows recovers the stream,
+		// which restarts from this buffer.
+		Err(status) if status == -libc::EPIPE => Duration::ZERO,
+		Err(_) => clock.fallback(),
+	}
+}
+
+/// How long ago the first of `frames` just-read capture frames was digitized,
+/// given the `snd_pcm_delay` result measured right after the read.
+fn alsa_capture_age(clock: StreamClock, delay: Result<c_long, c_int>, frames: usize) -> Duration {
+	let unread = delay.map_or_else(
+		|_| clock.fallback(),
+		|unread| clock.duration(u64::try_from(unread).unwrap_or(0)),
+	);
+	unread.saturating_add(clock.duration(frames as u64))
 }
 
 fn alsa_playback_loop(
@@ -645,7 +815,8 @@ fn alsa_playback_loop(
 ) -> Result<(), String> {
 	let mut buffer = vec![0.0_f32; samples];
 	while !stop.load(Ordering::Acquire) {
-		if !fill_if_armed(gate, fill, &mut buffer) {
+		let presented_at = presented_after(alsa_playback_lead(stream.clock, stream.delay(api)));
+		if !fill_if_armed(gate, fill, &mut buffer, presented_at) {
 			break;
 		}
 		let mut offset = 0;
@@ -660,7 +831,7 @@ fn alsa_playback_loop(
 			// SAFETY: stream is open and the remaining buffer contains frames of
 			// mono f32 audio.
 			let status = unsafe {
-				(api.pcm_writei)(stream.0, buffer.as_ptr().add(offset).cast_mut().cast(), frames)
+				(api.pcm_writei)(stream.handle, buffer.as_ptr().add(offset).cast_mut().cast(), frames)
 			};
 			if status == -c_long::from(libc::EAGAIN) {
 				if let Err(error) = wait_for_alsa(api, stream, timeout_ms) {
@@ -688,7 +859,7 @@ fn alsa_playback_loop(
 				if written > samples - offset {
 					// SAFETY: stream is still open and exclusively owned by this
 					// thread.
-					unsafe { (api.pcm_close)(stream.0) };
+					unsafe { (api.pcm_close)(stream.handle) };
 					return Err(format!(
 						"ALSA wrote {written} frames after receiving {}",
 						samples - offset
@@ -699,7 +870,7 @@ fn alsa_playback_loop(
 		}
 	}
 	// SAFETY: stream is still open and exclusively owned by this thread.
-	unsafe { (api.pcm_close)(stream.0) };
+	unsafe { (api.pcm_close)(stream.handle) };
 	Ok(())
 }
 
@@ -723,7 +894,7 @@ fn alsa_capture_loop(
 	while !stop.load(Ordering::Acquire) {
 		// SAFETY: stream is open and buffer has writable storage for frames mono
 		// f32 frames.
-		let status = unsafe { (api.pcm_readi)(stream.0, buffer.as_mut_ptr().cast(), frames) };
+		let status = unsafe { (api.pcm_readi)(stream.handle, buffer.as_mut_ptr().cast(), frames) };
 		if status == -c_long::from(libc::EAGAIN) {
 			if let Err(error) = wait_for_alsa(api, stream, timeout_ms) {
 				return close_alsa_with_error(api, stream, error);
@@ -754,16 +925,18 @@ fn alsa_capture_loop(
 			if captured > samples {
 				// SAFETY: stream is still open and exclusively owned by this
 				// thread.
-				unsafe { (api.pcm_close)(stream.0) };
+				unsafe { (api.pcm_close)(stream.handle) };
 				return Err(format!("ALSA captured {captured} frames into a {samples}-frame buffer"));
 			}
-			if !sink_if_armed(gate, sink, &buffer[..captured]) {
+			let captured_at =
+				captured_before(alsa_capture_age(stream.clock, stream.delay(api), captured));
+			if !sink_if_armed(gate, sink, &buffer[..captured], captured_at) {
 				break;
 			}
 		}
 	}
 	// SAFETY: stream is still open and exclusively owned by this thread.
-	unsafe { (api.pcm_close)(stream.0) };
+	unsafe { (api.pcm_close)(stream.handle) };
 	Ok(())
 }
 
@@ -1042,5 +1215,21 @@ mod tests {
 	fn drain_periods_scale_with_widened_latency() {
 		assert_eq!(drain_periods_for_latency(20, 20), 3);
 		assert_eq!(drain_periods_for_latency(20, 200), 30);
+	}
+
+	/// `snd_pcm_delay` outcomes become echo-canceller timestamps: measured
+	/// delays convert at the stream rate, an xrun restarts playback from the
+	/// next buffer, and a failed or missing query falls back to the requested
+	/// queue depth instead of failing. A wrong branch skews speaker/microphone
+	/// alignment by whole buffers.
+	#[test]
+	fn alsa_delay_maps_to_buffer_lead_and_age() {
+		let clock = StreamClock { sample_rate: 16_000, fallback_frames: 960 };
+		assert_eq!(alsa_playback_lead(clock, Ok(320)), Duration::from_millis(20));
+		assert_eq!(alsa_playback_lead(clock, Ok(-5)), Duration::ZERO);
+		assert_eq!(alsa_playback_lead(clock, Err(-libc::EPIPE)), Duration::ZERO);
+		assert_eq!(alsa_playback_lead(clock, Err(-libc::ENOSYS)), Duration::from_millis(60));
+		assert_eq!(alsa_capture_age(clock, Ok(160), 320), Duration::from_millis(30));
+		assert_eq!(alsa_capture_age(clock, Err(-libc::EPIPE), 320), Duration::from_millis(80));
 	}
 }

@@ -317,6 +317,7 @@ export class InputController {
 	#expandToolsListenerInstalled = false;
 	#inlineMouseListenerInstalled = false;
 	#linkHintListenerInstalled = false;
+	#liveToggleListenerInstalled = false;
 
 	/** Click-candidate id the hover band currently tracks; repaint only on change. */
 	#lastHoverClickId: string | undefined;
@@ -406,6 +407,14 @@ export class InputController {
 				if (!focused || focused === this.ctx.editor || !hasPasteText(focused)) return undefined;
 				if (!this.ctx.keybindings.matches(data, "app.clipboard.pasteImage")) return undefined;
 				void this.handleImagePaste();
+				return { consume: true };
+			});
+		}
+		if (!this.#liveToggleListenerInstalled) {
+			this.#liveToggleListenerInstalled = true;
+			this.ctx.ui.addInputListener(data => {
+				if (!this.ctx.keybindings.matches(data, "app.live.toggle") || !this.ctx.isLiveActive?.()) return undefined;
+				void this.ctx.handleLiveCommand();
 				return { consume: true };
 			});
 		}

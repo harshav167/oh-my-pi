@@ -6,12 +6,15 @@
 //! TypeScript, and [`crate::live`] shares [`PlaybackStream`] for remote-audio
 //! rendering.
 
-use std::sync::{
-	Arc,
-	atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+use std::{
+	sync::{
+		Arc,
+		atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+	},
+	time::Instant,
 };
 
-use flume::TryRecvError;
+use flume::{TryRecvError, TrySendError};
 use tokio::sync::Notify;
 
 use crate::{
@@ -29,6 +32,9 @@ const PLAYBACK_PERIOD_MS: u32 = 20;
 const CAPTURE_PERIOD_MS: u32 = 50;
 #[cfg(not(target_os = "linux"))]
 const CAPTURE_PERIOD_MS: u32 = 20;
+/// Live playback may accumulate a short cushion. Older chunks are discarded
+/// rather than allowing network bursts to create an ever-larger audio delay.
+const LIVE_PLAYBACK_QUEUE_CHUNKS: usize = 6;
 // Backends queue up to `device::playback_drain_periods` periods (three for
 // AudioQueue buffers/WASAPI padding; PulseAudio scales this with the widened
 // remote/`PULSE_LATENCY_MSEC` backlog — see that function). Draining needs
@@ -40,29 +46,50 @@ const CAPTURE_PERIOD_MS: u32 = 20;
 // write is always the last one, which is margin rather than accounted flush.
 const PLAYBACK_DRAIN_MARGIN_CALLBACKS: usize = 1;
 
-/// Shared render-time state for one playback device: gain, queue depth,
-/// drain, stop.
+/// Receives every buffer exactly as written to the speaker (after gain,
+/// silence included) with the instant its first sample reaches the device.
+/// Runs on the audio thread and must not block.
+pub(crate) type PlaybackTap = Box<dyn FnMut(&[f32], Instant) + Send + 'static>;
+
+/// Move `epoch` to the disabled (odd) or enabled (even) parity. Every
+/// transition advances to a fresh epoch, so audio tagged before a
+/// disable/enable cycle can never match again. Returns whether it changed.
+pub(crate) fn set_epoch_disabled(epoch: &AtomicU64, disabled: bool) -> VoiceResult<bool> {
+	let mut current = epoch.load(Ordering::Acquire);
+	loop {
+		if (current % 2 == 1) == disabled {
+			return Ok(false);
+		}
+		let next = current
+			.checked_add(1)
+			.ok_or_else(|| "Audio epoch exhausted".to_owned())?;
+		match epoch.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire) {
+			Ok(_) => return Ok(true),
+			Err(actual) => current = actual,
+		}
+	}
+}
+
+/// Shared render-time state for one playback device: gain, drain, stop.
 ///
 /// Held as an `Arc` by both the stream and its N-API wrapper so
 /// [`PlaybackState::wait_for_drain`] can outlive the stream lock.
 pub struct PlaybackState {
-	gain_bits: AtomicU32,
-	/// Samples written but not yet taken by the renderer. Writers add before
-	/// sending, so this never undercounts what the channel holds.
-	queued:    AtomicUsize,
-	drained:   AtomicBool,
-	stopped:   AtomicBool,
-	notify:    Notify,
+	gain_bits:     AtomicU32,
+	drained:       AtomicBool,
+	stopped:       AtomicBool,
+	speaker_epoch: AtomicU64,
+	notify:        Notify,
 }
 
 impl PlaybackState {
 	fn new() -> Self {
 		Self {
-			gain_bits: AtomicU32::new(1.0f32.to_bits()),
-			queued:    AtomicUsize::new(0),
-			drained:   AtomicBool::new(false),
-			stopped:   AtomicBool::new(false),
-			notify:    Notify::new(),
+			gain_bits:     AtomicU32::new(1.0f32.to_bits()),
+			drained:       AtomicBool::new(false),
+			stopped:       AtomicBool::new(false),
+			speaker_epoch: AtomicU64::new(0),
+			notify:        Notify::new(),
 		}
 	}
 
@@ -98,16 +125,35 @@ impl PlaybackState {
 	}
 }
 
+/// Wakes drain waiters when the backend drops the fill callback (device loss
+/// or stop) so `wait_for_drain` can never outlive the render path.
+struct FillGuard {
+	state: Arc<PlaybackState>,
+}
+
+impl Drop for FillGuard {
+	fn drop(&mut self) {
+		self.state.mark_stopped();
+	}
+}
+
+struct PlaybackChunk {
+	samples: Vec<f32>,
+	epoch:   u64,
+}
+
 /// Producer endpoint for one native playback device. Cloned into the WebRTC
 /// remote-audio decoder so it can feed the same speaker stream.
 #[derive(Clone)]
 pub struct PlaybackWriter {
-	tx:    flume::Sender<Vec<f32>>,
-	state: Arc<PlaybackState>,
+	tx:       flume::Sender<PlaybackChunk>,
+	flush_rx: Option<flume::Receiver<PlaybackChunk>>,
+	state:    Arc<PlaybackState>,
 }
 
 impl PlaybackWriter {
-	/// Queue mono floating-point samples without blocking the caller.
+	/// Queue mono floating-point samples without blocking the caller. Audio
+	/// written while the speaker is suppressed is discarded.
 	pub fn write(&self, samples: &[f32]) -> VoiceResult<()> {
 		if samples.is_empty() {
 			return Ok(());
@@ -115,49 +161,90 @@ impl PlaybackWriter {
 		if self.state.stopped.load(Ordering::Acquire) || self.state.drained.load(Ordering::Acquire) {
 			return Err("Native audio playback is closed".to_owned());
 		}
-		self.state.queued.fetch_add(samples.len(), Ordering::AcqRel);
-		if self.tx.send(samples.to_vec()).is_err() {
-			self.state.queued.fetch_sub(samples.len(), Ordering::AcqRel);
-			return Err("Native audio playback is closed".to_owned());
+		let epoch = self.state.speaker_epoch.load(Ordering::Acquire);
+		if !epoch.is_multiple_of(2) {
+			return Ok(());
 		}
-		Ok(())
+		let chunk = PlaybackChunk { samples: samples.to_vec(), epoch };
+		match self.tx.try_send(chunk) {
+			Ok(()) => Ok(()),
+			Err(TrySendError::Full(chunk)) => {
+				let Some(flush_rx) = &self.flush_rx else {
+					// Ordinary playback is intentionally unbounded; a bounded
+					// writer always carries the queue used for live recovery.
+					return Err("Native audio playback queue is full".to_owned());
+				};
+				while flush_rx.try_recv().is_ok() {}
+				self
+					.tx
+					.try_send(chunk)
+					.map_err(|_| "Native audio playback is closed".to_owned())
+			},
+			Err(TrySendError::Disconnected(_)) => Err("Native audio playback is closed".to_owned()),
+		}
 	}
 }
 
 /// Running mono playback stream shared by N-API playback and native WebRTC.
 pub struct PlaybackStream {
-	device: Option<PlaybackDevice>,
-	writer: Option<PlaybackWriter>,
-	state:  Arc<PlaybackState>,
+	device:   Option<PlaybackDevice>,
+	writer:   Option<PlaybackWriter>,
+	state:    Arc<PlaybackState>,
+	flush_rx: flume::Receiver<PlaybackChunk>,
 }
 
 impl PlaybackStream {
 	/// Open and start the default speaker at the requested logical sample rate.
-	///
-	/// `jitter_buffer_ms` of audio is held back before playback starts and
-	/// again after every underrun, so a network-paced producer survives
-	/// arrival jitter as one short rebuffer instead of a hole in every late
-	/// period. Partial bursts play after one reserve's worth of device
-	/// callbacks even while the producer remains connected. Zero plays
-	/// samples as soon as they are queued.
-	pub fn start(sample_rate: u32, jitter_buffer_ms: u32) -> VoiceResult<Self> {
+	pub fn start(sample_rate: u32) -> VoiceResult<Self> {
+		Self::open(sample_rate, None)
+	}
+
+	/// Like [`Self::start`], additionally handing every rendered buffer and
+	/// its device presentation time to `reference` so echo cancellation sees
+	/// exactly what the speaker played.
+	pub(crate) fn start_with_reference(
+		sample_rate: u32,
+		reference: PlaybackTap,
+	) -> VoiceResult<Self> {
+		Self::open(sample_rate, Some(reference))
+	}
+
+	fn open(sample_rate: u32, reference: Option<PlaybackTap>) -> VoiceResult<Self> {
 		let sample_rate = audio_sample_rate(sample_rate)?;
-		let state = Arc::new(PlaybackState::new());
-		let (tx, rx) = flume::unbounded::<Vec<f32>>();
 		let config = DeviceConfig { sample_rate, period_ms: PLAYBACK_PERIOD_MS };
-		let mut renderer = Renderer::new(
+		let state = Arc::new(PlaybackState::new());
+		let is_live = reference.is_some();
+		let (tx, rx) = if is_live {
+			flume::bounded::<PlaybackChunk>(LIVE_PLAYBACK_QUEUE_CHUNKS)
+		} else {
+			flume::unbounded::<PlaybackChunk>()
+		};
+		let flush_rx = rx.clone();
+		let writer_flush_rx = is_live.then(|| rx.clone());
+		let mut render = PlaybackRender::new(
 			rx,
 			Arc::clone(&state),
 			(playback_drain_periods(config) as usize) + PLAYBACK_DRAIN_MARGIN_CALLBACKS,
-			sample_rate as usize * jitter_buffer_ms as usize / 1000,
+			reference,
 		);
-		let device = PlaybackDevice::start(config, Box::new(move |output| renderer.fill(output)))
-			.map_err(|error| format!("Failed to open the default speaker: {error}"))?;
+		// The guard travels inside the fill closure: if the backend drops the
+		// callback for any reason (worker exit on device loss, stop), waiters
+		// blocked in `wait_for_drain` wake instead of hanging forever.
+		let guard = FillGuard { state: Arc::clone(&state) };
+		let device = PlaybackDevice::start(
+			config,
+			Box::new(move |output, presented_at| {
+				let _ = &guard;
+				render.fill(output, presented_at);
+			}),
+		)
+		.map_err(|error| format!("Failed to open the default speaker: {error}"))?;
 
 		Ok(Self {
 			device: Some(device),
-			writer: Some(PlaybackWriter { tx, state: Arc::clone(&state) }),
+			writer: Some(PlaybackWriter { tx, flush_rx: writer_flush_rx, state: Arc::clone(&state) }),
 			state,
+			flush_rx,
 		})
 	}
 
@@ -167,6 +254,14 @@ impl PlaybackStream {
 			.writer
 			.clone()
 			.ok_or_else(|| "Native audio playback is closed".to_owned())
+	}
+
+	pub(crate) fn set_suppressed(&self, suppressed: bool) -> VoiceResult<()> {
+		set_epoch_disabled(&self.state.speaker_epoch, suppressed)?;
+		if suppressed {
+			while self.flush_rx.try_recv().is_ok() {}
+		}
+		Ok(())
 	}
 
 	/// Shared render-time state, cloned out so callers can await drain after
@@ -215,90 +310,80 @@ fn audio_sample_rate(sample_rate: u32) -> VoiceResult<u32> {
 	Ok(sample_rate)
 }
 
-/// Render-thread side of a [`PlaybackStream`]: moves queued chunks into
-/// device buffers, holds back the jitter reserve, and detects drain.
-///
-/// Travels inside the device fill callback; dropping it (worker exit on
-/// device loss, stop) marks the stream stopped so `wait_for_drain` waiters
-/// wake instead of outliving the render path.
-struct Renderer {
-	rx:                  flume::Receiver<Vec<f32>>,
-	state:               Arc<PlaybackState>,
-	current:             Vec<f32>,
-	cursor:              usize,
-	empty_callbacks:     usize,
-	drain_callbacks:     usize,
-	/// Samples that must be queued before output (re)starts; zero disables.
-	reserve:             usize,
-	buffering:           bool,
-	buffering_callbacks: usize,
+/// Audio-thread side of one playback stream: pulls queued chunks into each
+/// device buffer, then reports the finished buffer to the reference tap.
+struct PlaybackRender {
+	rx:              flume::Receiver<PlaybackChunk>,
+	state:           Arc<PlaybackState>,
+	current:         Vec<f32>,
+	cursor:          usize,
+	current_epoch:   u64,
+	empty_callbacks: usize,
+	drain_callbacks: usize,
+	reference:       Option<PlaybackTap>,
 }
 
-impl Renderer {
-	const fn new(
-		rx: flume::Receiver<Vec<f32>>,
+impl PlaybackRender {
+	fn new(
+		rx: flume::Receiver<PlaybackChunk>,
 		state: Arc<PlaybackState>,
 		drain_callbacks: usize,
-		reserve: usize,
+		reference: Option<PlaybackTap>,
 	) -> Self {
 		Self {
 			rx,
 			state,
 			current: Vec::new(),
 			cursor: 0,
+			current_epoch: 0,
 			empty_callbacks: 0,
 			drain_callbacks,
-			reserve,
-			buffering: reserve > 0,
-			buffering_callbacks: 0,
+			reference,
 		}
 	}
 
-	/// Fill one device buffer, padding with silence when the queue runs dry.
-	fn fill(&mut self, output: &mut [f32]) {
-		output.fill(0.0);
-		if output.is_empty() || self.state.stopped.load(Ordering::Acquire) {
-			return;
+	fn fill(&mut self, output: &mut [f32], presented_at: Instant) {
+		self.write(output);
+		if let Some(reference) = self.reference.as_mut() {
+			reference(output, presented_at);
 		}
-		if self.buffering {
-			let queued = self.state.queued.load(Ordering::Acquire);
-			if queued == 0 {
-				// Silence before a burst must not consume its rebuffer window.
-				self.buffering_callbacks = 0;
-			} else {
-				self.buffering_callbacks += 1;
-			}
-			// A connected live writer stays open between turns. Once a burst
-			// has waited one reserve of callback periods, play even its short
-			// tail instead of holding it for the next turn.
-			if queued < self.reserve
-				&& !self.rx.is_disconnected()
-				&& (queued == 0 || self.buffering_callbacks < self.reserve.div_ceil(output.len()))
-			{
-				return;
-			}
-			self.buffering = false;
-			self.buffering_callbacks = 0;
+	}
+
+	fn write(&mut self, output: &mut [f32]) {
+		output.fill(0.0);
+		if self.state.stopped.load(Ordering::Acquire) {
+			return;
 		}
 
 		let gain = self.state.gain();
 		let mut output_offset = 0;
 		while output_offset < output.len() {
-			if self.cursor == self.current.len() {
+			let epoch = self.state.speaker_epoch.load(Ordering::Acquire);
+			if !epoch.is_multiple_of(2) {
+				self.current.clear();
+				self.cursor = 0;
+				while self.rx.try_recv().is_ok() {}
+				self.empty_callbacks = 0;
+				return;
+			}
+			if self.current_epoch != epoch || self.cursor == self.current.len() {
+				self.current.clear();
+				self.cursor = 0;
+			}
+			if self.current.is_empty() {
 				match self.rx.try_recv() {
 					Ok(next) => {
-						self.state.queued.fetch_sub(next.len(), Ordering::AcqRel);
-						self.current = next;
+						if next.epoch != epoch
+							|| self.state.speaker_epoch.load(Ordering::Acquire) != epoch
+						{
+							continue;
+						}
+						self.current = next.samples;
 						self.cursor = 0;
+						self.current_epoch = next.epoch;
 						self.empty_callbacks = 0;
 					},
-					Err(TryRecvError::Empty) => {
-						// Underrun: rebuild the reserve before resuming.
-						self.empty_callbacks = 0;
-						self.buffering = self.reserve > 0;
-						self.buffering_callbacks = 0;
-						break;
-					},
+					Err(TryRecvError::Empty) => break,
 					Err(TryRecvError::Disconnected) => {
 						self.empty_callbacks += 1;
 						if self.empty_callbacks >= self.drain_callbacks {
@@ -325,12 +410,6 @@ impl Renderer {
 	}
 }
 
-impl Drop for Renderer {
-	fn drop(&mut self) {
-		self.state.mark_stopped();
-	}
-}
-
 /// Running default-microphone capture delivering low-latency mono `f32`
 /// chunks to its callback. Wraps the platform device so N-API callers never
 /// see backend types.
@@ -340,18 +419,19 @@ pub struct CaptureStream {
 
 impl CaptureStream {
 	/// Open the default microphone at the requested sample rate. `on_audio`
+	/// receives each chunk with the instant its first sample was captured and
 	/// runs on the realtime audio thread — it must not block.
 	pub fn start<C>(sample_rate: u32, mut on_audio: C) -> VoiceResult<Self>
 	where
-		C: FnMut(&[f32]) + Send + 'static,
+		C: FnMut(&[f32], Instant) + Send + 'static,
 	{
 		let sample_rate = audio_sample_rate(sample_rate)?;
 		let config = DeviceConfig { sample_rate, period_ms: CAPTURE_PERIOD_MS };
 		let device = CaptureDevice::start(
 			config,
-			Box::new(move |samples| {
+			Box::new(move |samples, captured_at| {
 				if !samples.is_empty() {
-					on_audio(samples);
+					on_audio(samples, captured_at);
 				}
 			}),
 		)
@@ -392,34 +472,31 @@ mod tests {
 	// period-sized local target.
 	const LOCAL_DRAIN_CALLBACKS: usize = 3 + PLAYBACK_DRAIN_MARGIN_CALLBACKS;
 
-	fn renderer(drain_callbacks: usize, reserve: usize) -> (PlaybackWriter, Renderer) {
-		let state = Arc::new(PlaybackState::new());
-		let (tx, rx) = flume::unbounded();
-		let writer = PlaybackWriter { tx, state: Arc::clone(&state) };
-		(writer, Renderer::new(rx, state, drain_callbacks, reserve))
-	}
-
 	#[test]
 	fn playback_preserves_chunk_order_and_applies_render_gain() {
-		let (writer, mut renderer) = renderer(LOCAL_DRAIN_CALLBACKS, 0);
-		renderer.state.set_gain(0.5);
-		writer.write(&[1.0, -1.0]).expect("stream is open");
-		writer.write(&[0.5, -0.5]).expect("stream is open");
-		drop(writer);
+		let state = Arc::new(PlaybackState::new());
+		state.set_gain(0.5);
+		let (tx, rx) = flume::unbounded();
+		tx.send(PlaybackChunk { samples: vec![1.0, -1.0], epoch: 0 })
+			.expect("receiver is live");
+		tx.send(PlaybackChunk { samples: vec![0.5, -0.5], epoch: 0 })
+			.expect("receiver is live");
+		drop(tx);
+		let mut render = PlaybackRender::new(rx, Arc::clone(&state), LOCAL_DRAIN_CALLBACKS, None);
 		let mut output = [9.0; 5];
 
-		renderer.fill(&mut output);
+		render.write(&mut output);
 
 		assert_eq!(output, [0.5, -0.5, 0.25, -0.25, 0.0]);
-		assert!(!renderer.state.drained.load(Ordering::Acquire));
+		assert!(!state.drained.load(Ordering::Acquire));
 		let mut silence = [1.0; 2];
-		while renderer.empty_callbacks < LOCAL_DRAIN_CALLBACKS {
+		while render.empty_callbacks < LOCAL_DRAIN_CALLBACKS {
 			silence.fill(1.0);
-			renderer.fill(&mut silence);
+			render.write(&mut silence);
 			assert_eq!(silence, [0.0, 0.0]);
 			assert_eq!(
-				renderer.state.drained.load(Ordering::Acquire),
-				renderer.empty_callbacks >= LOCAL_DRAIN_CALLBACKS
+				state.drained.load(Ordering::Acquire),
+				render.empty_callbacks >= LOCAL_DRAIN_CALLBACKS
 			);
 		}
 	}
@@ -431,152 +508,129 @@ mod tests {
 	/// wait out the full widened `drain_callbacks` count.
 	#[test]
 	fn widened_backlog_is_not_drained_within_local_margin() {
+		let state = Arc::new(PlaybackState::new());
+		let (tx, rx) = flume::unbounded::<PlaybackChunk>();
+		drop(tx);
 		let widened_drain_callbacks = LOCAL_DRAIN_CALLBACKS * 4;
-		let (writer, mut renderer) = renderer(widened_drain_callbacks, 0);
-		drop(writer);
+		let mut render = PlaybackRender::new(rx, Arc::clone(&state), widened_drain_callbacks, None);
 		let mut output = [0.0; 2];
 
 		for _ in 0..LOCAL_DRAIN_CALLBACKS {
-			renderer.fill(&mut output);
+			render.write(&mut output);
 		}
 		assert!(
-			!renderer.state.drained.load(Ordering::Acquire),
+			!state.drained.load(Ordering::Acquire),
 			"drained after only the local margin despite a widened backlog"
 		);
 
-		while renderer.empty_callbacks < widened_drain_callbacks {
-			renderer.fill(&mut output);
+		while render.empty_callbacks < widened_drain_callbacks {
+			render.write(&mut output);
 		}
-		assert!(renderer.state.drained.load(Ordering::Acquire));
+		assert!(state.drained.load(Ordering::Acquire));
 	}
 
 	#[test]
-	fn jitter_reserve_holds_output_at_start_and_after_underrun() {
-		let (writer, mut renderer) = renderer(LOCAL_DRAIN_CALLBACKS, 4);
-		let mut output = [9.0; 2];
-
-		writer.write(&[1.0; 3]).expect("stream is open");
-		renderer.fill(&mut output);
-		assert_eq!(output, [0.0, 0.0], "started below the reserve");
-		writer.write(&[2.0]).expect("stream is open");
-		renderer.fill(&mut output);
-		assert_eq!(output, [1.0, 1.0]);
-		renderer.fill(&mut output);
-		assert_eq!(output, [1.0, 2.0]);
-
-		renderer.fill(&mut output);
-		assert_eq!(output, [0.0, 0.0]);
-		writer.write(&[3.0; 3]).expect("stream is open");
-		renderer.fill(&mut output);
-		assert_eq!(output, [0.0, 0.0], "resumed below the reserve after an underrun");
-		writer.write(&[4.0]).expect("stream is open");
-		renderer.fill(&mut output);
-		assert_eq!(output, [3.0, 3.0]);
-	}
-
-	#[test]
-	fn closed_writer_plays_tail_shorter_than_reserve() {
-		let (writer, mut renderer) = renderer(LOCAL_DRAIN_CALLBACKS, 4);
-		writer.write(&[1.0]).expect("stream is open");
-		drop(writer);
-		let mut output = [9.0; 2];
-
-		renderer.fill(&mut output);
-
-		assert_eq!(output, [1.0, 0.0]);
-	}
-
-	/// Live keeps its writer connected across turns. A short final frame
-	/// must reach the speaker without waiting for the next assistant turn.
-	#[test]
-	fn connected_live_writer_releases_short_turns() {
-		let (writer, mut renderer) = renderer(LOCAL_DRAIN_CALLBACKS, 6);
-		let mut output = [9.0; 2];
-
-		for _ in 0..5 {
-			renderer.fill(&mut output);
-		}
-		writer.write(&[1.0; 2]).expect("live writer is connected");
-		for _ in 0..2 {
-			renderer.fill(&mut output);
-			assert_eq!(output, [0.0; 2], "short turn waits for jitter reserve");
-		}
-		renderer.fill(&mut output);
-		assert_eq!(output, [1.0; 2], "short turn plays without closing the writer");
-
-		renderer.fill(&mut output);
-		writer
-			.write(&[2.0; 2])
-			.expect("next turn uses the same writer");
-		for _ in 0..2 {
-			renderer.fill(&mut output);
-			assert_eq!(output, [0.0; 2], "next turn waits for its own reserve");
-		}
-		renderer.fill(&mut output);
-		assert_eq!(output, [2.0; 2], "next turn does not inherit stale audio");
-	}
-
-	/// Regression guard for #17114: live speech arrives as 20 ms Opus frames
-	/// paced by the network. Without a reserve, every packet landing after
-	/// its 20 ms device callback zero-filled a period mid-word (crackle).
-	#[test]
-	fn live_jitter_reserve_absorbs_network_jitter_without_dropouts() {
-		const SAMPLE_RATE: usize = 48_000;
-		const FRAME: usize = SAMPLE_RATE / 50;
-		const PERIOD_US: u64 = 20_000;
-		let reserve = SAMPLE_RATE * crate::live::OUTPUT_JITTER_BUFFER_MS as usize / 1000;
-		let mut seed: u64 = 17_114;
-		let mut random = move |modulo: u64| {
-			seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-			(seed >> 33) % modulo
+	fn suppression_discards_partial_output_and_rejects_audio_until_resumed() {
+		let state = Arc::new(PlaybackState::new());
+		let (tx, rx) = flume::unbounded();
+		let writer = PlaybackWriter { tx, flush_rx: None, state: Arc::clone(&state) };
+		writer.write(&[1.0, 0.5, 0.25]).unwrap();
+		let stream = PlaybackStream {
+			device:   None,
+			writer:   None,
+			state:    Arc::clone(&state),
+			flush_rx: rx.clone(),
 		};
+		let mut render = PlaybackRender::new(rx, Arc::clone(&state), LOCAL_DRAIN_CALLBACKS, None);
+		let mut first = [0.0; 1];
+		render.write(&mut first);
+		assert_eq!(first, [1.0]);
 
-		// Sweep the packet-vs-callback phase across one device period.
-		for phase in (0..PERIOD_US).step_by(1_000) {
-			// 5 s utterance: one frame per 20 ms, 0-4 ms delay variation plus
-			// 5% spikes of 10-30 ms; packets stay in order.
-			let mut latest = 0;
-			let arrivals: Vec<u64> = (0..250)
-				.map(|frame| {
-					let spike = if random(100) < 5 {
-						10_000 + random(20_000)
-					} else {
-						0
-					};
-					latest = (phase + frame * PERIOD_US + random(4_000) + spike).max(latest);
-					latest
-				})
-				.collect();
-			let (writer, mut renderer) = renderer(LOCAL_DRAIN_CALLBACKS, reserve);
-			let total = arrivals.len() * FRAME;
-			// Last packet arrives by ~5.04 s; one extra second of callbacks is
-			// ample for the reserve and any rebuffer, and keeps a renderer that
-			// strands the tail failing instead of spinning forever.
-			let deadline = arrivals[arrivals.len() - 1] / PERIOD_US + 50;
-			let mut delivered = 0;
-			let mut played = 0;
-			let mut output = [0.0; FRAME];
-			for callback in 0..=deadline {
-				let now = callback * PERIOD_US;
-				while delivered < arrivals.len() && arrivals[delivered] <= now {
-					writer.write(&[0.5; FRAME]).expect("stream is open");
-					delivered += 1;
-				}
-				renderer.fill(&mut output);
-				let audible = output.iter().filter(|sample| **sample != 0.0).count();
-				if played > 0 && played < total {
-					assert_eq!(audible, FRAME, "dropout mid-utterance at phase {phase} µs, {now} µs");
-				}
-				played += audible;
-				if played == total {
-					break;
-				}
-			}
-			assert_eq!(
-				played, total,
-				"utterance not fully played by callback {deadline} at phase {phase} µs"
-			);
+		stream.set_suppressed(true).unwrap();
+		writer.write(&[0.125]).unwrap();
+		stream.set_suppressed(false).unwrap();
+		let mut resumed = [9.0; 2];
+		render.write(&mut resumed);
+		assert_eq!(resumed, [0.0; 2]);
+		writer.write(&[0.75, 0.5]).unwrap();
+		let mut new_audio = [0.0; 2];
+		render.write(&mut new_audio);
+		assert_eq!(new_audio, [0.75, 0.5]);
+	}
+
+	#[test]
+	fn live_playback_overflow_discards_stale_chunks_instead_of_growing_lag() {
+		let state = Arc::new(PlaybackState::new());
+		let (tx, rx) = flume::bounded(LIVE_PLAYBACK_QUEUE_CHUNKS);
+		let writer = PlaybackWriter { tx, flush_rx: Some(rx.clone()), state: Arc::clone(&state) };
+		for index in 0..LIVE_PLAYBACK_QUEUE_CHUNKS + 4 {
+			writer.write(&[index as f32]).unwrap();
 		}
+		let mut render = PlaybackRender::new(rx, Arc::clone(&state), LOCAL_DRAIN_CALLBACKS, None);
+		let mut output = [9.0; 1];
+		render.write(&mut output);
+		assert_eq!(output, [(LIVE_PLAYBACK_QUEUE_CHUNKS) as f32]);
+		let mut next = [9.0; 1];
+		render.write(&mut next);
+		assert_eq!(next, [(LIVE_PLAYBACK_QUEUE_CHUNKS + 1) as f32]);
+	}
+	/// Echo cancellation aligns microphone capture against this tap, so it
+	/// must see the post-gain samples the device received, including the
+	/// silence written while nothing is queued, at the device's timestamps.
+	#[test]
+	fn reference_tap_receives_rendered_buffers_with_presentation_time() {
+		let state = Arc::new(PlaybackState::new());
+		state.set_gain(0.5);
+		let (tx, rx) = flume::unbounded();
+		let writer = PlaybackWriter { tx, flush_rx: None, state: Arc::clone(&state) };
+		let (reference_tx, reference_rx) = flume::unbounded();
+		let mut render = PlaybackRender::new(
+			rx,
+			Arc::clone(&state),
+			LOCAL_DRAIN_CALLBACKS,
+			Some(Box::new(move |samples: &[f32], at: Instant| {
+				reference_tx
+					.send((samples.to_vec(), at))
+					.expect("reference receiver is live");
+			})),
+		);
+		writer.write(&[1.0, -1.0, 0.5]).unwrap();
+		let first_at = Instant::now();
+		let second_at = first_at + Duration::from_millis(20);
+
+		render.fill(&mut [9.0; 4], first_at);
+		render.fill(&mut [9.0; 2], second_at);
+
+		assert_eq!(reference_rx.try_iter().collect::<Vec<_>>(), [
+			(vec![0.5, -0.5, 0.25, 0.0], first_at),
+			(vec![0.0, 0.0], second_at),
+		]);
+	}
+
+	#[test]
+	fn live_playback_queue_is_bounded_without_blocking_the_producer() {
+		let state = Arc::new(PlaybackState::new());
+		let (tx, rx) = flume::bounded(LIVE_PLAYBACK_QUEUE_CHUNKS);
+		let writer = PlaybackWriter { tx, flush_rx: Some(rx.clone()), state: Arc::clone(&state) };
+		for index in 0..LIVE_PLAYBACK_QUEUE_CHUNKS + 1 {
+			writer.write(&[index as f32]).unwrap();
+		}
+		assert_eq!(rx.len(), 1);
+		assert_eq!(rx.try_recv().unwrap().samples, [LIVE_PLAYBACK_QUEUE_CHUNKS as f32]);
+	}
+
+	#[test]
+	fn regular_playback_retains_every_queued_chunk() {
+		let state = Arc::new(PlaybackState::new());
+		let (tx, rx) = flume::unbounded();
+		let writer = PlaybackWriter { tx, flush_rx: None, state: Arc::clone(&state) };
+		for index in 0..LIVE_PLAYBACK_QUEUE_CHUNKS + 1 {
+			writer.write(&[index as f32]).unwrap();
+		}
+		let mut render = PlaybackRender::new(rx, Arc::clone(&state), LOCAL_DRAIN_CALLBACKS, None);
+		let mut output = [0.0; LIVE_PLAYBACK_QUEUE_CHUNKS + 1];
+		render.write(&mut output);
+		assert_eq!(output, std::array::from_fn(|index| index as f32));
 	}
 
 	#[test]
@@ -585,7 +639,7 @@ mod tests {
 			return;
 		}
 
-		let mut stream = PlaybackStream::start(16_000, 0).expect("default playback device starts");
+		let mut stream = PlaybackStream::start(16_000).expect("default playback device starts");
 		stream.stop().expect("default playback device stops");
 	}
 
@@ -597,7 +651,7 @@ mod tests {
 
 		let callbacks = Arc::new(AtomicUsize::new(0));
 		let callback_count = Arc::clone(&callbacks);
-		let mut stream = CaptureStream::start(16_000, move |_samples| {
+		let mut stream = CaptureStream::start(16_000, move |_samples, _captured_at| {
 			callback_count.fetch_add(1, Ordering::Relaxed);
 		})
 		.expect("default capture device starts");

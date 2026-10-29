@@ -12,6 +12,7 @@ export class CountdownTimer {
 	#deadlineMs = 0;
 	#node: NativeNode | undefined;
 	readonly #initialMs: number;
+	#pausedRemainingMs: number | undefined;
 
 	constructor(
 		timeoutMs: number,
@@ -29,9 +30,9 @@ export class CountdownTimer {
 		return Math.ceil(remainingMs / 1000);
 	}
 
-	#start(): void {
+	#start(durationMs = this.#initialMs): void {
 		const now = Date.now();
-		this.#deadlineMs = now + this.#initialMs;
+		this.#deadlineMs = now + durationMs;
 		this.#node = undefined;
 		this.#remainingSeconds = this.#calculateRemainingSeconds(now);
 		this.onTick(this.#remainingSeconds);
@@ -40,7 +41,7 @@ export class CountdownTimer {
 		this.#expireTimeoutId = setTimeout(() => {
 			this.dispose();
 			this.onExpire();
-		}, this.#initialMs);
+		}, durationMs);
 
 		// The per-second tick only repaints the remaining time; a TSP terminal
 		// counts down the described `elapsed` node itself.
@@ -78,8 +79,24 @@ export class CountdownTimer {
 		}, 1000);
 	}
 
+	/** Stop expiration while preserving the precise remaining duration. */
+	pause(): void {
+		if (this.#pausedRemainingMs !== undefined) return;
+		this.#pausedRemainingMs = Math.max(0, this.#deadlineMs - Date.now());
+		this.dispose();
+	}
+
+	/** Resume from the paused remaining duration rather than restarting the initial timeout. */
+	resume(): void {
+		const remainingMs = this.#pausedRemainingMs;
+		if (remainingMs === undefined) return;
+		this.#pausedRemainingMs = undefined;
+		this.#start(remainingMs);
+	}
+
 	/** Reset the countdown to its initial value */
 	reset(): void {
+		if (this.#pausedRemainingMs !== undefined) return;
 		this.dispose();
 		this.#start();
 	}

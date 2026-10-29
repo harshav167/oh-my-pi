@@ -1,13 +1,14 @@
 import { afterEach, beforeAll, describe, expect, it, type Mock, vi } from "bun:test";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import { stripVTControlCharacters } from "node:util";
-import { type Component, Container, isFocusable, type OverlayOptions, setKeybindings } from "@oh-my-pi/pi-tui";
+import { type Component, Container, isFocusable, type OverlayOptions, setKeybindings, Text } from "@oh-my-pi/pi-tui";
 import { KeybindingsManager } from "@oh-my-pi/pi-tui/app-keybindings";
 import type { ExtensionAskDialogQuestion, ExtensionUIContext } from "../../../src/extensibility/extensions";
 import { AskDialogComponent } from "@oh-my-pi/pi-tui/overlays/ask-dialog";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { HookEditorComponent } from "@oh-my-pi/pi-tui/overlays/hook-editor";
 import { ExtensionUiController } from "../../../src/modes/controllers/extension-ui-controller";
+import { editorSurfaceFor } from "../../../src/modes/controllers/editor-surface";
 import { InputController } from "../../../src/modes/controllers/input-controller";
 import { getEditorTheme, getThemeByName, setThemeInstance } from "@oh-my-pi/pi-tui/theme";
 import type { InteractiveModeContext } from "../../../src/modes/types";
@@ -79,12 +80,13 @@ function makeHarness() {
 	const controller = new ExtensionUiController(ctx);
 
 	return {
+		ctx,
 		editor,
 		requestRender,
 		addAutocompleteProvider,
-		editorContainer,
-		getFocused,
 		setFocus,
+		getFocused,
+		editorContainer,
 		showOverlay,
 		fakeHandle,
 		controller,
@@ -264,6 +266,23 @@ describe("ExtensionUiController Ask dialog input", () => {
 			results: [{ id: "answer", selectedOptions: [], customInput: "typed after failure" }],
 		});
 		expect(harness.editor.getText()).toBe("");
+	});
+
+	it("stacks Ask above the persistent voice surface and restores it on submit", async () => {
+		const harness = makeHarness();
+		const voiceSurface = new Text("voice", 0, 0);
+		editorSurfaceFor(harness.ctx).setBase([voiceSurface], voiceSurface);
+
+		const pending = harness.controller.showAskDialog(questions);
+		const ask = harness.editorContainer.children[0];
+		expect(ask).toBeInstanceOf(AskDialogComponent);
+		expect(harness.editorContainer.children).toEqual([ask, voiceSurface]);
+		expect(harness.getFocused()).toBe(ask);
+
+		harness.handleInput("\r");
+		expect(await pending).toMatchObject({ kind: "submit" });
+		expect(harness.editorContainer.children).toEqual([voiceSurface]);
+		expect(harness.getFocused()).toBe(voiceSurface);
 	});
 });
 
@@ -532,7 +551,7 @@ describe("ExtensionUiController custom overlay", () => {
 		await expect(ui.custom(() => Promise.reject(failure))).rejects.toBe(failure);
 
 		expect(harness.editorContainer.children).toEqual([harness.editor]);
-		expect(harness.setFocus).toHaveBeenLastCalledWith(harness.editor);
+		expect(harness.getFocused()).toBe(harness.editor);
 	});
 
 	it("aborts a pending custom factory and disposes its late component", async () => {
@@ -555,6 +574,32 @@ describe("ExtensionUiController custom overlay", () => {
 		expect(component.dispose).toHaveBeenCalledTimes(1);
 		expect(harness.editorContainer.children).toEqual([harness.editor]);
 		expect(harness.editor.getText()).toBe("draft typed while factory is pending");
+	});
+
+	it("closing an overlay preserves a pending editor-slot Ask", async () => {
+		const harness = makeHarness();
+		const ui = await harness.init();
+		const pending = harness.controller.showAskDialog([
+			{ id: "overlay-ask", question: "Continue?", options: [{ label: "Yes" }] },
+		]);
+		const ask = harness.editorContainer.children[0];
+		let closeOverlay: (() => void) | undefined;
+		const overlay = ui.custom<void>(
+			(_tui, _theme, _keybindings, done) => {
+				closeOverlay = () => done(undefined);
+				return new Container();
+			},
+			{ overlay: true },
+		);
+		await flushMicrotasks();
+		if (!closeOverlay) throw new Error("overlay did not mount");
+		closeOverlay();
+		await overlay;
+
+		expect(harness.editorContainer.children[0]).toBe(ask);
+		expect(harness.getFocused()).toBe(ask);
+		harness.handleInput("\r");
+		expect(await pending).toMatchObject({ kind: "submit" });
 	});
 });
 

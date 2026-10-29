@@ -5,16 +5,18 @@
 //! playback. The N-API class in pi-natives is a thin adapter over
 //! [`LivePeerCore`].
 
+mod playout;
+mod processing;
+mod runtime;
+
 use std::{
 	sync::{
 		Arc, Weak,
-		atomic::{AtomicBool, AtomicUsize, Ordering},
+		atomic::{AtomicBool, AtomicU64, Ordering},
 	},
 	time::Duration,
 };
 
-use bytes::Bytes;
-use opus::{Application, Channels, Decoder, Encoder};
 use parking_lot::Mutex;
 use tokio::{sync::watch, task::JoinHandle};
 use webrtc::{
@@ -25,7 +27,6 @@ use webrtc::{
 	},
 	data_channel::{RTCDataChannel, data_channel_message::DataChannelMessage},
 	interceptor::registry::Registry,
-	media::Sample,
 	peer_connection::{
 		RTCPeerConnection, configuration::RTCConfiguration,
 		peer_connection_state::RTCPeerConnectionState,
@@ -35,31 +36,16 @@ use webrtc::{
 		rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
 		rtp_sender::RTCRtpSender,
 	},
-	track::{
-		track_local::{TrackLocal, track_local_static_sample::TrackLocalStaticSample},
-		track_remote::TrackRemote,
-	},
+	track::track_local::{TrackLocal, track_local_static_sample::TrackLocalStaticSample},
 };
 
 use crate::{
 	VoiceResult,
-	audio::{PlaybackStream, PlaybackWriter},
+	audio::{CaptureStream, PlaybackStream, set_epoch_disabled},
 };
 
 const DATA_CHANNEL_LABEL: &str = "oai-events";
-const INPUT_SAMPLE_RATE: u32 = 16_000;
-const INPUT_FRAME_SAMPLES: usize = 320;
-const INPUT_FRAME_DURATION: Duration = Duration::from_millis(20);
-const MAX_ENCODED_OPUS_BYTES: usize = 1_275;
-const MAX_QUEUED_INPUT_SAMPLES: usize = 32_000;
 const OUTPUT_SAMPLE_RATE: u32 = 48_000;
-const MAX_DECODED_OPUS_SAMPLES: usize = 5_760;
-const OUTPUT_LEVEL_SAMPLES: usize = 2_400;
-const OUTPUT_FRAME_SAMPLES: usize = 960;
-/// Remote speech held back before playback starts and after each underrun.
-/// Packets arrive paced by the network, one 20 ms frame per device period on
-/// macOS/Windows; three frames of slack absorb ordinary jitter and spikes.
-pub(crate) const OUTPUT_JITTER_BUFFER_MS: u32 = 60;
 /// Default `wait_for_open` timeout, exposed so the N-API adapter can apply it
 /// when TypeScript passes no override.
 pub const DEFAULT_OPEN_TIMEOUT_MS: u32 = 20_000;
@@ -82,20 +68,29 @@ enum PeerSignal {
 	Closed,
 }
 
-enum InputCommand {
-	Audio(Vec<f32>),
-	Muted(bool),
-	Close,
+#[derive(Clone, Copy, PartialEq)]
+struct LiveLevels {
+	input:  f64,
+	output: f64,
 }
 
-/// Host callbacks for peer lifecycle and media events. Every callback is
-/// invoked from tokio worker threads and must not block (the N-API adapter
-/// forwards through non-blocking threadsafe functions).
+/// Host callbacks for peer lifecycle and media events. Callbacks must not
+/// block or call back into the peer; the N-API adapter forwards through
+/// non-blocking threadsafe functions.
+///
+/// - `event` runs on tokio worker threads.
+/// - `levels` runs on the media worker and, when muting or suppressing the
+///   speaker, on the thread calling [`LivePeerCore::set_muted`] or
+///   [`LivePeerCore::set_speaker_suppressed`]. It runs while the peer's level
+///   lock (and, from those setters, its resource lock) is held, so re-entering
+///   the peer deadlocks.
+/// - `failure` runs on tokio worker threads, or on the realtime device audio
+///   threads when a microphone or speaker-reference queue closes unexpectedly.
 pub struct LiveCallbacks {
 	/// One `oai-events` data-channel text payload.
 	pub event:   Box<dyn Fn(String) + Send + Sync>,
-	/// RMS output level in `[0, 1]`, one report per level window.
-	pub level:   Box<dyn Fn(f64) + Send + Sync>,
+	/// RMS input and output levels in `[0, 1]`.
+	pub levels:  Box<dyn Fn(f64, f64) + Send + Sync>,
 	/// Terminal transport failure; reported at most once per peer.
 	pub failure: Box<dyn Fn(String) + Send + Sync>,
 }
@@ -103,24 +98,31 @@ pub struct LiveCallbacks {
 struct LiveResources {
 	peer:         Arc<RTCPeerConnection>,
 	data_channel: Arc<RTCDataChannel>,
-	input_tx:     flume::Sender<InputCommand>,
-	input_task:   JoinHandle<()>,
+	media_tx:     flume::Sender<runtime::MediaCommand>,
+	capture:      CaptureStream,
+	media_task:   JoinHandle<()>,
 	rtcp_task:    JoinHandle<()>,
 	playback:     PlaybackStream,
 }
 
-/// WebRTC live-conversation peer: accepts 16 kHz mono PCM input and renders
-/// remote Opus audio to the default speaker. Owned as an `Arc` by the N-API
-/// `LiveWebRtcPeer` wrapper.
+/// WebRTC live-conversation peer: captures microphone audio natively and
+/// renders remote Opus audio to the default speaker. Owned as an `Arc` by the
+/// N-API `LiveWebRtcPeer` wrapper.
 pub struct LivePeerCore {
-	callbacks:        LiveCallbacks,
-	resources:        Mutex<Option<LiveResources>>,
-	signal_tx:        watch::Sender<PeerSignal>,
-	started:          AtomicBool,
-	closing:          AtomicBool,
-	muted:            AtomicBool,
-	failure_reported: AtomicBool,
-	queued_samples:   AtomicUsize,
+	callbacks:          LiveCallbacks,
+	resources:          Mutex<Option<LiveResources>>,
+	signal_tx:          watch::Sender<PeerSignal>,
+	started:            AtomicBool,
+	closing:            AtomicBool,
+	/// Even while transmitting, odd while muted; advanced on every mute
+	/// transition so capture tagged with an older epoch is discarded.
+	microphone_epoch:   AtomicU64,
+	speaker_suppressed: AtomicBool,
+	capture_dropped:    AtomicBool,
+	render_dropped:     AtomicBool,
+	remote_track_seen:  AtomicBool,
+	failure_reported:   AtomicBool,
+	levels:             Mutex<LiveLevels>,
 }
 
 impl LivePeerCore {
@@ -133,9 +135,13 @@ impl LivePeerCore {
 			signal_tx,
 			started: AtomicBool::new(false),
 			closing: AtomicBool::new(false),
-			muted: AtomicBool::new(false),
+			microphone_epoch: AtomicU64::new(0),
+			speaker_suppressed: AtomicBool::new(false),
+			capture_dropped: AtomicBool::new(false),
+			render_dropped: AtomicBool::new(false),
+			remote_track_seen: AtomicBool::new(false),
 			failure_reported: AtomicBool::new(false),
-			queued_samples: AtomicUsize::new(0),
+			levels: Mutex::new(LiveLevels { input: 0.0, output: 0.0 }),
 		}
 	}
 
@@ -151,8 +157,16 @@ impl LivePeerCore {
 			return Err("Native live WebRTC peer is closed".to_owned());
 		}
 
-		let playback = PlaybackStream::start(OUTPUT_SAMPLE_RATE, OUTPUT_JITTER_BUFFER_MS)?;
+		let (reference_tx, reference_rx) = runtime::reference_channel();
+		let playback = runtime::open_playback(Arc::downgrade(self), reference_tx)?;
+		playback.set_suppressed(self.speaker_suppressed.load(Ordering::Acquire))?;
 		let playback_tx = playback.writer()?;
+		let (capture_tx, capture_rx) = runtime::capture_channel();
+		let capture = runtime::open_capture(Arc::downgrade(self), capture_tx)?;
+		let (packet_tx, packet_rx) = runtime::incoming_channel();
+		let incoming_budget = playout::IngressBudget::new();
+		let (media_tx, media_rx) = runtime::command_channel();
+
 		let mut media_engine = MediaEngine::default();
 		let capability = opus_capability();
 		media_engine
@@ -193,7 +207,7 @@ impl LivePeerCore {
 			},
 		};
 
-		install_peer_callbacks(&peer, Arc::downgrade(self), playback_tx);
+		install_peer_callbacks(&peer, Arc::downgrade(self), packet_tx, incoming_budget);
 		let data_channel = match peer.create_data_channel(DATA_CHANNEL_LABEL, None).await {
 			Ok(channel) => channel,
 			Err(error) => {
@@ -214,19 +228,48 @@ impl LivePeerCore {
 			let _ = peer.close().await;
 			return Err(format!("Failed to install the live SDP offer: {error}"));
 		}
-		let mut resources_slot = self.resources.lock();
-		if self.closing.load(Ordering::Acquire) {
-			drop(resources_slot);
+		let resources_result = {
+			let mut resources_slot = self.resources.lock();
+			if self.closing.load(Ordering::Acquire) {
+				Err((
+					"Native live WebRTC peer was closed while starting".to_owned(),
+					peer,
+					capture,
+					playback,
+				))
+			} else if let Err(error) =
+				playback.set_suppressed(self.speaker_suppressed.load(Ordering::Acquire))
+			{
+				Err((error, peer, capture, playback))
+			} else {
+				let media_task = tokio::spawn(runtime::run_media(
+					Arc::clone(&track),
+					capture_rx,
+					reference_rx,
+					packet_rx,
+					media_rx,
+					playback_tx,
+					Arc::downgrade(self),
+				));
+				let rtcp_task = tokio::spawn(drain_rtcp(sender));
+				*resources_slot = Some(LiveResources {
+					peer,
+					data_channel,
+					media_tx,
+					capture,
+					media_task,
+					rtcp_task,
+					playback,
+				});
+				Ok(())
+			}
+		};
+		if let Err((error, peer, mut capture, mut playback)) = resources_result {
+			let _ = capture.stop();
+			let _ = playback.stop();
 			let _ = peer.close().await;
-			return Err("Native live WebRTC peer was closed while starting".to_owned());
+			return Err(error);
 		}
-
-		let (input_tx, input_rx) = flume::unbounded();
-		let input_task = tokio::spawn(run_input_audio(track, input_rx, Arc::downgrade(self)));
-		let rtcp_task = tokio::spawn(drain_rtcp(sender));
-		let resources =
-			LiveResources { peer, data_channel, input_tx, input_task, rtcp_task, playback };
-		*resources_slot = Some(resources);
 		Ok(offer.sdp)
 	}
 
@@ -272,54 +315,48 @@ impl LivePeerCore {
 			.map_err(|_| "Timed out waiting for the live data channel to open".to_owned())?
 	}
 
-	/// Queue 16 kHz mono PCM for Opus transmission. Silently drops audio while
-	/// muted or when the bounded input queue is full.
-	pub fn push_audio(&self, samples: &[f32]) -> VoiceResult<()> {
-		if samples.is_empty() || self.muted.load(Ordering::Acquire) {
+	/// Enable or disable microphone transmission, discarding partial muted
+	/// frames.
+	pub fn set_muted(&self, muted: bool) -> VoiceResult<()> {
+		let resources = self.resources.lock();
+		if !set_epoch_disabled(&self.microphone_epoch, muted)? {
 			return Ok(());
 		}
-		let input_tx = self
-			.resources
-			.lock()
-			.as_ref()
-			.map(|resources| resources.input_tx.clone())
-			.ok_or_else(|| "Native live WebRTC peer has not started".to_owned())?;
-		let sample_count = samples.len().min(MAX_QUEUED_INPUT_SAMPLES);
-		let retained = &samples[samples.len() - sample_count..];
-		let queued = self
-			.queued_samples
-			.fetch_add(sample_count, Ordering::AcqRel);
-		if queued.saturating_add(sample_count) > MAX_QUEUED_INPUT_SAMPLES {
-			self
-				.queued_samples
-				.fetch_sub(sample_count, Ordering::AcqRel);
-			return Ok(());
+		if muted {
+			self.report_input_level(0.0);
 		}
-		if input_tx
-			.send(InputCommand::Audio(retained.to_vec()))
-			.is_err()
-		{
-			self
-				.queued_samples
-				.fetch_sub(sample_count, Ordering::AcqRel);
-			return Err("Native live audio input is closed".to_owned());
+		if let Some(resources) = resources.as_ref() {
+			resources
+				.media_tx
+				.send(runtime::MediaCommand::Muted(muted))
+				.map_err(|_| "Native live audio input is closed".to_owned())?;
 		}
 		Ok(())
 	}
 
-	/// Enable or disable microphone transmission, discarding partial muted
-	/// frames.
-	pub fn set_muted(&self, muted: bool) -> VoiceResult<()> {
-		self.muted.store(muted, Ordering::Release);
-		let input_tx = self
-			.resources
-			.lock()
-			.as_ref()
-			.map(|resources| resources.input_tx.clone());
-		if let Some(input_tx) = input_tx {
-			input_tx
-				.send(InputCommand::Muted(muted))
-				.map_err(|_| "Native live audio input is closed".to_owned())?;
+	/// Suppress speaker output, dropping queued and incoming audio until
+	/// resumed.
+	pub fn set_speaker_suppressed(&self, suppressed: bool) -> VoiceResult<()> {
+		let resources = self.resources.lock();
+		let previous = self.speaker_suppressed.swap(suppressed, Ordering::AcqRel);
+		if previous == suppressed {
+			return Ok(());
+		}
+		if let Some(resources) = resources.as_ref() {
+			if let Err(error) = resources.playback.set_suppressed(suppressed) {
+				self.speaker_suppressed.store(previous, Ordering::Release);
+				return Err(error);
+			}
+			if resources
+				.media_tx
+				.send(runtime::MediaCommand::SpeakerSuppressed(suppressed))
+				.is_err()
+			{
+				return Err("Native live audio output is closed".to_owned());
+			}
+		}
+		if suppressed {
+			self.report_output_level(0.0);
 		}
 		Ok(())
 	}
@@ -330,12 +367,43 @@ impl LivePeerCore {
 		self.closing.load(Ordering::Acquire)
 	}
 
+	fn is_muted(&self) -> bool {
+		!self
+			.microphone_epoch
+			.load(Ordering::Acquire)
+			.is_multiple_of(2)
+	}
+
 	fn report_event(&self, payload: String) {
 		(self.callbacks.event)(payload);
 	}
 
-	fn report_level(&self, level: f64) {
-		(self.callbacks.level)(level.clamp(0.0, 1.0));
+	fn report_input_level(&self, input: f64) {
+		let input = if self.is_muted() { 0.0 } else { input };
+		self.report_levels(Some(input), None);
+	}
+
+	fn report_output_level(&self, output: f64) {
+		let output = if self.speaker_suppressed.load(Ordering::Acquire) {
+			0.0
+		} else {
+			output
+		};
+		self.report_levels(None, Some(output));
+	}
+
+	fn report_levels(&self, input: Option<f64>, output: Option<f64>) {
+		let mut levels = self.levels.lock();
+		let current = *levels;
+		let next = LiveLevels {
+			input:  input.map_or(current.input, normalize_level),
+			output: output.map_or(current.output, normalize_level),
+		};
+		if current == next {
+			return;
+		}
+		*levels = next;
+		(self.callbacks.levels)(next.input, next.output);
 	}
 
 	fn mark_open(&self) {
@@ -355,8 +423,8 @@ impl LivePeerCore {
 		(self.callbacks.failure)(message);
 	}
 
-	/// Close media, the data channel, the peer connection, and speaker
-	/// playback. Concurrent calls wait for the first closer to finish.
+	/// Close media, the data channel, the peer connection, and device streams.
+	/// Concurrent calls wait for the first closer to finish.
 	pub async fn close(&self) {
 		if self.closing.swap(true, Ordering::AcqRel) {
 			let mut signal_rx = self.signal_tx.subscribe();
@@ -370,16 +438,25 @@ impl LivePeerCore {
 
 		let resources = self.resources.lock().take();
 		if let Some(mut resources) = resources {
-			let _ = resources.input_tx.send(InputCommand::Close);
+			let _ = set_epoch_disabled(&self.microphone_epoch, true);
+			let _ = resources.media_tx.send(runtime::MediaCommand::Close);
+			let _ = resources.capture.stop();
 			let _ = resources.peer.close().await;
+			let _ = tokio::time::timeout(CLOSE_TASK_TIMEOUT, resources.media_task).await;
 			let _ = resources.playback.stop();
-			let _ = tokio::time::timeout(CLOSE_TASK_TIMEOUT, resources.input_task).await;
 			resources.rtcp_task.abort();
 			let _ = resources.rtcp_task.await;
 			drop(resources.data_channel);
 		}
-		self.queued_samples.store(0, Ordering::Release);
 		self.signal_tx.send_replace(PeerSignal::Closed);
+	}
+}
+
+const fn normalize_level(level: f64) -> f64 {
+	if level.is_finite() {
+		level.clamp(0.0, 1.0)
+	} else {
+		0.0
 	}
 }
 
@@ -396,27 +473,27 @@ fn opus_capability() -> RTCRtpCodecCapability {
 fn install_peer_callbacks(
 	peer: &Arc<RTCPeerConnection>,
 	core: Weak<LivePeerCore>,
-	playback_tx: PlaybackWriter,
+	incoming_tx: flume::Sender<playout::IncomingPacket>,
+	budget: playout::IngressBudget,
 ) {
-	let output_sender = Arc::new(Mutex::new(Some(playback_tx)));
-	let output_sender_for_track = Arc::clone(&output_sender);
 	let core_for_track = core.clone();
 	peer.on_track(Box::new(move |track, _receiver, _transceiver| {
-		let output_sender = output_sender_for_track.lock().take();
+		let incoming_tx = incoming_tx.clone();
+		let budget = budget.clone();
 		let core = core_for_track.clone();
 		Box::pin(async move {
 			if track.kind() != RTPCodecType::Audio {
 				return;
 			}
-			let Some(output_sender) = output_sender else {
-				if let Some(core) = core.upgrade() {
-					core.report_failure(
-						"Codex live returned more than one remote audio track".to_owned(),
-					);
-				}
+			let Some(core_ref) = core.upgrade() else {
 				return;
 			};
-			tokio::spawn(receive_output_audio(track, output_sender, core));
+			if core_ref.remote_track_seen.swap(true, Ordering::AcqRel) {
+				core_ref
+					.report_failure("Codex live returned more than one remote audio track".to_owned());
+				return;
+			}
+			tokio::spawn(runtime::receive_output_audio(track, incoming_tx, budget, core));
 		})
 	}));
 
@@ -494,318 +571,6 @@ fn install_data_channel_callbacks(data_channel: &Arc<RTCDataChannel>, core: Weak
 	}));
 }
 
-async fn run_input_audio(
-	track: Arc<TrackLocalStaticSample>,
-	input_rx: flume::Receiver<InputCommand>,
-	core: Weak<LivePeerCore>,
-) {
-	let mut encoder = match Encoder::new(INPUT_SAMPLE_RATE, Channels::Mono, Application::Voip) {
-		Ok(encoder) => encoder,
-		Err(error) => {
-			if let Some(core) = core.upgrade() {
-				core.report_failure(format!("Failed to initialize the live Opus encoder: {error}"));
-			}
-			return;
-		},
-	};
-	if let Err(error) = encoder.set_inband_fec(true) {
-		if let Some(core) = core.upgrade() {
-			core.report_failure(format!("Failed to configure the live Opus encoder: {error}"));
-		}
-		return;
-	}
-
-	let mut muted = false;
-	let mut pending = Vec::with_capacity(INPUT_FRAME_SAMPLES * 2);
-	let mut encoded = [0u8; MAX_ENCODED_OPUS_BYTES];
-	let mut ticker = tokio::time::interval(INPUT_FRAME_DURATION);
-	ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
-	ticker.tick().await;
-	loop {
-		tokio::select! {
-			biased;
-			command = input_rx.recv_async() => {
-				let Ok(command) = command else {
-					break;
-				};
-				match command {
-					InputCommand::Audio(samples) => {
-						if let Some(core) = core.upgrade() {
-							core.queued_samples.fetch_sub(samples.len(), Ordering::AcqRel);
-						}
-						if muted {
-							continue;
-						}
-						if samples.len() >= MAX_QUEUED_INPUT_SAMPLES {
-							pending.clear();
-							pending.extend_from_slice(&samples[samples.len() - MAX_QUEUED_INPUT_SAMPLES..]);
-							continue;
-						}
-						let overflow = pending
-							.len()
-							.saturating_add(samples.len())
-							.saturating_sub(MAX_QUEUED_INPUT_SAMPLES);
-						if overflow > 0 {
-							pending.drain(..overflow);
-						}
-						pending.extend_from_slice(&samples);
-					},
-					InputCommand::Muted(next_muted) => {
-						muted = next_muted;
-						pending.clear();
-					},
-					InputCommand::Close => break,
-				}
-			},
-			_ = ticker.tick() => {
-				let mut frame = [0.0f32; INPUT_FRAME_SAMPLES];
-				if !muted {
-					let consumed = pending.len().min(INPUT_FRAME_SAMPLES);
-					frame[..consumed].copy_from_slice(&pending[..consumed]);
-					if consumed > 0 {
-						pending.copy_within(consumed.., 0);
-						pending.truncate(pending.len() - consumed);
-					}
-				}
-				let encoded_len = match encoder.encode_float(&frame, &mut encoded) {
-					Ok(encoded_len) => encoded_len,
-					Err(error) => {
-						if let Some(core) = core.upgrade() {
-							core.report_failure(format!("Failed to encode live microphone audio: {error}"));
-						}
-						return;
-					},
-				};
-				let sample = Sample {
-					data: Bytes::copy_from_slice(&encoded[..encoded_len]),
-					duration: INPUT_FRAME_DURATION,
-					..Default::default()
-				};
-				if let Err(error) = track.write_sample(&sample).await {
-					if let Some(core) = core.upgrade() {
-						core.report_failure(format!("Failed to send live microphone audio: {error}"));
-					}
-					return;
-				}
-			},
-		}
-	}
-}
-
 async fn drain_rtcp(sender: Arc<RTCRtpSender>) {
 	while sender.read_rtcp().await.is_ok() {}
-}
-
-async fn receive_output_audio(
-	track: Arc<TrackRemote>,
-	playback_tx: PlaybackWriter,
-	core: Weak<LivePeerCore>,
-) {
-	if !track
-		.codec()
-		.capability
-		.mime_type
-		.eq_ignore_ascii_case(MIME_TYPE_OPUS)
-	{
-		if let Some(core) = core.upgrade() {
-			core.report_failure(format!(
-				"Codex live negotiated unsupported audio codec {}",
-				track.codec().capability.mime_type
-			));
-		}
-		return;
-	}
-	let mut decoder = match OutputDecoder::new() {
-		Ok(decoder) => decoder,
-		Err(error) => {
-			if let Some(core) = core.upgrade() {
-				core.report_failure(format!("Failed to initialize the live Opus decoder: {error}"));
-			}
-			return;
-		},
-	};
-	let mut level = OutputLevel::default();
-
-	loop {
-		let packet = match track.read_rtp().await {
-			Ok((packet, _attributes)) => packet,
-			Err(error) => {
-				if let Some(core) = core.upgrade()
-					&& !core.closing.load(Ordering::Acquire)
-				{
-					core.report_failure(format!("Live remote audio track failed: {error}"));
-				}
-				return;
-			},
-		};
-		let decoded = decoder.push(packet.header.sequence_number, &packet.payload, |samples| {
-			if !write_output(&playback_tx, samples, &core) {
-				return false;
-			}
-			level.observe(samples, &core);
-			true
-		});
-		match decoded {
-			Ok(true) => {},
-			Ok(false) => return,
-			Err(error) => {
-				if let Some(core) = core.upgrade() {
-					core.report_failure(error);
-				}
-				return;
-			},
-		}
-	}
-}
-
-/// Opus decode state for the remote track: conceals sequence gaps, drops
-/// late or duplicate packets, and emits PCM in playback order.
-struct OutputDecoder {
-	decoder:           Decoder,
-	decoded:           Box<[f32]>,
-	expected_sequence: Option<u16>,
-}
-
-impl OutputDecoder {
-	fn new() -> Result<Self, opus::Error> {
-		Ok(Self {
-			decoder:           Decoder::new(OUTPUT_SAMPLE_RATE, Channels::Mono)?,
-			decoded:           vec![0.0; MAX_DECODED_OPUS_SAMPLES].into_boxed_slice(),
-			expected_sequence: None,
-		})
-	}
-
-	/// Decode one RTP payload after concealing frames lost since the
-	/// previous packet (PLC, then the payload's in-band FEC for the frame
-	/// just before it). Returns `Ok(false)` once `emit` asks to stop.
-	///
-	/// # Errors
-	/// The payload itself fails to decode.
-	fn push(
-		&mut self,
-		sequence: u16,
-		payload: &[u8],
-		mut emit: impl FnMut(&[f32]) -> bool,
-	) -> VoiceResult<bool> {
-		if let Some(expected) = self.expected_sequence {
-			let gap = sequence.wrapping_sub(expected);
-			if gap >= u16::MAX / 2 {
-				return Ok(true);
-			}
-			if gap > 0 {
-				// libopus synthesizes exactly the requested size for PLC and FEC,
-				// so it must match the lost audio: assume this packet's duration.
-				let frame = self
-					.decoder
-					.get_nb_samples(payload)
-					.ok()
-					.filter(|&samples| samples > 0 && samples <= MAX_DECODED_OPUS_SAMPLES)
-					.unwrap_or(OUTPUT_FRAME_SAMPLES);
-				for _ in 1..gap.min(5) {
-					if let Ok(samples) =
-						self
-							.decoder
-							.decode_float(&[], &mut self.decoded[..frame], false)
-						&& !emit(&self.decoded[..samples])
-					{
-						return Ok(false);
-					}
-				}
-				if let Ok(samples) =
-					self
-						.decoder
-						.decode_float(payload, &mut self.decoded[..frame], true)
-					&& !emit(&self.decoded[..samples])
-				{
-					return Ok(false);
-				}
-			}
-		}
-		self.expected_sequence = Some(sequence.wrapping_add(1));
-		let samples = self
-			.decoder
-			.decode_float(payload, &mut self.decoded, false)
-			.map_err(|error| format!("Failed to decode live speaker audio: {error}"))?;
-		Ok(emit(&self.decoded[..samples]))
-	}
-}
-
-fn write_output(playback_tx: &PlaybackWriter, samples: &[f32], core: &Weak<LivePeerCore>) -> bool {
-	match playback_tx.write(samples) {
-		Ok(()) => true,
-		Err(error) => {
-			if let Some(core) = core.upgrade()
-				&& !core.closing.load(Ordering::Acquire)
-			{
-				core.report_failure(format!("Live speaker playback failed: {error}"));
-			}
-			false
-		},
-	}
-}
-
-#[derive(Default)]
-struct OutputLevel {
-	sum_squares: f64,
-	samples:     usize,
-}
-
-impl OutputLevel {
-	fn observe(&mut self, decoded: &[f32], core: &Weak<LivePeerCore>) {
-		let mut offset = 0;
-		while offset < decoded.len() {
-			let take = (OUTPUT_LEVEL_SAMPLES - self.samples).min(decoded.len() - offset);
-			for &sample in &decoded[offset..offset + take] {
-				let sample = f64::from(sample);
-				self.sum_squares = sample.mul_add(sample, self.sum_squares);
-			}
-			self.samples += take;
-			offset += take;
-			if self.samples == OUTPUT_LEVEL_SAMPLES {
-				if let Some(core) = core.upgrade() {
-					core.report_level((self.sum_squares / self.samples as f64).sqrt());
-				}
-				self.sum_squares = 0.0;
-				self.samples = 0;
-			}
-		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	/// Regression guard for #17114: each lost 20 ms frame must be concealed
-	/// with 20 ms of audio, not the whole 120 ms decode buffer.
-	#[test]
-	fn lost_packets_are_concealed_with_their_own_duration() {
-		let speech: Vec<f32> = (0..OUTPUT_FRAME_SAMPLES)
-			.map(|sample| (sample as f32 * 0.05).sin() * 0.3)
-			.collect();
-		// FEC alone recovers one loss; a longer gap adds PLC frames before it.
-		for lost in [&[5u16][..], &[3, 4, 5]] {
-			let mut encoder = Encoder::new(OUTPUT_SAMPLE_RATE, Channels::Mono, Application::Voip)
-				.expect("Opus encoder initializes");
-			encoder.set_inband_fec(true).expect("FEC enables");
-			encoder.set_packet_loss_perc(10).expect("loss hint applies");
-			let mut decoder = OutputDecoder::new().expect("Opus decoder initializes");
-			let mut played = 0;
-			for sequence in 0..10u16 {
-				let mut packet = [0; MAX_ENCODED_OPUS_BYTES];
-				let length = encoder
-					.encode_float(&speech, &mut packet)
-					.expect("frame encodes");
-				if lost.contains(&sequence) {
-					continue;
-				}
-				let decoded = decoder.push(sequence, &packet[..length], |samples| {
-					played += samples.len();
-					true
-				});
-				assert_eq!(decoded, Ok(true));
-			}
-			assert_eq!(played, 10 * OUTPUT_FRAME_SAMPLES, "lost {lost:?}");
-		}
-	}
 }

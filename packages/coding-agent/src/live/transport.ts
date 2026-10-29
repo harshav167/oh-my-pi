@@ -7,9 +7,11 @@ import {
 	OPENAI_HEADERS,
 } from "@oh-my-pi/pi-catalog/wire/codex";
 import { LiveWebRtcPeer } from "@oh-my-pi/pi-natives";
+import { logger, toError } from "@oh-my-pi/pi-utils";
 import { generateCodexAttestation } from "./attestation";
 import {
 	buildLiveSessionPayload,
+	buildSessionClose,
 	type LiveClientMessage,
 	type LiveServerEvent,
 	parseLiveServerEvent,
@@ -19,11 +21,23 @@ const SIGNALING_URL = `${CODEX_BASE_URL}/codex/realtime/calls?intent=quicksilver
 const MAX_ERROR_BODY_LENGTH = 2_048;
 const SIDEBAND_CONNECT_ATTEMPTS = 5;
 const SIDEBAND_CONNECT_TIMEOUT_MS = 15_000;
+/** Codex's sideband reconnect backoff (`core/src/realtime_conversation/sideband.rs`). */
+const RECONNECT_BASE_DELAY_MS = 200;
+const RECONNECT_MAX_DELAY_MS = 5_000;
+const STABLE_CONNECTION_MS = 30_000;
+/** The server ended the session: Codex treats it as the conversation ending, not a dropped connection. */
+const NORMAL_CLOSE_CODE = 1000;
 const LIVE_PROVIDER = "openai-codex";
 const LIVE_ORIGINATOR = "Codex Desktop";
 const LIVE_CALL_ID_PATTERN = /^rtc_[\w-]+$/;
 
 type Lifecycle = "idle" | "connecting" | "connected" | "closing" | "closed";
+
+interface PendingOutbound {
+	message: LiveClientMessage;
+	resolve(): void;
+	reject(error: Error): void;
+}
 
 interface LiveSignalingResult {
 	answer: string;
@@ -44,10 +58,29 @@ class LiveSignalingError extends Error {
 	}
 }
 
+/** Startup failed after signaling: negotiation timed out or the connection closed. Codex retries these once. */
+export class LiveStartupInterruptedError extends Error {
+	readonly timedOut: boolean;
+
+	constructor(message: string, timedOut: boolean) {
+		super(message);
+		this.name = "LiveStartupInterruptedError";
+		this.timedOut = timedOut;
+	}
+}
+
+function startupInterruption(cause: unknown): LiveStartupInterruptedError {
+	const message = toError(cause).message;
+	return new LiveStartupInterruptedError(message, /timed out/i.test(message));
+}
+
 /** Callbacks emitted by the live WebRTC transport. */
 export interface LiveTransportCallbacks {
 	onEvent(event: LiveServerEvent): void;
-	onOutputLevel(level: number): void;
+	/** Microphone and speaker RMS levels reported by the native peer, clamped to [0, 1]. */
+	onLevels(input: number, output: number): void;
+	/** The server ended the session normally; the transport has started closing. */
+	onEnded(): void;
 }
 
 /** Configuration required to establish a Codex live call. */
@@ -117,6 +150,10 @@ function abortReason(signal: AbortSignal | undefined): Error {
 	return new DOMException("Live connection aborted", "AbortError");
 }
 
+function clampUnit(level: number): number {
+	return Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 0;
+}
+
 /** WebRTC transport for a Codex Frameless Bidi live session, with a native or caller-owned media peer. */
 export class CodexLiveTransport {
 	readonly #options: LiveTransportOptions;
@@ -127,9 +164,17 @@ export class CodexLiveTransport {
 	#state: Lifecycle = "idle";
 	#connectPromise: Promise<void> | undefined;
 	#closePromise: Promise<void> | undefined;
-	#sendTail: Promise<void> = Promise.resolve();
 	#muted = false;
 	#unexpectedFailureReported = false;
+	/** Signaled call the sideband joins; kept to rejoin after a dropped connection. */
+	#call: Omit<LiveSignalingResult, "answer"> | undefined;
+	#reconnecting = false;
+	#rapidDisconnects = 0;
+	#sidebandConnectedAt = 0;
+	/** Messages sent while the sideband rejoins; delivered in order once it reconnects. */
+	#pendingOutbound: PendingOutbound[] = [];
+	/** Cancels the sideband socket that is still connecting, so closing cannot leak it. */
+	#cancelSidebandConnect: ((error: Error) => void) | undefined;
 	readonly #abortListener: () => void;
 
 	constructor(options: LiveTransportOptions) {
@@ -149,8 +194,7 @@ export class CodexLiveTransport {
 	connect(): Promise<void> {
 		if (this.#state === "connected") return Promise.resolve();
 		if (this.#connectPromise) return this.#connectPromise;
-		if (this.#state === "closing" || this.#state === "closed")
-			return Promise.reject(new Error("Live transport is closed"));
+		if (this.#isClosing()) return Promise.reject(new Error("Live transport is closed"));
 		if (this.#options.signal?.aborted) return Promise.reject(abortReason(this.#options.signal));
 		this.#state = "connecting";
 		const operation = this.#connect().catch(async error => {
@@ -174,13 +218,20 @@ export class CodexLiveTransport {
 		if (peer) {
 			await peer.acceptAnswer(signaling.answer);
 			peer.setMuted(this.#muted);
-			await peer.waitForOpen();
 		} else {
 			this.#sdpAnswer = signaling.answer;
 		}
+		try {
+			if (peer) await peer.waitForOpen();
+			if (this.#state !== "connecting") throw abortReason(this.#options.signal);
+			await this.#connectSideband(signaling.callId, signaling.access, signaling.attestation);
+		} catch (cause) {
+			if (this.#state !== "connecting") throw abortReason(this.#options.signal);
+			throw startupInterruption(cause);
+		}
 		if (this.#state !== "connecting") throw abortReason(this.#options.signal);
-		await this.#connectSideband(signaling.callId, signaling.access, signaling.attestation);
-		if (this.#state !== "connecting") throw abortReason(this.#options.signal);
+		this.#call = { callId: signaling.callId, access: signaling.access, attestation: signaling.attestation };
+		this.#sidebandConnectedAt = Date.now();
 		this.#state = "connected";
 	}
 
@@ -193,11 +244,11 @@ export class CodexLiveTransport {
 					this.#handleServerEvent(payload);
 				}
 			},
-			(error, level) => {
+			(error, levels) => {
 				if (error) {
 					this.#reportFailure(error.message);
 				} else {
-					this.#handleOutputLevel(level);
+					this.#handleLevels(levels.input, levels.output);
 				}
 			},
 			(error, message) => this.#reportFailure(error?.message ?? message),
@@ -256,12 +307,13 @@ export class CodexLiveTransport {
 	async #connectSideband(callId: string, access: OAuthAccess, attestation: string | undefined): Promise<void> {
 		let failure = new Error("Codex live sideband connection failed");
 		for (let attempt = 0; attempt < SIDEBAND_CONNECT_ATTEMPTS; attempt++) {
+			if (this.#isClosing()) throw abortReason(this.#options.signal);
 			try {
 				await this.#openSideband(callId, access, attestation);
 				return;
 			} catch (cause) {
-				failure = cause instanceof Error ? cause : new Error(String(cause));
-				if (this.#options.signal?.aborted) throw abortReason(this.#options.signal);
+				failure = toError(cause);
+				if (this.#isClosing()) throw abortReason(this.#options.signal);
 				if (attempt + 1 < SIDEBAND_CONNECT_ATTEMPTS) await Bun.sleep(200 * 2 ** attempt);
 			}
 		}
@@ -279,34 +331,30 @@ export class CodexLiveTransport {
 		const { promise, resolve, reject } = Promise.withResolvers<void>();
 		let opened = false;
 		let settled = false;
-		let timeout: NodeJS.Timeout | undefined;
-		const cleanup = (): void => {
-			if (timeout) {
-				clearTimeout(timeout);
-				timeout = undefined;
-			}
-			this.#options.signal?.removeEventListener("abort", onAbort);
-		};
-		const rejectConnect = (error: Error): void => {
+		const settle = (error?: Error): void => {
 			if (settled) return;
 			settled = true;
-			cleanup();
-			reject(error);
+			clearTimeout(timeout);
+			if (this.#cancelSidebandConnect === cancel) this.#cancelSidebandConnect = undefined;
+			if (error) reject(error);
+			else resolve();
 		};
-		const onAbort = (): void => {
-			socket.close(1000, "aborted");
-			rejectConnect(abortReason(this.#options.signal));
+		const cancel = (error: Error): void => {
+			socket.close(1000, "cancelled");
+			settle(error);
 		};
 		socket.onopen = () => {
 			if (settled) {
 				socket.close(1000, "stale");
 				return;
 			}
+			if (this.#isClosing()) {
+				cancel(abortReason(this.#options.signal));
+				return;
+			}
 			opened = true;
-			settled = true;
-			cleanup();
 			this.#sideband = socket;
-			resolve();
+			settle();
 		};
 		socket.onmessage = event => {
 			if (typeof event.data !== "string") {
@@ -318,39 +366,51 @@ export class CodexLiveTransport {
 		socket.onerror = event => {
 			const detail = event instanceof ErrorEvent && event.message ? `: ${event.message}` : "";
 			if (!opened) {
-				rejectConnect(new Error(`Codex live sideband connection failed${detail}`));
+				settle(new Error(`Codex live sideband connection failed${detail}`));
 				socket.close(1011, "connection failed");
 				return;
 			}
-			this.#reportFailure(`Codex live sideband failed${detail}`);
+			// The close that follows decides between reconnecting and failing.
+			logger.debug("Codex live sideband error", { detail });
 		};
 		socket.onclose = event => {
 			if (!opened) {
-				rejectConnect(new Error(`Codex live sideband closed before connecting (${event.code})`));
+				settle(new Error(`Codex live sideband closed before connecting (${event.code})`));
 				return;
 			}
 			if (this.#sideband !== socket) return;
 			this.#sideband = undefined;
-			if (this.#state === "connecting" || this.#state === "connected") {
-				const detail = event.reason ? `: ${event.reason}` : "";
-				this.#reportFailure(`Codex live sideband closed (${event.code})${detail}`);
-			}
+			this.#handleSidebandClose(event.code, event.reason);
 		};
-		if (this.#options.signal?.aborted) {
-			onAbort();
-		} else {
-			this.#options.signal?.addEventListener("abort", onAbort, { once: true });
-			timeout = setTimeout(() => {
-				socket.close(1000, "connect timeout");
-				rejectConnect(new Error("Codex live sideband connection timed out"));
-			}, SIDEBAND_CONNECT_TIMEOUT_MS);
-			timeout.unref?.();
-		}
+		const timeout = setTimeout(() => {
+			cancel(new Error("Codex live sideband connection timed out"));
+		}, SIDEBAND_CONNECT_TIMEOUT_MS);
+		timeout.unref?.();
+		this.#cancelSidebandConnect = cancel;
 		await promise;
 	}
 
+	/** Codex ends the session on a normal close and rejoins after any other (`realtime_websocket/methods.rs` close handling). */
+	#handleSidebandClose(code: number, reason: string): void {
+		const message = `Codex live sideband closed (${code})${reason ? `: ${reason}` : ""}`;
+		if (this.#state === "connecting") {
+			this.#reportFailure(message);
+			return;
+		}
+		if (this.#state !== "connected") return;
+		if (code === NORMAL_CLOSE_CODE) {
+			logger.debug("Codex live session ended by the server");
+			void this.close();
+			try {
+				this.#options.callbacks.onEnded();
+			} catch {}
+		} else {
+			void this.#reconnectSideband(message);
+		}
+	}
+
 	#handleSidebandEvent(payload: string): void {
-		if (this.#state === "closing" || this.#state === "closed") return;
+		if (this.#isClosing()) return;
 		const event = parseLiveServerEvent(payload);
 		if (!event) return;
 		try {
@@ -359,18 +419,19 @@ export class CodexLiveTransport {
 	}
 
 	#handleServerEvent(payload: string): void {
-		if (this.#state === "closing" || this.#state === "closed") return;
+		if (this.#isClosing()) return;
 		const event = parseLiveServerEvent(payload);
-		if (!event || (this.#sideband?.readyState === WebSocket.OPEN && event.type !== "error")) return;
+		if (!event) return;
+		if (this.#sideband?.readyState === WebSocket.OPEN && event.type !== "error") return;
 		try {
 			this.#options.callbacks.onEvent(event);
 		} catch {}
 	}
 
-	#handleOutputLevel(level: number): void {
-		if (this.#state !== "connected" || !Number.isFinite(level)) return;
+	#handleLevels(input: number, output: number): void {
+		if (this.#state !== "connected") return;
 		try {
-			this.#options.callbacks.onOutputLevel(Math.min(1, Math.max(0, level)));
+			this.#options.callbacks.onLevels(clampUnit(input), clampUnit(output));
 		} catch {}
 	}
 
@@ -384,33 +445,81 @@ export class CodexLiveTransport {
 		} catch {}
 	}
 
-	/** Serialize one Frameless Bidi control message onto the call's sideband WebSocket. */
-	send(message: LiveClientMessage): Promise<void> {
-		const operation = this.#sendTail.then(() => {
-			if (this.#state !== "connected") throw new Error("Live transport is not connected");
-			const sideband = this.#sideband;
-			if (!sideband || sideband.readyState !== WebSocket.OPEN) {
-				throw new Error("Codex live sideband is not connected");
+	/** Rejoins the call's sideband after it dropped, with Codex's backoff; a failed rejoin ends the session. */
+	async #reconnectSideband(reason: string): Promise<void> {
+		const call = this.#call;
+		if (!call) {
+			this.#reportFailure(reason);
+			return;
+		}
+		if (this.#reconnecting) return;
+		this.#reconnecting = true;
+		if (Date.now() - this.#sidebandConnectedAt >= STABLE_CONNECTION_MS) this.#rapidDisconnects = 0;
+		this.#rapidDisconnects += 1;
+		const delayMs = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** (this.#rapidDisconnects - 1), RECONNECT_MAX_DELAY_MS);
+		logger.warn("Codex live sideband lost; reconnecting", { reason, delayMs });
+		try {
+			await Bun.sleep(delayMs);
+			if (this.#state !== "connected") return;
+			await withOAuthAccess(
+				this.#options.authStorage,
+				LIVE_PROVIDER,
+				access => this.#connectSideband(call.callId, access, call.attestation),
+				{ sessionId: this.#options.sessionId, signal: this.#options.signal },
+			);
+		} catch (cause) {
+			this.#reconnecting = false;
+			if (this.#state === "connected") this.#reportFailure(`${reason}; reconnect failed: ${toError(cause).message}`);
+			return;
+		}
+		this.#reconnecting = false;
+		if (this.#state !== "connected") return;
+		this.#sidebandConnectedAt = Date.now();
+		const sideband = this.#sideband;
+		if (!sideband) return;
+		for (const pending of this.#pendingOutbound.splice(0)) {
+			try {
+				sideband.send(JSON.stringify(pending.message));
+				pending.resolve();
+			} catch (cause) {
+				pending.reject(toError(cause));
 			}
-			sideband.send(JSON.stringify(message));
-		});
-		this.#sendTail = operation.catch(() => {});
-		return operation;
+		}
 	}
 
-	/** Queue 16 kHz mono Float32 PCM for native Opus transmission. */
-	pushAudio(samples: Float32Array): void {
-		if (this.#state !== "connected" || this.#muted || samples.length === 0) return;
-		this.#peer?.pushAudio(samples);
+	/**
+	 * Send one Frameless Bidi control message on the call's sideband WebSocket. While the sideband
+	 * rejoins, the message waits and settles once delivered, or rejects if the transport closes first.
+	 */
+	async send(message: LiveClientMessage): Promise<void> {
+		if (this.#state !== "connected") throw new Error("Live transport is not connected");
+		const sideband = this.#sideband;
+		// Behind earlier queued messages too, so delivery keeps the order they were sent in.
+		if (!sideband || sideband.readyState !== WebSocket.OPEN || this.#pendingOutbound.length > 0) {
+			const { promise, resolve, reject } = Promise.withResolvers<void>();
+			this.#pendingOutbound.push({ message, resolve, reject });
+			return promise;
+		}
+		sideband.send(JSON.stringify(message));
+	}
+
+	#isClosing(): boolean {
+		return this.#state === "closing" || this.#state === "closed";
+	}
+
+	/** Drops queued speaker audio, and keeps dropping new audio, until unsuppressed. */
+	setSpeakerSuppressed(suppressed: boolean): void {
+		this.#peer?.setSpeakerSuppressed(suppressed);
 	}
 
 	/** Enable or disable the native audio source and discard partial input when muted. */
 	async setMuted(muted: boolean): Promise<void> {
 		this.#muted = muted;
-		if (this.#state === "connected") this.#peer?.setMuted(muted);
+		// The native mute applies before media starts flowing, so connecting peers honor it too.
+		this.#peer?.setMuted(muted);
 	}
 
-	/** Stop sideband signaling and the native WebRTC media peer. Safe to call repeatedly. */
+	/** End the session, stop sideband signaling, and close the native WebRTC media peer. Safe to call repeatedly. */
 	close(): Promise<void> {
 		if (this.#closePromise) return this.#closePromise;
 		this.#state = "closing";
@@ -421,12 +530,23 @@ export class CodexLiveTransport {
 
 	async #close(): Promise<void> {
 		this.#options.signal?.removeEventListener("abort", this.#abortListener);
+		const unsent = new Error("Live transport closed before the message was sent");
+		for (const pending of this.#pendingOutbound.splice(0)) pending.reject(unsent);
+		this.#cancelSidebandConnect?.(abortReason(this.#options.signal));
 		const sideband = this.#sideband;
 		const peer = this.#peer;
 		this.#sideband = undefined;
 		this.#peer = undefined;
-		if (sideband && (sideband.readyState === WebSocket.OPEN || sideband.readyState === WebSocket.CONNECTING)) {
+		if (sideband?.readyState === WebSocket.OPEN) {
+			try {
+				sideband.send(JSON.stringify(buildSessionClose()));
+			} catch (cause) {
+				logger.debug("Failed to send Codex live session.close", { error: toError(cause).message });
+			}
 			sideband.close(1000, "done");
+		} else {
+			// Closing the WebRTC peer ends the call without the sideband.
+			logger.debug("Codex live sideband is not open; skipping session.close");
 		}
 		if (peer) {
 			try {

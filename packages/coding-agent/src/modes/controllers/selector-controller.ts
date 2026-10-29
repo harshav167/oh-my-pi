@@ -11,6 +11,7 @@ import type { Component, OverlayHandle } from "@oh-my-pi/pi-tui";
 import { Loader, Spacer, Text } from "@oh-my-pi/pi-tui";
 import { formatKeyHint } from "@oh-my-pi/pi-tui/app-keybindings";
 import { appKey, editorKey } from "@oh-my-pi/pi-tui/chrome/keybinding-hints";
+import { editorSurfaceFor } from "./editor-surface";
 import {
 	getAgentDbPath,
 	getAgentDir,
@@ -307,22 +308,10 @@ export class SelectorController {
 	 * slot contents and focus when the selector finishes.
 	 */
 	showSelector(create: (done: () => void) => { component: Component; focus: Component }): void {
-		const previousChildren = [...this.ctx.editorContainer.children];
-		const previousFocus = this.ctx.ui.getFocused();
-		const done = () => {
-			this.ctx.editorContainer.clear();
-			for (const child of previousChildren) this.ctx.editorContainer.addChild(child);
-			const focus =
-				previousFocus && previousChildren.includes(previousFocus)
-					? previousFocus
-					: (previousChildren[0] ?? this.ctx.editor);
-			this.ctx.ui.setFocus(focus);
-		};
+		const surface = editorSurfaceFor(this.ctx);
+		const done = surface.captureRestore();
 		const { component, focus } = create(done);
-		this.ctx.editorContainer.clear();
-		this.ctx.editorContainer.addChild(component);
-		this.ctx.ui.setFocus(focus);
-		this.ctx.ui.requestRender();
+		surface.present([component], focus);
 	}
 
 	showSettingsSelector(): void {
@@ -2136,10 +2125,7 @@ export class SelectorController {
 		const restoreEditor = () => {
 			if (restored) return;
 			restored = true;
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(this.ctx.editor);
-			this.ctx.ui.setFocus(this.ctx.editor);
-			this.ctx.ui.requestRender();
+			editorSurfaceFor(this.ctx).restore();
 		};
 		const dialog = new LoginDialogComponent(
 			this.ctx.ui,
@@ -2152,10 +2138,7 @@ export class SelectorController {
 			},
 			openPath,
 		);
-		this.ctx.editorContainer.clear();
-		this.ctx.editorContainer.addChild(dialog);
-		this.ctx.ui.setFocus(dialog);
-		this.ctx.ui.requestRender();
+		editorSurfaceFor(this.ctx).present([dialog], dialog);
 		try {
 			const identity = await this.ctx.session.modelRegistry.authStorage.oauth.login(providerId as OAuthProvider, {
 				signal: dialog.signal,

@@ -31,6 +31,7 @@
 - Typing `B)` or `8)` no longer turns into 😎 (so "option B)" and "step 8)" stay as typed); `B-)` and `8-)` still do
 ### Fixed
 
+- Voice request rows now show the full utterance and the voice model's request text as plain, unquoted text
 - Fixed table charts marking the worse value "best" from header keywords: without a judge, a measure is better higher or lower only when its unit says so (rates per second, durations, scores, and sizes or money beside a baseline); `shouldJudge` now also sends single-measure tables the local guess would chart to the judge
 - Fixed the LSP diagnostics view showing "No issues" for files whose language server had not reported yet; they now show as unverified ([#17293](https://github.com/can1357/oh-my-pi/pull/17293) by [@JustasMasiulis](https://github.com/JustasMasiulis))
 - Fixed Esc-Esc rewind in Tern opening on, and stepping onto, a turn that shows nothing (one interrupted before any output) instead of the last turn shown
@@ -136,6 +137,13 @@
 ### Fixed
 
 - Fixed the `/agents` and `/models` hubs in Tern squeezing the left sidebar as long lines (such as a streaming new-agent draft) widen the body pane
+### Added
+
+- Added a `text` option to `FramedMessageComponent` that replaces the message's content as the rendered markdown body
+
+### Changed
+
+- In the classic renderer, the live voice panel shows up to three wrapped lines of your latest speech instead of one truncated line; Tern's native view still shows the end of your speech on one line
 
 ## [18.12.4] - 2026-10-20
 

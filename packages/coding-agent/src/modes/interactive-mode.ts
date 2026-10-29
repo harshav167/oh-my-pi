@@ -301,6 +301,7 @@ import { EventController } from "./controllers/event-controller";
 import { ExtensionUiController } from "./controllers/extension-ui-controller";
 import { InputController } from "./controllers/input-controller";
 import { LiveCommandController } from "./controllers/live-command-controller";
+import { editorSurfaceFor } from "./controllers/editor-surface";
 import { MCPCommandController } from "./controllers/mcp-command-controller";
 import { OmfgController } from "./controllers/omfg-controller";
 import { SelectorController } from "./controllers/selector-controller";
@@ -8215,6 +8216,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// A swap during startup keeps the bootstrap submit gate until init lifts it.
 		nextEditor.disableSubmit = previousEditor.disableSubmit;
 		nextEditor.setShimmerRepaintHandler(() => this.ui.requestComponentRender(nextEditor));
+		const surface = editorSurfaceFor(this);
 		this.editor = nextEditor;
 		this.composer.setEditor(nextEditor);
 		this.syncComposerShape();
@@ -8224,9 +8226,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		nextEditor.setText(previousText);
 
-		this.editorContainer.clear();
-		this.editorContainer.addChild(nextEditor);
-		this.ui.setFocus(nextEditor);
+		if (this.#liveCommandController.visualizerMounted) {
+			this.#liveCommandController.replaceDetachedEditor(nextEditor);
+		} else {
+			surface.setBase([nextEditor], nextEditor);
+		}
 
 		this.#inputController.setupKeyHandlers();
 		this.#inputController.setupEditorSubmitHandler();
@@ -9046,6 +9050,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		const blocker = this.#liveStartBlocker();
 		if (blocker) throw new Error(blocker);
 		return await this.#liveCommandController.startRemote(options);
+	}
+	/** Whether the Codex-backed realtime voice surface is active. */
+	isLiveActive(): boolean {
+		return this.#liveCommandController.active;
 	}
 
 	async showDebugSelector(): Promise<void> {

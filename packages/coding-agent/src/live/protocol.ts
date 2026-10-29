@@ -40,7 +40,12 @@ export type LiveServerEvent =
 			session: { id: string; instructions?: string };
 	  }
 	| { type: "output_audio.delta"; audio: string }
-	| { type: "input_transcript.added" | "output_transcript.added"; item: { text: string } }
+	| {
+			type: "input_transcript.added" | "output_transcript.added";
+			item: { text: string };
+			/** Audio span of the delta (`start_ms`/`end_ms`), when the server reports one. */
+			frame?: { startMs: number; endMs: number };
+	  }
 	| { type: "turn.done"; turn: { role: "user" | "assistant"; transcript: string } }
 	| {
 			type: "delegation.created";
@@ -84,12 +89,19 @@ function parseSessionEvent(
 	return { type, session: { id: session.id } };
 }
 
+function isFrameMilliseconds(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
 function parseTranscriptAddedEvent(
 	type: "input_transcript.added" | "output_transcript.added",
 	payload: UnknownRecord,
 ): LiveServerEvent | null {
 	const item = payload.item;
 	if (!isRecord(item) || typeof item.text !== "string") return null;
+	if (isFrameMilliseconds(payload.start_ms) && isFrameMilliseconds(payload.end_ms)) {
+		return { type, item: { text: item.text }, frame: { startMs: payload.start_ms, endMs: payload.end_ms } };
+	}
 	return { type, item: { text: item.text } };
 }
 

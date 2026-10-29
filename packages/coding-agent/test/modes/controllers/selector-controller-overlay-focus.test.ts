@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import type { SessionSelectorComponent } from "@oh-my-pi/pi-tui/overlays/session-selector";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { SelectorController } from "@oh-my-pi/pi-coding-agent/modes/controllers/selector-controller";
+import { editorSurfaceFor } from "@oh-my-pi/pi-coding-agent/modes/controllers/editor-surface";
 import { initTheme } from "@oh-my-pi/pi-tui/theme";
 import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
 import type { SessionInfo } from "@oh-my-pi/pi-coding-agent/session/session-listing";
@@ -114,6 +115,54 @@ describe("SelectorController.showSelector", () => {
 		finish();
 		expect(slot.children).toEqual([askDialog, editor]);
 		expect(setFocus).toHaveBeenLastCalledWith(askDialog);
+	});
+
+	it("restores the pending dialog without reviving a live surface that stopped during the selector", () => {
+		const editor = new Text("editor", 0, 0);
+		const askDialog = new Text("ask", 0, 0);
+		const voice = new Text("voice", 0, 0);
+		const historySearch = new Text("history", 0, 0);
+		const slot = createEditorSlot(editor);
+		const { ctx, setFocus } = createCtx(slot, editor, askDialog);
+		const surface = editorSurfaceFor(ctx);
+		surface.setBase([voice], voice);
+		surface.present([askDialog, editor], askDialog);
+		let finish: (() => void) | undefined;
+
+		new SelectorController(ctx).showSelector(done => {
+			finish = done;
+			return { component: historySearch, focus: historySearch };
+		});
+		expect(slot.children).toEqual([historySearch, voice]);
+
+		surface.setBase([editor], editor);
+		if (!finish) throw new Error("selector did not provide its completion callback");
+		finish();
+
+		expect(slot.children).toEqual([askDialog, editor]);
+		expect(setFocus).toHaveBeenLastCalledWith(askDialog);
+	});
+
+	it("does not revive the editor behind a dialog-only surface", () => {
+		const editor = new Text("editor", 0, 0);
+		const hookSelector = new Text("hook", 0, 0);
+		const historySearch = new Text("history", 0, 0);
+		const slot = createEditorSlot(hookSelector);
+		const { ctx, setFocus } = createCtx(slot, editor, hookSelector);
+		let finish: (() => void) | undefined;
+
+		new SelectorController(ctx).showSelector(done => {
+			finish = done;
+			return { component: historySearch, focus: historySearch };
+		});
+		expect(slot.children).toEqual([historySearch]);
+
+		editorSurfaceFor(ctx).setBase([editor], editor);
+		if (!finish) throw new Error("selector did not provide its completion callback");
+		finish();
+
+		expect(slot.children).toEqual([hookSelector]);
+		expect(setFocus).toHaveBeenLastCalledWith(hookSelector);
 	});
 });
 

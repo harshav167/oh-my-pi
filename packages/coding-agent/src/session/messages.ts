@@ -15,6 +15,7 @@ import {
 	type FileMentionMessage,
 	isUserInvokedSkillPrompt,
 	isUserTurnInitiator,
+	LIVE_DELEGATION_MESSAGE_TYPE,
 } from "@oh-my-pi/pi-tui/chat/messages";
 export {
 	SKILL_PROMPT_MESSAGE_TYPE,
@@ -24,6 +25,7 @@ export {
 	VIBE_MODE_CONTEXT_MESSAGE_TYPE,
 	DEFAULT_CUSTOM_MESSAGE_TYPE,
 	LIVE_DELEGATION_MESSAGE_TYPE,
+	type LiveDelegationDetails,
 	type CustomMessageContent,
 	type CustomMessagePayload,
 	type NormalizedCustomMessagePayload,
@@ -55,6 +57,7 @@ import type { AssistantMessage, ImageContent, Message, TextContent, UserMessage 
 import { copyPerCallContextMessage } from "@oh-my-pi/pi-ai/utils/block-symbols";
 import { isRecord, logger, prompt } from "@oh-my-pi/pi-utils";
 import { COLLAB_PROMPT_MESSAGE_TYPE } from "@oh-my-pi/pi-wire";
+import { liveDelegationToLlm } from "../live/delegation";
 import userInterjectionTemplate from "../prompts/steering/user-interjection.md" with { type: "text" };
 import { formatTitleConversationContext, type TitleConversationTurn } from "../tiny/message-preproc";
 import { stripXdUrlPrefix } from "@oh-my-pi/pi-tui/tools/xd-url";
@@ -1131,6 +1134,10 @@ function convertOne(m: AgentMessage, interruptedNext: boolean): Message[] {
 			if (isSteeringUserMessage(m)) {
 				const converted = convertMessageToLlm(wrapSteeringUserMessage(m));
 				return converted ? [converted] : [];
+			}
+			if (m.customType === LIVE_DELEGATION_MESSAGE_TYPE) {
+				const converted = liveDelegationToLlm(m);
+				if (converted) return converted;
 			}
 			if (isUserInvokedSkillPrompt(m)) {
 				return [

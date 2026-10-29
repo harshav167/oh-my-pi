@@ -114,6 +114,23 @@
 ### Fixed
 
 - Fixed a macOS background action leaving its target in front of your app after you clicked another of your windows, when placing the click took longer than the click itself ([#16217](https://github.com/can1357/oh-my-pi/pull/16217))
+- Removed `LiveWebRtcPeer.pushAudio`: the live peer now captures the default microphone natively, so `createOffer()` opens both the microphone and the speaker and rejects when either device is unavailable.
+- Changed the `LiveWebRtcPeer` level callback from `(error, level: number)` to `(error, levels: { input, output })`.
+
+### Added
+
+- Added `LiveWebRtcPeer.setSpeakerSuppressed(suppressed)` to discard queued and incoming speaker audio until resumed, plus paired input/output RMS level reporting; the output level measures audio the speaker actually played.
+
+### Changed
+
+- Changed live voice to capture microphone audio at 48 kHz, apply echo cancellation, noise suppression and adaptive gain, and send each 20 ms Opus frame as soon as it is encoded.
+- Changed remote live playback to reorder RTP for up to 60 ms and conceal at most 80 ms of lost audio before resuming at the next received packet.
+- Changed live playback to pace queued audio and discard stale playback backlog instead of accumulating delay
+- Changed live voice echo cancellation to align the exact audio the speaker played with the microphone using the audio devices' own timestamps, so the voice no longer hears and interrupts itself on open speakers.
+
+### Fixed
+
+- Fixed live playout cadence and restart after silent gaps, and made microphone worker termination fail the live session instead of leaving it connected without input
 
 ## [18.12.4] - 2026-10-20
 

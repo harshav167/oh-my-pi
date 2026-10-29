@@ -51,6 +51,7 @@ import { setExtensionTerminalTitle, setSessionTerminalTitle } from "../../utils/
 import { getEditorCommand, openInEditor } from "../../utils/external-editor";
 import { launchTerminal } from "../../subprocess/terminal-launch";
 import { approvalAnswerForChoice, approvalChoiceLabels, approvalOnceLabel } from "../../tools/approval";
+import { editorSurfaceFor } from "./editor-surface";
 
 const MAX_WIDGET_LINES = 10;
 
@@ -773,22 +774,15 @@ export class ExtensionUiController {
 							},
 						},
 					);
-					this.ctx.editorContainer.clear();
-					this.ctx.editorContainer.addChild(dialog);
-					this.ctx.editorContainer.addChild(editor);
-					this.ctx.ui.setFocus(dialog);
+					editorSurfaceFor(this.ctx).present([dialog, editor], dialog);
 					// The dialog owns focus but forwards typing: keep the composer's cursor visible.
 					editor.focused = true;
 					// Its submissions steer this (main) session, even from a focused agent's view.
 					this.ctx.approvalOwnsComposer = true;
-					this.ctx.ui.requestRender();
 					return () => {
 						this.ctx.approvalOwnsComposer = false;
 						dialog.dispose();
-						this.ctx.editorContainer.clear();
-						this.ctx.editorContainer.addChild(editor);
-						this.ctx.ui.setFocus(editor);
-						this.ctx.ui.requestRender();
+						editorSurfaceFor(this.ctx).restore();
 					};
 				}),
 			);
@@ -852,17 +846,20 @@ export class ExtensionUiController {
 						}
 					: undefined;
 
+			const mountAskSurface = (component: Component): void => {
+				this.ctx.editorContainer.clear();
+				this.ctx.editorContainer.addChild(component);
+				for (const child of editorSurfaceFor(this.ctx).baseChildren) {
+					if (child !== this.ctx.editor) this.ctx.editorContainer.addChild(child);
+				}
+				if (inputGuard) this.ctx.editorContainer.addChild(this.ctx.editor);
+				this.ctx.ui.setFocus(component);
+				this.ctx.ui.requestRender();
+			};
+
 			const restoreAskDialog = (): void => {
 				if (closed || !askDialog) return;
-				this.ctx.editorContainer.clear();
-				this.ctx.editorContainer.addChild(askDialog);
-				// Keep the draft editor mounted beneath the restored ask, matching the
-				// initial presentation: the guard re-blocks whenever the draft is
-				// non-empty (e.g. a failed submit restored its text while a nested
-				// prompt was open), and routed input must land on a visible surface.
-				if (inputGuard) this.ctx.editorContainer.addChild(this.ctx.editor);
-				this.ctx.ui.setFocus(askDialog);
-				this.ctx.ui.requestRender();
+				mountAskSurface(askDialog);
 			};
 
 			const finishPrompt = (value: AskDialogPromptValue | undefined): void => {
@@ -893,10 +890,7 @@ export class ExtensionUiController {
 					() => finishPrompt(undefined),
 					{ promptStyle: true, externalEditor: editDialogExternally, question: prompt.question, ...options },
 				);
-				this.ctx.editorContainer.clear();
-				this.ctx.editorContainer.addChild(promptEditor);
-				this.ctx.ui.setFocus(promptEditor);
-				this.ctx.ui.requestRender();
+				mountAskSurface(promptEditor);
 			};
 
 			const promptForText = (prompt: AskDialogPrompt, prefill?: string): Promise<string | undefined> => {
@@ -938,11 +932,7 @@ export class ExtensionUiController {
 					inputGuard,
 				},
 			);
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(askDialog);
-			if (inputGuard) this.ctx.editorContainer.addChild(this.ctx.editor);
-			this.ctx.ui.setFocus(askDialog);
-			this.ctx.ui.requestRender();
+			mountAskSurface(askDialog);
 
 			return () => {
 				closed = true;
@@ -951,10 +941,6 @@ export class ExtensionUiController {
 				promptResolve?.(undefined);
 				promptResolve = undefined;
 				promptEditor = undefined;
-				this.ctx.editorContainer.clear();
-				this.ctx.editorContainer.addChild(this.ctx.editor);
-				this.ctx.ui.setFocus(this.ctx.editor);
-				this.ctx.ui.requestRender();
 			};
 		});
 	}
@@ -1194,10 +1180,7 @@ export class ExtensionUiController {
 					slider: extra?.slider,
 				},
 			);
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(this.ctx.hookSelector);
-			this.ctx.ui.setFocus(this.ctx.hookSelector);
-			this.ctx.ui.requestRender();
+			editorSurfaceFor(this.ctx).present([this.ctx.hookSelector], this.ctx.hookSelector);
 			return () => this.hideHookSelector();
 		});
 	}
@@ -1206,11 +1189,8 @@ export class ExtensionUiController {
 	 */
 	hideHookSelector(): void {
 		this.ctx.hookSelector?.dispose();
-		this.ctx.editorContainer.clear();
-		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookSelector = undefined;
-		this.ctx.ui.setFocus(this.ctx.editor);
-		this.ctx.ui.requestRender();
+		editorSurfaceFor(this.ctx).restore();
 	}
 
 	/**
@@ -1246,24 +1226,17 @@ export class ExtensionUiController {
 					tui: this.ctx.ui,
 				},
 			);
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(this.ctx.hookInput);
-			this.ctx.ui.setFocus(this.ctx.hookInput);
-			this.ctx.ui.requestRender();
+			editorSurfaceFor(this.ctx).present([this.ctx.hookInput], this.ctx.hookInput);
 			return () => this.hideHookInput();
 		});
 	}
-
 	/**
 	 * Hide the hook input.
 	 */
 	hideHookInput(): void {
 		this.ctx.hookInput?.dispose();
-		this.ctx.editorContainer.clear();
-		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookInput = undefined;
-		this.ctx.ui.setFocus(this.ctx.editor);
-		this.ctx.ui.requestRender();
+		editorSurfaceFor(this.ctx).restore();
 	}
 
 	/**
@@ -1284,10 +1257,7 @@ export class ExtensionUiController {
 				() => settle(undefined),
 				{ ...editorOptions, externalEditor: editDialogExternally },
 			);
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(this.ctx.hookEditor);
-			this.ctx.ui.setFocus(this.ctx.hookEditor);
-			this.ctx.ui.requestRender();
+			editorSurfaceFor(this.ctx).present([this.ctx.hookEditor], this.ctx.hookEditor);
 			return () => this.hideHookEditor();
 		});
 	}
@@ -1297,11 +1267,8 @@ export class ExtensionUiController {
 	 */
 	hideHookEditor(): void {
 		this.ctx.hookEditor?.dispose();
-		this.ctx.editorContainer.clear();
-		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookEditor = undefined;
-		this.ctx.ui.setFocus(this.ctx.editor);
-		this.ctx.ui.requestRender();
+		editorSurfaceFor(this.ctx).restore();
 	}
 
 	/**
@@ -1343,12 +1310,9 @@ export class ExtensionUiController {
 			overlayHandle?.hide();
 			overlayHandle = undefined;
 			if (editorReplaced) {
-				this.ctx.editorContainer.clear();
-				this.ctx.editorContainer.addChild(this.ctx.editor);
 				this.ctx.editor.setText(savedText);
 			}
-			this.ctx.ui.setFocus(this.ctx.editor);
-			this.ctx.ui.requestRender();
+			if (editorReplaced) editorSurfaceFor(this.ctx).restore();
 		};
 		const finish = (settle: () => void) => {
 			if (closed) return;
@@ -1393,10 +1357,7 @@ export class ExtensionUiController {
 					return;
 				}
 				editorReplaced = true;
-				this.ctx.editorContainer.clear();
-				this.ctx.editorContainer.addChild(component);
-				this.ctx.ui.setFocus(component);
-				this.ctx.ui.requestRender();
+				editorSurfaceFor(this.ctx).present([component], component);
 			})
 			.catch(fail);
 		return promise;
@@ -1557,9 +1518,9 @@ export class ExtensionUiController {
 		let started = false;
 		let hide: (() => void) | undefined;
 
-		function onAbort(): void {
+		const onAbort = (): void => {
 			settle(undefined);
-		}
+		};
 
 		const settle = (value: T | undefined): void => {
 			if (settled) return;
@@ -1567,6 +1528,7 @@ export class ExtensionUiController {
 			signal?.removeEventListener("abort", onAbort);
 			if (started) {
 				hide?.();
+				editorSurfaceFor(this.ctx).restore();
 				this.#dialogActive = false;
 				this.#advanceDialogQueue();
 			}
@@ -1587,6 +1549,7 @@ export class ExtensionUiController {
 				settled = true;
 				signal?.removeEventListener("abort", onAbort);
 				this.#dialogActive = false;
+				editorSurfaceFor(this.ctx).restore();
 				reject(error);
 				this.#advanceDialogQueue();
 			}

@@ -37,14 +37,19 @@ function createContext(): ContextHarness {
 		extractAssistantText: vi.fn(() => ""),
 		editor,
 		editorContainer: {
-			clear: vi.fn(),
-			addChild: vi.fn((component: unknown) => {
+			children: [editor],
+			clear: vi.fn(function (this: { children: unknown[] }) {
+				this.children.length = 0;
+			}),
+			addChild: vi.fn(function (this: { children: unknown[] }, component: unknown) {
+				this.children.push(component);
 				mounted.push(component);
 			}),
 		},
 		ui: {
 			getShowHardwareCursor: vi.fn(() => true),
 			setShowHardwareCursor: vi.fn(),
+			getFocused: vi.fn(() => focused.at(-1)),
 			setFocus: vi.fn((component: unknown) => {
 				focused.push(component);
 				if (component === editor) refocused.resolve();
@@ -95,6 +100,7 @@ describe("LiveCommandController", () => {
 
 		await controller.handleCommand();
 		expect(controller.active).toBe(true);
+		expect(controller.visualizerMounted).toBe(true);
 
 		// The controller replaces and focuses the editor with the visualizer;
 		// Ctrl+L must end the call from there, not just from the editor.
@@ -109,7 +115,10 @@ describe("LiveCommandController", () => {
 		expect(mounted.at(-1)).toBe(editor);
 		expect(focused.at(-1)).toBe(editor);
 		// `active` stays true until #finish's fire-and-forget settling promise
-		// clears; drain microtasks deterministically instead of sleeping.
+		// clears, even though the visualizer has already left the surface.
+		expect(controller.active).toBe(true);
+		expect(controller.visualizerMounted).toBe(false);
+		// Drain microtasks deterministically instead of sleeping.
 		for (let i = 0; controller.active && i < 20; i++) await Promise.resolve();
 		expect(controller.active).toBe(false);
 	});
@@ -258,8 +267,10 @@ describe("LiveSessionController with a caller-owned peer", () => {
 		const phases: string[] = [];
 		const agentSession = {
 			modelRegistry: { authStorage: {} },
+			settings: Settings.isolated(),
 			sessionId: "s1",
 			subscribe: () => () => {},
+			dropPendingNextTurnMessages: () => 0,
 			sendCustomMessage: async (message: { content: string }) => {
 				delegated.push(message.content);
 			},
@@ -287,6 +298,7 @@ describe("LiveSessionController with a caller-owned peer", () => {
 				content: [{ type: "input_text", text: "list files" }],
 			},
 		});
+		await Promise.resolve();
 
 		expect(delegated).toEqual(["list files"]);
 		// A remote peer re-enables its microphone on any phase but `muted`.

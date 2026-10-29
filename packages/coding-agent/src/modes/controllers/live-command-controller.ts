@@ -9,6 +9,7 @@ import type { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { theme } from "@oh-my-pi/pi-tui/theme";
 import type { InteractiveModeContext } from "../types";
 import { createAssistantMessageComponent } from "@oh-my-pi/pi-tui/prompt/interactive-context-helpers";
+import { editorSurfaceFor } from "./editor-surface";
 
 import type { ExtensionLiveSession, ExtensionLiveStartOptions } from "../../extensibility/extensions/types";
 import { resolveLiveVoice } from "../../live/settings";
@@ -64,6 +65,11 @@ export class LiveCommandController {
 	/** Whether a live session is connected, connecting, or closing. */
 	get active(): boolean {
 		return this.#session !== undefined || this.#settling !== undefined;
+	}
+
+	/** Whether the live visualizer currently owns a mounted editor-surface child. */
+	get visualizerMounted(): boolean {
+		return this.#visualizer !== undefined && this.#ctx.editorContainer.children.includes(this.#visualizer);
 	}
 
 	/** Start live mode, or stop the currently active session. */
@@ -187,6 +193,9 @@ export class LiveCommandController {
 					this.#finish(session, error);
 					notifyRemote(() => remote?.onEnd?.(error));
 				},
+				onNotice: message => {
+					if (this.#visualizer === visualizer) this.#ctx.showStatus(message);
+				},
 			},
 		};
 		let session: LiveSessionController;
@@ -263,6 +272,10 @@ export class LiveCommandController {
 		this.#ctx.ui.requestComponentRender(component);
 	}
 
+	/** Keep the editor restored on live shutdown current after an extension replaces it. */
+	replaceDetachedEditor(editor: CustomEditor): void {
+		this.#detachedEditor = editor;
+	}
 	#mountVisualizer(visualizer: LiveVisualizer): void {
 		this.#visualizer = visualizer;
 		this.#detachedEditor = this.#ctx.editor;
@@ -270,9 +283,7 @@ export class LiveCommandController {
 		this.#previousUseTerminalCursor = this.#ctx.editor.getUseTerminalCursor();
 		this.#ctx.ui.setShowHardwareCursor(false);
 		this.#ctx.editor.setUseTerminalCursor(false);
-		this.#ctx.editorContainer.clear();
-		this.#ctx.editorContainer.addChild(visualizer);
-		this.#ctx.ui.setFocus(visualizer);
+		editorSurfaceFor(this.#ctx).setBase([visualizer], visualizer);
 		this.#resumeVocalizer = vocalizer.suspend();
 		let frame = 0;
 		this.#animationInterval = setInterval(() => {
@@ -310,8 +321,7 @@ export class LiveCommandController {
 		this.#detachedEditor = undefined;
 		this.#visualizer = undefined;
 		if (!editor) return;
-		this.#ctx.editorContainer.clear();
-		this.#ctx.editorContainer.addChild(editor);
+		editorSurfaceFor(this.#ctx).setBase([editor], editor);
 		if (this.#previousShowHardwareCursor !== undefined) {
 			this.#ctx.ui.setShowHardwareCursor(this.#previousShowHardwareCursor);
 		}
@@ -320,7 +330,5 @@ export class LiveCommandController {
 		}
 		this.#previousShowHardwareCursor = undefined;
 		this.#previousUseTerminalCursor = undefined;
-		this.#ctx.ui.setFocus(editor);
-		this.#ctx.ui.requestRender();
 	}
 }

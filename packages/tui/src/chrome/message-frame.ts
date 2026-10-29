@@ -47,6 +47,8 @@ export interface FramedMessageOptions<M extends FramedMessage> {
 	readonly borderColor?: ThemeColor;
 	/** Collapse the markdown body to this many lines when `expanded` is false. Omit to never collapse. */
 	readonly collapseAfterLines?: number;
+	/** Markdown body shown instead of the message's text content. */
+	readonly text?: string;
 	readonly customRenderer?: FramedRenderer<M>;
 	/** Semantic role of the native card. */
 	readonly role: string;
@@ -128,6 +130,7 @@ export class FramedMessageComponent<M extends FramedMessage> extends Container {
 	}
 
 	#messageText(): string {
+		if (this.#options.text !== undefined) return this.#options.text;
 		const content = this.#options.message.content;
 		if (typeof content === "string") return content;
 		return content

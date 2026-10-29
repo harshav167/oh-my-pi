@@ -378,27 +378,33 @@ export declare class LineMatcher {
   matchLines(text: string): LineMatches
 }
 
-/** WebRTC peer that accepts 16 kHz mono PCM and renders remote Opus audio. */
+/**
+ * WebRTC peer that captures the default microphone and renders remote Opus
+ * audio.
+ */
 export declare class LiveWebRtcPeer {
   /**
-   * Create an idle peer and register its event, output-level, and failure
+   * Create a peer and register event, input/output-level, and failure
    * callbacks.
    */
-  constructor(onEvent: (error: Error | null, payload: string) => void, onLevel: (error: Error | null, level: number) => void, onFailure: (error: Error | null, message: string) => void)
+  constructor(onEvent: (error: Error | null, payload: string) => void, onLevels: (error: Error | null, levels: LiveAudioLevels) => void, onFailure: (error: Error | null, message: string) => void)
   /** Start the native media peer and return its SDP offer. */
   createOffer(): Promise<string>
   /** Apply the remote SDP answer returned by Codex signaling. */
   acceptAnswer(sdp: string): Promise<void>
   /** Wait until the `oai-events` data channel is open. */
   waitForOpen(timeoutMs?: number | undefined | null): Promise<void>
-  /** Queue 16 kHz mono floating-point PCM for Opus transmission. */
-  pushAudio(samples: Float32Array): void
   /**
    * Enable or disable microphone transmission, discarding partial muted
    * frames.
    */
   setMuted(muted: boolean): void
-  /** Close media, the data channel, the peer connection, and speaker playback. */
+  /**
+   * While suppressed, drop queued speaker audio immediately and discard
+   * incoming audio; resume playback when unsuppressed.
+   */
+  setSpeakerSuppressed(suppressed: boolean): void
+  /** Close the peer and release the microphone and speaker devices. */
   close(): Promise<void>
 }
 
@@ -2694,6 +2700,20 @@ export interface ListWorkspaceResult {
    * `reportDirectoryErrors` is set.
    */
   unreadableDirectories: Array<WorkspaceDirectoryError>
+}
+
+/** Root-mean-square microphone input and speaker output levels. */
+export interface LiveAudioLevels {
+  /**
+   * Input RMS of the latest 20 ms of microphone audio after echo
+   * cancellation, noise suppression, and gain control; zero while muted.
+   */
+  input: number
+  /**
+   * Output RMS of the latest 2,400 samples (50 ms) the speaker played; zero
+   * while suppressed.
+   */
+  output: number
 }
 
 /**

@@ -1,27 +1,39 @@
 import * as os from "node:os";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { AudioCapture } from "@oh-my-pi/pi-natives";
-import { prompt } from "@oh-my-pi/pi-utils";
+import type { LivePhase } from "@oh-my-pi/pi-tui/apps/live-visualizer";
+import { logger, prompt, toError } from "@oh-my-pi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
 import type { AgentSessionEvent } from "../session/agent-session-events";
-import { LIVE_DELEGATION_MESSAGE_TYPE } from "../session/messages";
-import agentFinalMessageTemplate from "./prompts/agent-final-message.md" with { type: "text" };
+import { LIVE_DELEGATION_MESSAGE_TYPE, type LiveDelegationDetails, USER_INTERRUPT_LABEL } from "../session/messages";
+import {
+	LIVE_TRANSCRIPT_ENTRY_TYPE,
+	LIVE_VOICE_CONTEXT_MESSAGE_TYPE,
+	LIVE_VOICE_END_INSTRUCTIONS,
+	spokenSinceLastRequest,
+} from "./delegation";
 import liveInstructionsTemplate from "./prompts/live-instructions.md" with { type: "text" };
 import {
 	buildDelegationContextAppend,
-	buildSessionClose,
+	buildSessionContextAppend,
 	chunkLiveContext,
 	type LiveClientMessage,
 	type LiveServerEvent,
 } from "./protocol";
-import { OUTPUT_ACTIVE_LEVEL, OutputActivity } from "./output-activity";
-import { CodexLiveTransport } from "./transport";
-import type { LivePhase } from "@oh-my-pi/pi-tui/apps/live-visualizer";
+import {
+	formatTranscriptDelta,
+	LiveActiveTranscript,
+	type LiveTranscriptFrame,
+	type LiveTranscriptRole,
+} from "./transcript";
+import { CodexLiveTransport, LiveStartupInterruptedError } from "./transport";
+import { cfgLiveAnswerLength } from "./settings";
 import { DEFAULT_LIVE_VOICE } from "./voices";
 
-const MIN_BARGE_IN_LEVEL = 0.04;
-const OUTPUT_ECHO_RATIO = 0.65;
+/** Speaker level above which the voice counts as audibly speaking. */
+const OUTPUT_ACTIVE_LEVEL = 0.015;
+/** Codex keeps the speaker counted as active this long after its last audible level. */
+const SPEAKER_ACTIVITY_HOLD_MS = 500;
 
 /** Incremental or final transcript for one realtime conversational turn. */
 export interface LiveTranscript {
@@ -42,11 +54,13 @@ export interface LiveSessionCallbacks {
 	onTranscript(transcript: LiveTranscript | undefined): void;
 	/** Reports one terminal stop, optionally carrying its cause. */
 	onTerminal(error?: Error): void;
+	/** Reports a recoverable connection notice, such as a startup retry. */
+	onNotice?(message: string): void;
 }
 
 /** Dependencies and presentation callbacks for a live session. */
 export interface LiveSessionControllerOptions {
-	/** Agent session that performs all delegated coding work. */
+	/** Agent session that performs all delegated work. */
 	session: AgentSession;
 	/** UI callbacks for live session state. */
 	callbacks: LiveSessionCallbacks;
@@ -56,7 +70,7 @@ export interface LiveSessionControllerOptions {
 	voice?: string;
 	/**
 	 * Handlebars template replacing the bundled live instructions; rendered with
-	 * `{ username, firstName }` like the bundled prompt.
+	 * `{ username, firstName, user_first_name, answerLength }` like the bundled prompt.
 	 */
 	instructions?: string;
 	/**
@@ -70,26 +84,7 @@ export interface LiveSessionControllerOptions {
 	sdpOffer?: string;
 }
 
-function errorFrom(cause: unknown): Error {
-	return cause instanceof Error ? cause : new Error(String(cause));
-}
-
-function clampLevel(level: number): number {
-	if (!Number.isFinite(level) || level <= 0) return 0;
-	return Math.min(1, level);
-}
-
-function microphoneLevel(samples: Float32Array): number {
-	if (samples.length === 0) return 0;
-	let sumSquares = 0;
-	for (let index = 0; index < samples.length; index += 1) {
-		const sample = samples[index] ?? 0;
-		sumSquares += sample * sample;
-	}
-	return clampLevel(Math.sqrt(sumSquares / samples.length));
-}
-
-function currentUser(): { username: string; firstName: string } {
+function currentUser(): { username: string; firstName: string; user_first_name: string } {
 	let username = "user";
 	try {
 		const candidate = os.userInfo().username.trim();
@@ -97,8 +92,28 @@ function currentUser(): { username: string; firstName: string } {
 	} catch {
 		// Sandboxed runtimes may not expose OS account information.
 	}
-	const firstPart = username.split(/[._\-\s]+/).find(part => part.length > 0);
-	return { username, firstName: firstPart ?? "there" };
+	const firstName = username.split(/[._\-\s]+/).find(part => part.length > 0) ?? "there";
+	return { username, firstName, user_first_name: firstName };
+}
+
+/** Identity of one spoken input, used to recognize a late transcript of input that typing superseded. */
+function inputFingerprint(text: string): string {
+	return text.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+interface PendingLiveAnswer {
+	text: string;
+	timestamp: number;
+	generation: number;
+	needsRetry: boolean;
+}
+
+interface LiveDelegationMessage {
+	customType: typeof LIVE_DELEGATION_MESSAGE_TYPE;
+	content: string;
+	display: true;
+	details: LiveDelegationDetails;
+	attribution: "agent";
 }
 
 /** Coordinates the realtime conversational surface with normal AgentSession turns. */
@@ -111,11 +126,11 @@ export class LiveSessionController {
 	readonly #sdpOffer: string | undefined;
 
 	#transport: CodexLiveTransport | undefined;
-	#recorder: AudioCapture | undefined;
 	#unsubscribeSession: (() => void) | undefined;
-	#sendChain: Promise<void> = Promise.resolve();
 	#stopPromise: Promise<void> | undefined;
 	#started = false;
+	#starting = false;
+	#startupFailure: Error | undefined;
 	#stopped = false;
 	#terminalEmitted = false;
 	#failure: Error | undefined;
@@ -126,6 +141,7 @@ export class LiveSessionController {
 	/** Last pair passed to `onLevels`; repeated identical levels are not re-emitted. */
 	#emittedInputLevel = -1;
 	#emittedOutputLevel = -1;
+	#speakerActiveUntil = 0;
 	#activeDelegationId: string | undefined;
 	#userTranscript = "";
 	#assistantTranscript = "";
@@ -134,11 +150,32 @@ export class LiveSessionController {
 	#userTranscriptTurn = 0;
 	#assistantTranscriptTurn = 0;
 	#lastTranscript: LiveTranscript | undefined;
-	readonly #outputActivity = new OutputActivity(() =>
-		this.#guardEvent(() => {
-			if (!this.#activeDelegationId) this.#refreshAudioPhase();
-		}),
-	);
+	/** Conversation since the previous delegation, handed to the main agent with the next one. */
+	readonly #activeTranscript = new LiveActiveTranscript();
+	// Codex's input-generation bookkeeping (`tui/src/chatwidget/realtime.rs`): which input the
+	// speaker's audio answers, and whether the current run's answer may still be spoken.
+	#inputGeneration = 0;
+	#transcriptInputGeneration: number | undefined;
+	#assistantTranscriptGeneration: number | undefined;
+	#speakerSuppressionGeneration: number | undefined;
+	#latestInputWasVoice = false;
+	#latestVoiceInputFingerprint: string | undefined;
+	#delegatedRun: { maySpeak: boolean } | undefined;
+	/** Serializes abort-and-send so a newer utterance cannot race an older one's interruption. */
+	#delegationDispatch: Promise<void> = Promise.resolve();
+	/** User turn consumed by a real or fallback delegation. */
+	#lastDelegatedUserTurn: number | undefined;
+	/** Fallback turn whose late server delegation must be ignored as a duplicate. */
+	#fallbackDelegatedUserTurn: number | undefined;
+	/** Timestamp of the last answer initially queued, so agent completion does not repeat it. */
+	#spokenAnswerTimestamp: number | undefined;
+	/** Answers queued to the voice but not yet followed by an assistant output transcript. */
+	#pendingAnswers: PendingLiveAnswer[] = [];
+	#assistantCaptionAfterSpeechQueue = false;
+	/** The main agent has not yet been told this voice session started. */
+	#needsVoiceStart = true;
+	/** The main agent believes voice mode is active, so it must be told when it ends. */
+	#voiceContextActive = false;
 
 	constructor(options: LiveSessionControllerOptions) {
 		this.#session = options.session;
@@ -167,7 +204,7 @@ export class LiveSessionController {
 		return this.#transport?.sdpAnswer;
 	}
 
-	/** Connects the realtime surface and starts microphone streaming (or, with `sdpOffer`, only signaling). */
+	/** Connects the realtime surface; the native peer records and plays audio, or with `sdpOffer` only signals. */
 	async start(): Promise<void> {
 		if (this.#stopped) {
 			throw (
@@ -178,59 +215,31 @@ export class LiveSessionController {
 		this.#started = true;
 		this.#emitPhase("connecting", true);
 		this.#emitTranscript(undefined);
-		if (this.#stopped) {
-			throw this.#failure ?? new Error("The live session stopped while starting.");
-		}
 
 		try {
-			const user = currentUser();
-			const instructions = prompt.render(this.#instructionsTemplate, user);
-			const transport = new CodexLiveTransport({
-				authStorage: this.#session.modelRegistry.authStorage,
-				sessionId: this.#session.sessionId,
-				instructions,
-				voice: this.#voice,
-				sdpOffer: this.#sdpOffer,
-				callbacks: {
-					onEvent: event => this.#guardEvent(() => this.#handleLiveEvent(event)),
-					onOutputLevel: level => this.#guardEvent(() => this.#handleOutputLevel(level)),
-				},
+			if (this.#stopped) {
+				throw this.#failure ?? new Error("The live session stopped during startup.");
+			}
+			// A pending end notice means the main agent still believes voice is active. Decided before
+			// connecting, so a failed start re-queues the notice and early delegations keep the flag.
+			const resumed = this.#session.dropPendingNextTurnMessages(LIVE_VOICE_CONTEXT_MESSAGE_TYPE) > 0;
+			this.#voiceContextActive = resumed;
+			this.#needsVoiceStart = !resumed;
+			const instructions = prompt.render(this.#instructionsTemplate, {
+				...currentUser(),
+				answerLength: cfgLiveAnswerLength.get(this.#session.settings),
 			});
-			this.#transport = transport;
-			await transport.connect();
+			await this.#connect(instructions);
 			if (this.#stopped) {
 				throw this.#failure ?? new Error("The live session stopped while connecting.");
 			}
 			this.#unsubscribeSession = this.#session.subscribe(event =>
 				this.#guardEvent(() => this.#handleSessionEvent(event)),
 			);
-			if (this.#muted) await transport.setMuted(true);
-			if (this.#stopped) {
-				throw this.#failure ?? new Error("The live session stopped before recording began.");
-			}
-			if (this.#sdpOffer !== undefined) {
-				this.#refreshAudioPhase();
-				return;
-			}
-			const recorder = new AudioCapture(16_000, (error, samples) => {
-				if (error) {
-					this.#reportFailure(error);
-					return;
-				}
-				this.#handleMicrophoneAudio(samples);
-			});
-			if (this.#stopped) {
-				try {
-					recorder.stop();
-				} catch {
-					// Preserve the failure that stopped startup.
-				}
-				throw this.#failure ?? new Error("The live session stopped while recording began.");
-			}
-			this.#recorder = recorder;
+
 			this.#refreshAudioPhase();
 		} catch (cause) {
-			const error = errorFrom(cause);
+			const error = toError(cause);
 			this.#reportFailure(error);
 			await this.stop();
 			throw error;
@@ -249,7 +258,7 @@ export class LiveSessionController {
 		this.#refreshAudioPhase();
 		const transport = this.#transport;
 		if (transport) {
-			void transport.setMuted(this.#muted).catch(cause => this.#reportFailure(errorFrom(cause)));
+			void transport.setMuted(this.#muted).catch(cause => this.#reportFailure(toError(cause)));
 		}
 	}
 
@@ -261,39 +270,105 @@ export class LiveSessionController {
 
 	async #stop(): Promise<void> {
 		this.#stopped = true;
-		this.#outputActivity.dispose();
 		this.#unsubscribeSession?.();
 		this.#unsubscribeSession = undefined;
 		let cleanupError: Error | undefined;
 
-		const recorder = this.#recorder;
-		this.#recorder = undefined;
-		if (recorder) {
-			try {
-				recorder.stop();
-			} catch (cause) {
-				cleanupError = errorFrom(cause);
-			}
-		}
-
-		await this.#sendChain;
 		const transport = this.#transport;
 		this.#transport = undefined;
 		if (transport) {
 			try {
-				await transport.send(buildSessionClose());
-			} catch (cause) {
-				cleanupError ??= errorFrom(cause);
-			}
-			try {
 				await transport.close();
 			} catch (cause) {
-				cleanupError ??= errorFrom(cause);
+				cleanupError = toError(cause);
 			}
 		}
+		this.#queueVoiceEnd();
 
 		if (cleanupError) this.#emitPhaseSafely("error");
 		this.#emitTerminal(cleanupError);
+	}
+
+	/** Connects, retrying once after cleanup when startup times out or the connection closes, as Codex does. */
+	async #connect(instructions: string): Promise<void> {
+		this.#starting = true;
+		try {
+			try {
+				await this.#openTransport(instructions);
+			} catch (cause) {
+				if (!(cause instanceof LiveStartupInterruptedError) || this.#stopped) throw cause;
+				await this.#closeTransport();
+				if (this.#stopped) throw cause;
+				this.#notify(
+					cause.timedOut
+						? "Voice connection timed out. Retrying once after cleanup."
+						: "Voice connection closed during startup. Retrying once.",
+				);
+				await this.#openTransport(instructions);
+			}
+		} finally {
+			this.#starting = false;
+		}
+	}
+
+	async #openTransport(instructions: string): Promise<void> {
+		this.#startupFailure = undefined;
+		if (this.#stopped) {
+			throw this.#failure ?? new Error("The live session stopped before opening a transport.");
+		}
+		const transport = new CodexLiveTransport({
+			authStorage: this.#session.modelRegistry.authStorage,
+			sessionId: this.#session.sessionId,
+			instructions,
+			voice: this.#voice,
+			sdpOffer: this.#sdpOffer,
+			callbacks: {
+				onEvent: event => this.#guardEvent(() => this.#handleLiveEvent(event)),
+				onLevels: (input, output) => this.#guardEvent(() => this.#handleLevels(input, output)),
+				onEnded: () => this.#guardEvent(() => void this.stop()),
+			},
+		});
+		this.#transport = transport;
+		try {
+			await transport.setMuted(this.#muted);
+			await transport.connect();
+			if (this.#startupFailure) throw this.#startupFailure;
+		} finally {
+			if (this.#stopped) await this.#closeTransport();
+		}
+		if (this.#stopped) {
+			throw this.#failure ?? new Error("The live session stopped while connecting.");
+		}
+	}
+
+	async #closeTransport(): Promise<void> {
+		const transport = this.#transport;
+		this.#transport = undefined;
+		if (!transport) return;
+		try {
+			await transport.close();
+		} catch (cause) {
+			logger.debug("Live transport cleanup before retry failed", { error: toError(cause).message });
+		}
+	}
+
+	/** Tells the main agent that voice mode ended, if it was told voice mode started. */
+	#queueVoiceEnd(): void {
+		if (!this.#voiceContextActive) return;
+		this.#voiceContextActive = false;
+		void this.#session
+			.sendCustomMessage(
+				{
+					customType: LIVE_VOICE_CONTEXT_MESSAGE_TYPE,
+					content: LIVE_VOICE_END_INSTRUCTIONS,
+					display: false,
+					attribution: "agent",
+				},
+				{ deliverAs: "nextTurn" },
+			)
+			.catch(cause => {
+				logger.warn("Failed to queue the live voice end notice", { error: toError(cause).message });
+			});
 	}
 
 	#guardEvent(handler: () => void): void {
@@ -301,7 +376,7 @@ export class LiveSessionController {
 		try {
 			handler();
 		} catch (cause) {
-			this.#reportFailure(errorFrom(cause));
+			this.#reportFailure(toError(cause));
 		}
 	}
 
@@ -313,56 +388,258 @@ export class LiveSessionController {
 				break;
 			case "session.updated":
 			case "output_audio.delta":
+				break;
 			case "unknown":
+				logger.debug("Live event ignored", { wireType: event.wireType });
 				break;
 			case "input_transcript.added":
-				this.#addTranscript("user", event.item.text);
+				this.#handleTranscriptDelta("user", event.item.text, event.frame);
 				break;
 			case "output_transcript.added":
-				this.#addTranscript("assistant", event.item.text);
+				this.#handleTranscriptDelta("assistant", event.item.text, event.frame);
 				break;
 			case "turn.done":
-				this.#finishTranscript(event.turn.role, event.turn.transcript);
+				this.#handleTranscriptDone(event.turn.role, event.turn.transcript);
 				break;
 			case "delegation.created":
 				this.#handleDelegation(event);
 				break;
 			case "error":
+				if (this.#starting) {
+					// Startup surfaces its own failure; the retry decision belongs to `#connect`.
+					this.#startupFailure ??= new Error(event.message);
+					break;
+				}
 				this.#reportFailure(new Error(event.message));
 				break;
 		}
 	}
 
-	#handleDelegation(event: Extract<LiveServerEvent, { type: "delegation.created" }>): void {
-		let request = "";
-		for (const content of event.item.content) {
-			if (content.type !== "input_text") continue;
-			request += `${request ? "\n" : ""}${content.text}`;
+	#handleTranscriptDelta(role: LiveTranscriptRole, text: string, frame: LiveTranscriptFrame | undefined): void {
+		this.#activeTranscript.delta(role, text, frame);
+		if (role === "user" && this.#transcriptInputGeneration === undefined) {
+			// A new utterance is new voice input: it supersedes speech answering older input.
+			this.#inputGeneration += 1;
+			this.#transcriptInputGeneration = this.#inputGeneration;
+			this.#fallbackDelegatedUserTurn = undefined;
+			this.#markAnswersForRetry();
+			this.#suppressActiveSpeaker();
 		}
-		request = request.trim();
-		if (!request) return;
-		this.#activeDelegationId = event.item.id;
-		this.#refreshAudioPhase();
+		if (role === "assistant" && text.trim() && this.#assistantTranscriptGeneration === undefined) {
+			this.#assistantTranscriptGeneration = this.#inputGeneration;
+			this.#assistantCaptionAfterSpeechQueue = this.#pendingAnswers.some(
+				answer => !answer.needsRetry && answer.generation === this.#inputGeneration,
+			);
+		}
+		this.#resumeSpeakerFor(role, text);
+		if (role === "user" && this.#transcriptInputGeneration === this.#inputGeneration) {
+			this.#latestInputWasVoice = true;
+		}
+		this.#addTranscript(role, text);
+	}
+
+	#handleTranscriptDone(role: LiveTranscriptRole, text: string): void {
+		this.#activeTranscript.done(role, text);
+		const hasText = text.trim().length > 0;
+		if (hasText) this.#resumeSpeakerFor(role, text);
+		if (role === "assistant") {
+			if (hasText && this.#assistantCaptionAfterSpeechQueue && this.#assistantTranscriptGeneration !== undefined) {
+				const captionGeneration = this.#assistantTranscriptGeneration;
+				this.#pendingAnswers = this.#pendingAnswers.filter(
+					answer => answer.needsRetry || answer.generation !== captionGeneration,
+				);
+			}
+			this.#assistantTranscriptGeneration = undefined;
+			this.#assistantCaptionAfterSpeechQueue = false;
+		}
+		if (role === "user") {
+			if (!hasText) logger.debug("Live user turn ended without a transcript");
+			this.#noteVoiceInputDone(text, hasText);
+		}
+		this.#finishTranscript(role, text);
+		if (hasText) this.#recordTranscript(role, text);
+		if (role === "user" && hasText && this.#lastDelegatedUserTurn !== this.#userTranscriptTurn) {
+			this.#fallbackDelegatedUserTurn = this.#userTranscriptTurn;
+			this.#delegate(text.trim(), undefined);
+		}
+	}
+
+	#noteVoiceInputDone(text: string, hasText: boolean): void {
+		const generation = this.#transcriptInputGeneration;
+		this.#transcriptInputGeneration = undefined;
+		const fingerprint = inputFingerprint(text);
+		if (generation !== undefined) {
+			if (generation === this.#inputGeneration) {
+				this.#latestInputWasVoice = hasText;
+				if (!hasText) this.#releaseSpeaker();
+			}
+		} else {
+			const superseded = !this.#latestInputWasVoice && this.#latestVoiceInputFingerprint === fingerprint;
+			if (superseded || !hasText) return;
+			this.#inputGeneration += 1;
+			this.#latestInputWasVoice = true;
+			this.#markAnswersForRetry();
+			this.#suppressActiveSpeaker();
+		}
+		if (hasText) this.#latestVoiceInputFingerprint = fingerprint;
+	}
+
+	/** Keeps a session record of what was said; the model never sees these entries. */
+	#recordTranscript(role: LiveTranscriptRole, text: string): void {
+		try {
+			this.#session.sessionManager.appendCustomEntry(LIVE_TRANSCRIPT_ENTRY_TYPE, { role, text });
+		} catch (cause) {
+			logger.warn("Failed to record a live transcript entry", { error: toError(cause).message });
+		}
+	}
+
+	#handleDelegation(event: Extract<LiveServerEvent, { type: "delegation.created" }>): void {
+		if (this.#fallbackDelegatedUserTurn === this.#userTranscriptTurn) {
+			this.#fallbackDelegatedUserTurn = undefined;
+			logger.debug("Ignored a late live delegation already delivered from its transcript", { id: event.item.id });
+			return;
+		}
+		this.#fallbackDelegatedUserTurn = undefined;
+		const request = event.item.content
+			.map(content => content.text)
+			.join("")
+			.trim();
+		this.#delegate(request, event.item.id);
+	}
+
+	#delegate(request: string, delegationId: string | undefined): void {
+		const transcript = this.#activeTranscript.takeForDelegation(request);
+		const transcriptDelta = formatTranscriptDelta(transcript);
+		const input = request || transcriptDelta;
+		if (!input) return;
+		this.#lastDelegatedUserTurn = this.#userTranscriptTurn;
+
+		const staleVoiceInput =
+			!this.#latestInputWasVoice &&
+			this.#latestVoiceInputFingerprint !== undefined &&
+			this.#latestVoiceInputFingerprint === inputFingerprint(input);
+		const maySpeak = !staleVoiceInput;
+		if (maySpeak) {
+			if (!this.#latestInputWasVoice || this.#delegatedRun?.maySpeak) {
+				this.#inputGeneration += 1;
+				if (this.#speakerSuppressionGeneration !== undefined) {
+					this.#speakerSuppressionGeneration = this.#inputGeneration;
+				}
+			}
+			this.#latestInputWasVoice = true;
+		}
+
+		const details: LiveDelegationDetails = transcriptDelta ? { transcriptDelta } : {};
+		// Without request text the transcript itself is the request, so there is no excerpt to explain.
+		const spoken = request ? spokenSinceLastRequest(transcript, request) : [];
+		if (spoken.length > 0) details.spoken = spoken;
+		if (this.#needsVoiceStart) {
+			details.voiceStart = true;
+			this.#needsVoiceStart = false;
+			this.#voiceContextActive = true;
+		}
+		logger.debug("Live delegation received", {
+			id: delegationId,
+			previousId: this.#activeDelegationId,
+			requestLength: request.length,
+			transcriptEntries: transcript.length,
+		});
+		const message: LiveDelegationMessage = {
+			customType: LIVE_DELEGATION_MESSAGE_TYPE,
+			content: input,
+			display: true,
+			details,
+			attribution: "agent",
+		};
+		this.#delegationDispatch = this.#delegationDispatch.then(() =>
+			this.#dispatchDelegation(message, delegationId, maySpeak),
+		);
+		void this.#delegationDispatch.catch(cause => this.#reportFailure(toError(cause)));
+	}
+
+	async #dispatchDelegation(
+		message: LiveDelegationMessage,
+		delegationId: string | undefined,
+		maySpeak: boolean,
+	): Promise<void> {
+		if (this.#stopped) return;
+		this.#markAnswersForRetry();
+		if (this.#session.isStreaming) await this.#session.abort({ reason: USER_INTERRUPT_LABEL });
+		if (this.#stopped) return;
+		this.#activateDelegatedRun(delegationId, maySpeak);
+		// sendCustomMessage settles after the agent turn, not after admission. Do not hold the
+		// delegation queue for that lifetime: the next utterance must be able to abort this turn.
 		void this.#session
-			.sendCustomMessage(
-				{
-					customType: LIVE_DELEGATION_MESSAGE_TYPE,
-					content: request,
-					display: true,
-					attribution: "agent",
-				},
-				{ triggerTurn: true },
-			)
-			.catch(cause => this.#reportFailure(errorFrom(cause)));
+			.sendCustomMessage(message, { triggerTurn: true })
+			.catch(cause => this.#reportFailure(toError(cause)));
+		this.#retryAnswers();
+		this.#refreshAudioPhase();
+	}
+
+	#activateDelegatedRun(delegationId: string | undefined, maySpeak: boolean): void {
+		this.#delegatedRun = { maySpeak };
+		this.#activeDelegationId = delegationId;
+		this.#refreshAudioPhase();
+	}
+
+	#markAnswersForRetry(): void {
+		this.#assistantCaptionAfterSpeechQueue = false;
+		for (const answer of this.#pendingAnswers) answer.needsRetry = true;
+	}
+
+	#retryAnswers(): void {
+		for (const answer of this.#pendingAnswers) {
+			if (!answer.needsRetry) continue;
+			answer.needsRetry = false;
+			answer.generation = this.#inputGeneration;
+			this.#sendAnswerChunks(answer.text);
+		}
+	}
+
+	#sendAnswerChunks(text: string): void {
+		for (const chunk of chunkLiveContext(text)) {
+			this.#queueSend(buildSessionContextAppend(chunk, "speakable"));
+		}
 	}
 
 	#handleSessionEvent(event: AgentSessionEvent): void {
-		if (event.type === "message_end" && event.message.role === "assistant") {
-			if (event.message.stopReason === "toolUse") this.#appendProgress(event.message);
+		if (
+			event.type === "message_start" &&
+			event.message.role === "user" &&
+			!event.message.synthetic &&
+			event.message.attribution !== "agent"
+		) {
+			this.#invalidateVoiceInput();
 			return;
 		}
-		if (event.type !== "agent_end" || event.isTerminal === false) return;
-		this.#appendFinalResponse(event.messages);
+		if (event.type === "message_end" && event.message.role === "assistant") {
+			if (event.message.stopReason === "toolUse") {
+				this.#appendProgress(event.message);
+			} else if (event.message.stopReason === "stop" && this.#delegatedRun?.maySpeak) {
+				const text = this.#extractAssistantText(event.message).trim();
+				if (text) this.#queueAnswer({ text, timestamp: event.message.timestamp });
+			}
+			return;
+		}
+		if (event.type !== "agent_end") return;
+		// A background job the agent started may resume it later; its answer is still due now.
+		const awaitingAsyncWork = event.awaitingAsyncWork === true;
+		if (event.isTerminal === false && !awaitingAsyncWork) return;
+		this.#appendFinalResponse(event.messages, awaitingAsyncWork);
+	}
+
+	/** Typed input supersedes voice input: silence the old answer and keep this run's answer unspoken. */
+	#invalidateVoiceInput(): void {
+		this.#latestInputWasVoice = false;
+		this.#inputGeneration += 1;
+		this.#speakerSuppressionGeneration = this.#inputGeneration;
+		this.#setSpeakerSuppressed(true);
+		this.#outputLevel = 0;
+		this.#speakerActiveUntil = 0;
+		this.#emitLevels();
+		if (this.#delegatedRun) this.#delegatedRun.maySpeak = false;
+		this.#pendingAnswers = [];
+		this.#assistantCaptionAfterSpeechQueue = false;
 	}
 
 	#appendProgress(message: AssistantMessage): void {
@@ -375,43 +652,90 @@ export class LiveSessionController {
 		}
 	}
 
-	#appendFinalResponse(messages: readonly AgentMessage[]): void {
-		const delegationId = this.#activeDelegationId;
-		if (!delegationId) return;
-		for (let index = messages.length - 1; index >= 0; index -= 1) {
-			const message = messages[index];
-			if (message?.role !== "assistant") continue;
-			const text = this.#extractAssistantText(message).trim();
-			if (!text) continue;
-			const finalContext = prompt.render(agentFinalMessageTemplate, { message: text });
-			for (const chunk of chunkLiveContext(finalContext)) {
-				this.#queueSend(buildDelegationContextAppend(delegationId, chunk));
-			}
-			break;
-		}
+	#appendFinalResponse(messages: readonly AgentMessage[], awaitingAsyncWork: boolean): void {
+		const run = this.#delegatedRun;
+		// The run stays open so the answer written after background results is spoken too.
+		if (!awaitingAsyncWork) this.#delegatedRun = undefined;
 		this.#activeDelegationId = undefined;
+		if (run?.maySpeak) {
+			const answer = this.#lastAnswer(messages);
+			if (answer) this.#queueAnswer(answer);
+		}
 		this.#refreshAudioPhase();
 	}
 
-	#handleOutputLevel(level: number): void {
-		this.#outputLevel = clampLevel(level);
-		this.#outputActivity.observe(this.#outputLevel);
-		this.#emitLevels();
-		if (!this.#activeDelegationId) this.#refreshAudioPhase();
+	#queueAnswer(answer: { text: string; timestamp: number }): void {
+		if (answer.timestamp === this.#spokenAnswerTimestamp) return;
+		this.#spokenAnswerTimestamp = answer.timestamp;
+		this.#pendingAnswers.push({ ...answer, generation: this.#inputGeneration, needsRetry: false });
+		this.#sendAnswerChunks(answer.text);
 	}
 
-	#handleMicrophoneAudio(samples: Float32Array): void {
-		if (this.#stopped || !this.#transport) return;
-		if (this.#muted) return;
-		this.#inputLevel = microphoneLevel(samples);
+	#lastAnswer(messages: readonly AgentMessage[]): { text: string; timestamp: number } | undefined {
+		for (let index = messages.length - 1; index >= 0; index -= 1) {
+			const message = messages[index];
+			if (message?.role !== "assistant" || message.stopReason !== "stop") continue;
+			const text = this.#extractAssistantText(message).trim();
+			if (text) return { text, timestamp: message.timestamp };
+		}
+		return undefined;
+	}
+
+	/** Levels arrive clamped to [0, 1] by the transport. */
+	#handleLevels(input: number, output: number): void {
+		this.#inputLevel = this.#muted ? 0 : input;
+		this.#outputLevel = output;
+		if (this.#outputLevel > OUTPUT_ACTIVE_LEVEL) this.#speakerActiveUntil = Date.now() + SPEAKER_ACTIVITY_HOLD_MS;
 		this.#emitLevels();
-		const outputActive = this.#outputLevel > OUTPUT_ACTIVE_LEVEL;
-		const echoThreshold = Math.max(MIN_BARGE_IN_LEVEL, this.#outputLevel * OUTPUT_ECHO_RATIO);
-		if (outputActive && this.#inputLevel < echoThreshold) return;
+		if (!this.#delegatedRun) this.#refreshAudioPhase();
+	}
+
+	#speakerActive(): boolean {
+		return this.#outputLevel > OUTPUT_ACTIVE_LEVEL || Date.now() < this.#speakerActiveUntil;
+	}
+
+	/** Interrupts only output that may answer older input. */
+	#suppressActiveSpeaker(): void {
+		if (
+			this.#assistantTranscriptGeneration !== undefined ||
+			this.#speakerActive() ||
+			this.#speakerSuppressionGeneration !== undefined
+		) {
+			this.#suppressSpeaker();
+		}
+	}
+
+	#suppressSpeaker(): void {
+		this.#speakerSuppressionGeneration = this.#inputGeneration;
+		this.#setSpeakerSuppressed(true);
+		this.#outputLevel = 0;
+		this.#speakerActiveUntil = 0;
+		this.#emitLevels();
+	}
+
+	#releaseSpeaker(): void {
+		this.#speakerSuppressionGeneration = undefined;
+		this.#setSpeakerSuppressed(false);
+	}
+
+	/** Resumes playback once the voice answers the latest voice input. */
+	#resumeSpeakerFor(role: LiveTranscriptRole, text: string): void {
+		if (
+			role === "assistant" &&
+			text.trim() &&
+			this.#assistantTranscriptGeneration === this.#inputGeneration &&
+			this.#latestInputWasVoice &&
+			this.#speakerSuppressionGeneration === this.#inputGeneration
+		) {
+			this.#releaseSpeaker();
+		}
+	}
+
+	#setSpeakerSuppressed(suppressed: boolean): void {
 		try {
-			this.#transport.pushAudio(samples);
+			this.#transport?.setSpeakerSuppressed(suppressed);
 		} catch (cause) {
-			this.#reportFailure(errorFrom(cause));
+			this.#reportFailure(toError(cause));
 		}
 	}
 
@@ -481,23 +805,23 @@ export class LiveSessionController {
 		this.#emitTranscript({ role, turn, text: normalized, final });
 	}
 
+	/** Hands the message to the transport now, so it keeps send order and precedes a later close. */
 	#queueSend(message: LiveClientMessage): void {
 		const transport = this.#transport;
 		if (!transport || this.#stopped) return;
-		this.#sendChain = this.#sendChain
-			.then(async () => {
-				if (!this.#stopped) await transport.send(message);
-			})
-			.catch(cause => this.#reportFailure(errorFrom(cause)));
+		transport.send(message).catch(cause => {
+			// Stopping rejects messages still waiting for the sideband to rejoin; that is not a failure.
+			if (!this.#stopped) this.#reportFailure(toError(cause));
+		});
 	}
 
 	#refreshAudioPhase(): void {
 		if (this.#stopped) return;
 		if (this.#muted) {
 			this.#emitPhase("muted");
-		} else if (this.#activeDelegationId) {
+		} else if (this.#delegatedRun) {
 			this.#emitPhase("working");
-		} else if (this.#outputActivity.active) {
+		} else if (this.#speakerActive()) {
 			this.#emitPhase("speaking");
 		} else {
 			this.#emitPhase("listening");
@@ -510,7 +834,7 @@ export class LiveSessionController {
 		try {
 			this.#callbacks.onPhase(phase);
 		} catch (cause) {
-			this.#reportFailure(errorFrom(cause));
+			this.#reportFailure(toError(cause));
 		}
 	}
 
@@ -532,7 +856,7 @@ export class LiveSessionController {
 			this.#emittedInputLevel = input;
 			this.#emittedOutputLevel = output;
 		} catch (cause) {
-			this.#reportFailure(errorFrom(cause));
+			this.#reportFailure(toError(cause));
 		}
 	}
 
@@ -541,7 +865,15 @@ export class LiveSessionController {
 		try {
 			this.#callbacks.onTranscript(transcript);
 		} catch (cause) {
-			this.#reportFailure(errorFrom(cause));
+			this.#reportFailure(toError(cause));
+		}
+	}
+
+	#notify(message: string): void {
+		try {
+			this.#callbacks.onNotice?.(message);
+		} catch (cause) {
+			logger.debug("Live notice callback failed", { error: toError(cause).message });
 		}
 	}
 

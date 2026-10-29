@@ -10394,6 +10394,15 @@ export class AgentSession implements SettingsScope {
 		);
 	}
 
+	/** Drops queued next-turn context of `customType` that no turn has received yet; returns how many were dropped. */
+	dropPendingNextTurnMessages(customType: string): number {
+		const before = this.#pendingNextTurnMessages.length;
+		this.#pendingNextTurnMessages = this.#pendingNextTurnMessages.filter(
+			message => message.customType !== customType,
+		);
+		return before - this.#pendingNextTurnMessages.length;
+	}
+
 	/** Whether an empty submit should interrupt the streaming turn: displayable input is
 	 *  queued, or live steering sits in the in-flight response, which the abort requeues
 	 *  for the continuation turn. */
