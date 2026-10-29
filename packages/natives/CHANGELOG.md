@@ -5,11 +5,14 @@
 ### Breaking Changes
 
 - Removed `invalidateFsScanCache`: the listing cache no longer needs invalidation. `FS_SCAN_CACHE_TTL_MS`, `FS_SCAN_EMPTY_RECHECK_MS`, `FS_SCAN_CACHE_MAX_ENTRIES`, and `FS_SCAN_CACHE_MAX_BYTES` are no longer read
+- Removed `LiveWebRtcPeer.pushAudio`: the live peer now captures the default microphone natively, so `createOffer()` opens both the microphone and the speaker and rejects when either device is unavailable.
+- Changed the `LiveWebRtcPeer` level callback from `(error, level: number)` to `(error, levels: { input, output })`.
 
 ### Added
 
 - The bash tool's built-in `rsync` behaves like rsync 3.5.1 on Linux, macOS, and Windows without an installed binary: local copies, `-e`/ssh remote shells, and `rsync://` daemons, interoperating with real rsync peers speaking protocol 29–33. Serving as a daemon (`--daemon`) is not supported; `PI_DISABLE_UUTILS_DESTRUCTIVE` falls back to the system `rsync`
 - The bash tool has a built-in `ast-grep` (also `sg`) for structural search and rewrite: `run` with patterns, rewrites, `-U`, context, headings, and `--json` output like ast-grep 0.50
+- Added `LiveWebRtcPeer.setSpeakerSuppressed(suppressed)` to discard queued and incoming speaker audio until resumed, plus paired input/output RMS reporting with output measured from post-gain speaker buffers
 
 ### Changed
 
@@ -20,12 +23,17 @@
 - Reduced overhead for full-tree native `grep` searches while preserving result ordering and streaming backpressure
 - Aborting or timing out native `grep`, `glob`, `fuzzyFind`, `listWorkspace`, and `astGrep`/`astEdit` stops their filesystem work at once, including searches over JavaScript-provided filesystems; `grep`'s `onMatches` streaming paces the search to the callback
 - Cancelling the bash tool's built-in `rg`, `grep`, `fd`, `find`, and `ast-grep` (abort, `timeout`) stops them immediately, even mid-way through a large file; `find -prune` and `fd` ignore rules no longer list pruned directories
+- Changed live voice to capture microphone audio at 48 kHz, apply echo cancellation, noise suppression and adaptive gain, and send each 20 ms Opus frame as soon as it is encoded.
+- Changed remote live playback to reorder RTP for up to 60 ms and conceal at most 80 ms of lost audio before resuming at the next received packet.
+- Changed live playback to pace queued audio and discard stale playback backlog instead of accumulating delay
+- Changed live voice echo cancellation to align post-gain speaker reference buffers with microphone capture using device timestamps
 
 ### Fixed
 
 - Fixed cancelled directory searches leaving filesystem-provider requests running during walk startup
 - Fixed the bash tool's built-in commands (`cat`, `grep`, `head`, `wc`, `read`, `mapfile`, …) hanging on macOS at the end of a FIFO's input until the command was aborted; `read -t` now returns at EOF instead of waiting out its timeout
 - Fixed `wrapTextWithAnsi` continuing a wrapped styled underline (`4:3`, `4:4`) as a background colour, `4:0` setting background `40`, and colon-form colours (`38:2::r:g:b`) being dropped ([#16239](https://github.com/can1357/oh-my-pi/pull/16239) by [@materemias](https://github.com/materemias))
+- Fixed live playout cadence and restart after silent gaps, and made microphone worker termination fail the live session instead of leaving it connected without input
 
 ## [18.13.3] - 2026-10-28
 
@@ -114,23 +122,6 @@
 ### Fixed
 
 - Fixed a macOS background action leaving its target in front of your app after you clicked another of your windows, when placing the click took longer than the click itself ([#16217](https://github.com/can1357/oh-my-pi/pull/16217))
-- Removed `LiveWebRtcPeer.pushAudio`: the live peer now captures the default microphone natively, so `createOffer()` opens both the microphone and the speaker and rejects when either device is unavailable.
-- Changed the `LiveWebRtcPeer` level callback from `(error, level: number)` to `(error, levels: { input, output })`.
-
-### Added
-
-- Added `LiveWebRtcPeer.setSpeakerSuppressed(suppressed)` to discard queued and incoming speaker audio until resumed, plus paired input/output RMS level reporting; the output level measures audio the speaker actually played.
-
-### Changed
-
-- Changed live voice to capture microphone audio at 48 kHz, apply echo cancellation, noise suppression and adaptive gain, and send each 20 ms Opus frame as soon as it is encoded.
-- Changed remote live playback to reorder RTP for up to 60 ms and conceal at most 80 ms of lost audio before resuming at the next received packet.
-- Changed live playback to pace queued audio and discard stale playback backlog instead of accumulating delay
-- Changed live voice echo cancellation to align the exact audio the speaker played with the microphone using the audio devices' own timestamps, so the voice no longer hears and interrupts itself on open speakers.
-
-### Fixed
-
-- Fixed live playout cadence and restart after silent gaps, and made microphone worker termination fail the live session instead of leaving it connected without input
 
 ## [18.12.4] - 2026-10-20
 

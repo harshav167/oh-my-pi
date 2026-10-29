@@ -6,18 +6,22 @@
  * turn, so the run the user stopped does not resume on them, and the next turn sends them
  * to the model.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import { Agent, type AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent } from "@oh-my-pi/pi-ai";
 import {
 	createMockModel,
 	type MockModel,
-	type MockResponse,
+	type MockHandler,
 	type MockResponseSource,
 } from "@oh-my-pi/pi-ai/providers/mock";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { LiveSessionController } from "@oh-my-pi/pi-coding-agent/live/controller";
+import { LIVE_TRANSCRIPT_ENTRY_TYPE, LIVE_VOICE_CONTEXT_MESSAGE_TYPE } from "@oh-my-pi/pi-coding-agent/live/delegation";
+import * as liveTransport from "@oh-my-pi/pi-coding-agent/live/transport";
+import type { LiveTransportOptions } from "@oh-my-pi/pi-coding-agent/live/transport";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import {
@@ -55,6 +59,7 @@ describe("AgentSession editor-restoring interrupt", () => {
 		try {
 			await session?.dispose();
 		} finally {
+			vi.restoreAllMocks();
 			session = undefined;
 			for (const authStorage of authStorages.splice(0)) authStorage.close();
 		}
@@ -64,7 +69,10 @@ describe("AgentSession editor-restoring interrupt", () => {
 		await tempDir?.remove();
 	});
 
-	async function createSession(responses: MockResponseSource): Promise<Omit<ParkedHarness, "streamStarted">> {
+	async function createSession(
+		responses: MockResponseSource,
+		sessionManager = SessionManager.inMemory(),
+	): Promise<Omit<ParkedHarness, "streamStarted">> {
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
 		const mock = createMockModel({ responses });
 		const agent = new Agent({
@@ -74,7 +82,6 @@ describe("AgentSession editor-restoring interrupt", () => {
 			initialState: { model, systemPrompt: ["Test"], tools: [] },
 			streamFn: mock.stream,
 		});
-		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated({ "compaction.enabled": false, "retry.enabled": false });
 		const authStorage = await AuthStorage.create(":memory:");
 		authStorages.push(authStorage);
@@ -85,15 +92,21 @@ describe("AgentSession editor-restoring interrupt", () => {
 	}
 
 	/** The first turn stays open (a 60 s mock delay the abort cancels), so messages can queue behind it. */
-	async function createParkedSession(tailResponses: MockResponse[] = []): Promise<ParkedHarness> {
+	async function createParkedSession(
+		tailResponses: MockHandler[] = [],
+		sessionManager = SessionManager.inMemory(),
+	): Promise<ParkedHarness> {
 		const started = Promise.withResolvers<void>();
-		const harness = await createSession([
-			() => {
-				started.resolve();
-				return { content: ["working"], delayMs: 60_000 };
-			},
-			...tailResponses,
-		]);
+		const harness = await createSession(
+			[
+				() => {
+					started.resolve();
+					return { content: ["working"], delayMs: 60_000 };
+				},
+				...tailResponses,
+			],
+			sessionManager,
+		);
 		return { ...harness, streamStarted: started.promise };
 	}
 
@@ -180,6 +193,110 @@ describe("AgentSession editor-restoring interrupt", () => {
 		expect(started).toBe(true);
 		expect(mock.calls).toHaveLength(2);
 		expect(JSON.stringify(mock.calls[1]!.context.messages)).toContain("replacement voice request");
+	});
+
+	it("admits and persists delegated voice turns and transcripts through a real session", async () => {
+		const delegated = Promise.withResolvers<void>();
+		const {
+			session: voiceAgent,
+			sessionManager,
+			mock,
+			streamStarted,
+		} = await createParkedSession(
+			[
+				() => {
+					delegated.resolve();
+					return { content: ["delegated answer"] };
+				},
+				{ content: ["typed follow-up answer"] },
+			],
+			SessionManager.create(tempDir.path(), tempDir.path()),
+		);
+		let transportOptions: LiveTransportOptions | undefined;
+		vi.spyOn(liveTransport, "CodexLiveTransport").mockImplementation(function (options: LiveTransportOptions) {
+			transportOptions = options;
+			return {
+				setMuted: async () => {},
+				connect: async () => {},
+				setSpeakerSuppressed: () => {},
+				close: async () => {},
+				send: async () => {},
+			};
+		} as never);
+		const controller = new LiveSessionController({
+			session: voiceAgent,
+			extractAssistantText: message =>
+				message.content.flatMap(part => (part.type === "text" ? [part.text] : [])).join(""),
+			callbacks: { onPhase: () => {}, onLevels: () => {}, onTranscript: () => {}, onTerminal: () => {} },
+		});
+		const firstTurn = voiceAgent.prompt("first task").catch(() => {});
+		try {
+			await streamStarted;
+			await controller.start();
+			if (!transportOptions) throw new Error("Expected the controller to open its transport");
+			const voice = transportOptions.callbacks.onEvent;
+			const request = "check the voice journal";
+			voice({ type: "input_transcript.added", item: { text: request } });
+			voice({ type: "turn.done", turn: { role: "user", transcript: request } });
+			await delegated.promise;
+			await voiceAgent.waitForIdle();
+			await firstTurn;
+
+			expect(mock.calls).toHaveLength(2);
+			const delegatedRequest = JSON.stringify(mock.calls[1]!.context.messages);
+			expect(delegatedRequest).toContain("Realtime conversation started.");
+			expect(delegatedRequest).toContain("<input>check the voice journal</input>");
+			expect(delegatedRequest).toContain("<transcript_delta>user: check the voice journal</transcript_delta>");
+
+			const spokenOnly = "Only the realtime voice said this.";
+			voice({ type: "output_transcript.added", item: { text: spokenOnly } });
+			voice({ type: "turn.done", turn: { role: "assistant", transcript: spokenOnly } });
+			await controller.stop();
+			await voiceAgent.prompt("typed follow-up");
+			await voiceAgent.waitForIdle();
+			expect(mock.calls).toHaveLength(3);
+			const typedRequest = JSON.stringify(mock.calls[2]!.context.messages);
+			expect(typedRequest).toContain("Realtime conversation ended.");
+			expect(typedRequest).not.toContain(spokenOnly);
+
+			await sessionManager.flush();
+			const sessionFile = sessionManager.getSessionFile();
+			if (!sessionFile) throw new Error("Expected a persisted voice session");
+			await voiceAgent.dispose();
+			session = undefined;
+			const resumed = await SessionManager.open(sessionFile, tempDir.path(), undefined, {
+				suppressBreadcrumb: true,
+				throwIfMissing: true,
+			});
+			try {
+				const entries = resumed.getEntries();
+				const transcripts = entries.filter(
+					entry => entry.type === "custom" && entry.customType === LIVE_TRANSCRIPT_ENTRY_TYPE,
+				);
+				expect(transcripts).toMatchObject([
+					{ data: { role: "user", text: request } },
+					{ data: { role: "assistant", text: spokenOnly } },
+				]);
+				const requests = entries.filter(
+					entry => entry.type === "custom_message" && entry.customType === LIVE_DELEGATION_MESSAGE_TYPE,
+				);
+				expect(requests).toHaveLength(1);
+				expect(requests[0]).toMatchObject({
+					content: request,
+					attribution: "agent",
+					details: { voiceStart: true, transcriptDelta: `user: ${request}` },
+				});
+				expect(
+					entries.filter(
+						entry => entry.type === "custom_message" && entry.customType === LIVE_VOICE_CONTEXT_MESSAGE_TYPE,
+					),
+				).toMatchObject([{ display: false, content: expect.stringContaining("Realtime conversation ended.") }]);
+			} finally {
+				await resumed.close();
+			}
+		} finally {
+			await controller.stop();
+		}
 	});
 
 	it("records the messages ahead of a prompt that another source started while the interrupt settled", async () => {

@@ -17,6 +17,7 @@
 - Added `PI_LINK_SCHEME` and `PI_LINK_HOST` for host-qualified file links with optional line and column positions in remote sessions ([#15855](https://github.com/can1357/oh-my-pi/pull/15855) by [@KunoLu](https://github.com/KunoLu)).
 - `AssistantMessageComponent` accepts display-only assistant text renderers and redraws one reply with `rerenderMessage(timestamp)`; `splitAssistantMessageToolTimeline` reports each segment's `contentOffsets` ([#16238](https://github.com/can1357/oh-my-pi/pull/16238) by [@materemias](https://github.com/materemias))
 - `setExtensionLinks()` makes markdown draw links of registered schemes as a dotted-underlined label without URL suffix or terminal hyperlink; `Composer.viewportLinkAt()` and `Composer.startLinkHints()` / `typeLinkHint()` pick them by click or keyboard tag (new `app.links.hint` keybinding, Alt+O) ([#16239](https://github.com/can1357/oh-my-pi/pull/16239) by [@materemias](https://github.com/materemias))
+- Added a `text` option to `FramedMessageComponent` that replaces the message's content as the rendered markdown body
 ### Changed
 
 - Changed TableChartPlanner to allow undefined return, falling back to local guess when no judge is available
@@ -29,9 +30,10 @@
 - Signing in during `omp setup` uses the same sign-in dialog as `/login`
 - In Tern, hovering a subagent's row shows its whole assignment as formatted Markdown in a wide card, instead of a narrow tooltip of the flattened text
 - Typing `B)` or `8)` no longer turns into 😎 (so "option B)" and "step 8)" stay as typed); `B-)` and `8-)` still do
+- In the classic renderer, the live voice panel shows up to three wrapped lines of your latest speech instead of one truncated line; Tern's native view still shows the end of your speech on one line
 ### Fixed
 
-- Voice request rows now show the full utterance and the voice model's request text as plain, unquoted text
+- Voice request rows show retained user utterances followed by the voice model's request text without adding blockquotes
 - Fixed table charts marking the worse value "best" from header keywords: without a judge, a measure is better higher or lower only when its unit says so (rates per second, durations, scores, and sizes or money beside a baseline); `shouldJudge` now also sends single-measure tables the local guess would chart to the judge
 - Fixed the LSP diagnostics view showing "No issues" for files whose language server had not reported yet; they now show as unverified ([#17293](https://github.com/can1357/oh-my-pi/pull/17293) by [@JustasMasiulis](https://github.com/JustasMasiulis))
 - Fixed Esc-Esc rewind in Tern opening on, and stepping onto, a turn that shows nothing (one interrupted before any output) instead of the last turn shown
@@ -137,13 +139,6 @@
 ### Fixed
 
 - Fixed the `/agents` and `/models` hubs in Tern squeezing the left sidebar as long lines (such as a streaming new-agent draft) widen the body pane
-### Added
-
-- Added a `text` option to `FramedMessageComponent` that replaces the message's content as the rendered markdown body
-
-### Changed
-
-- In the classic renderer, the live voice panel shows up to three wrapped lines of your latest speech instead of one truncated line; Tern's native view still shows the end of your speech on one line
 
 ## [18.12.4] - 2026-10-20
 

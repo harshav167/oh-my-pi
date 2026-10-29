@@ -711,7 +711,7 @@ export interface ExtensionLiveStartOptions {
 	voice?: string;
 	/**
 	 * Handlebars template replacing the bundled live instructions, rendered with
-	 * `{ username, firstName }` like the bundled prompt.
+	 * `{ username, firstName, user_first_name, answerLength }` like the bundled prompt.
 	 */
 	instructions?: string;
 	/**

@@ -5,6 +5,10 @@ import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
+import { LiveSessionController } from "@oh-my-pi/pi-coding-agent/live/controller";
+import { ExtensionUiController } from "@oh-my-pi/pi-coding-agent/modes/controllers/extension-ui-controller";
+import { LiveVisualizer } from "@oh-my-pi/pi-tui/apps/live-visualizer";
+import { AskDialogComponent } from "@oh-my-pi/pi-tui/overlays/ask-dialog";
 import { initTheme } from "@oh-my-pi/pi-tui/theme";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
@@ -74,6 +78,57 @@ describe("InteractiveMode.setEditorComponent", () => {
 		expect(mode.editor.onSubmit).toBeDefined();
 		expect(mode.editor.onEscape).toBeDefined();
 		expect(refreshSpy).toHaveBeenCalled();
+	});
+
+	it("keeps live mounted across editor replacement and stops it while Ask owns focus", async () => {
+		vi.spyOn(mode, "refreshSlashCommandState").mockResolvedValue();
+		vi.spyOn(LiveSessionController.prototype, "start").mockResolvedValue();
+		vi.spyOn(LiveSessionController.prototype, "stop").mockResolvedValue();
+		const previousEditor = mode.editor;
+		const hardwareCursor = mode.ui.getShowHardwareCursor();
+		const terminalCursor = previousEditor.getUseTerminalCursor();
+		previousEditor.setText("voice draft");
+		const dialogAbort = new AbortController();
+		try {
+			await mode.handleLiveCommand();
+			const visualizer = mode.editorContainer.children[0];
+			expect(visualizer).toBeInstanceOf(LiveVisualizer);
+			expect(mode.isLiveActive()).toBe(true);
+
+			mode.setEditorComponent((_tui, editorTheme) => new TestModalEditor(editorTheme));
+			const replacement = mode.editor;
+			expect(replacement).not.toBe(previousEditor);
+			expect(replacement.getText()).toBe("voice draft");
+			expect(mode.editorContainer.children).toEqual([visualizer]);
+			expect(mode.ui.getFocused()).toBe(visualizer);
+
+			replacement.setText("");
+			const ask = new ExtensionUiController(mode).showAskDialog(
+				[{ id: "continue", question: "Continue?", options: [{ label: "Yes" }] }],
+				{ signal: dialogAbort.signal },
+			);
+			const dialog = mode.ui.getFocused();
+			expect(dialog).toBeInstanceOf(AskDialogComponent);
+			if (!(dialog instanceof AskDialogComponent)) throw new Error("Expected Ask to own focus");
+			expect(mode.editorContainer.children).toEqual([dialog, visualizer]);
+			const toggle = vi.spyOn(mode, "handleLiveCommand");
+			mode.ui.injectDebugInput("\x0c");
+			expect(toggle).toHaveBeenCalledTimes(1);
+			await toggle.mock.results[0]!.value;
+
+			expect(mode.isLiveActive()).toBe(false);
+			expect(mode.editorContainer.children).toEqual([dialog, replacement]);
+			expect(mode.ui.getFocused()).toBe(dialog);
+			expect(mode.ui.getShowHardwareCursor()).toBe(hardwareCursor);
+			expect(replacement.getUseTerminalCursor()).toBe(terminalCursor);
+			mode.ui.injectDebugInput("\x1b");
+			expect(await ask).toBeUndefined();
+			expect(mode.editorContainer.children).toEqual([replacement]);
+			expect(mode.ui.getFocused()).toBe(replacement);
+		} finally {
+			dialogAbort.abort();
+			if (mode.isLiveActive()) await mode.handleLiveCommand();
+		}
 	});
 
 	it("exposes the active editor factory while replacing the editor", () => {
