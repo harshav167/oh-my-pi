@@ -771,7 +771,6 @@ Used by:
 - jj-lib-proc-macros 0.44.0 (https://github.com/jj-vcs/jj)
 - jj-lib 0.44.0 (https://github.com/jj-vcs/jj)
 - miette 7.6.0 (https://github.com/zkat/miette)
-
 Full license text:
 
                                  Apache License
@@ -992,7 +991,6 @@ Used by:
 - wasmtime-cranelift 29.0.1 (https://github.com/bytecodealliance/wasmtime)
 - wasmtime-environ 29.0.1 (https://github.com/bytecodealliance/wasmtime)
 - wasmtime 29.0.1 (https://github.com/bytecodealliance/wasmtime)
-
 Full license text:
 
                                  Apache License
@@ -1214,11 +1212,11 @@ prospectively choose to deem waived or otherwise exclude such Section(s) of
 the License, but only in their entirety and only with respect to the Combined
 Software.
 
+
 -------------------------------------------------------------------------------
 License: Apache License 2.0 (Apache-2.0)
 Used by:
 - ar_archive_writer 0.5.3 (https://github.com/rust-lang/ar_archive_writer)
-
 Full license text:
 
                                  Apache License
@@ -1440,11 +1438,11 @@ prospectively choose to deem waived or otherwise exclude such Section(s) of
 the License, but only in their entirety and only with respect to the Combined
 Software.
 
+
 -------------------------------------------------------------------------------
 License: Apache License 2.0 (Apache-2.0)
 Used by:
 - calendrical_calculations 0.2.4 (https://github.com/unicode-org/icu4x)
-
 Full license text:
 
                                  Apache License
@@ -1648,13 +1646,11 @@ Full license text:
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-
 -------------------------------------------------------------------------------
 License: Apache License 2.0 (Apache-2.0)
 Used by:
 - moxcms 0.8.1 (https://github.com/awxkee/moxcms.git)
 - pxfm 0.1.30 (https://github.com/awxkee/pxfm)
-
 Full license text:
 
                                  Apache License
@@ -1863,7 +1859,6 @@ Full license text:
 License: Apache License 2.0 (Apache-2.0)
 Used by:
 - xcap 0.9.6 (https://github.com/nashaofu/xcap.git)
-
 Full license text:
 
                                  Apache License
@@ -2075,7 +2070,6 @@ Used by:
 - safetensors 0.7.0 (https://github.com/huggingface/safetensors)
 - self_cell 1.3.0 (https://github.com/Voultapher/self_cell)
 - waitgroup 0.1.2 (https://github.com/laizy/waitgroup-rs)
-
 Full license text:
 
                                  Apache License
@@ -2291,7 +2285,6 @@ Used by:
 - ring 0.17.14 (https://github.com/briansmith/ring)
 - similar 2.7.0 (https://github.com/mitsuhiko/similar)
 - similar 3.2.0 (https://github.com/mitsuhiko/similar)
-
 Full license text:
 
                               Apache License
@@ -2500,7 +2493,6 @@ limitations under the License.
 License: Apache License 2.0 (Apache-2.0)
 Used by:
 - miette-derive 7.6.0 (https://github.com/zkat/miette)
-
 Full license text:
 
 Apache License
@@ -2512,19 +2504,19 @@ AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
    1. Definitions.
 
-     
+
 
 
       "License" shall mean the terms and conditions for use, reproduction, and
 distribution as defined by Sections 1 through 9 of this document.
 
-      
 
-     
+
+
 "Licensor" shall mean the copyright owner or entity authorized by the copyright
 owner that is granting the License.
 
-      
+
 
       "Legal Entity" shall mean the
 union of the acting entity and all other entities that control, are controlled
@@ -2534,33 +2526,33 @@ direction or management of such entity, whether by contract or otherwise, or (ii
 ownership of fifty percent (50%) or more of the outstanding shares, or (iii)
 beneficial ownership of such entity.
 
-      
+
 
       "You" (or "Your") shall mean
 an individual or Legal Entity exercising permissions granted by this License.
 
-  
+
 
 
       "Source" form shall mean the preferred form for making modifications,
 including but not limited to software source code, documentation source, and
 configuration files.
 
-      
+
 
       "Object" form shall mean any form resulting
 from mechanical transformation or translation of a Source form, including but not
 limited to compiled object code, generated documentation, and conversions to
 other media types.
 
-      
+
 
       "Work" shall mean the work of authorship,
 whether in Source or Object form, made available under the License, as indicated
 by a copyright notice that is included in or attached to the work (an example is
 provided in the Appendix below).
 
-      
+
 
       "Derivative Works" shall mean any
 work, whether in Source or Object form, that is based on (or derived from) the
@@ -2570,7 +2562,7 @@ purposes of this License, Derivative Works shall not include works that remain
 separable from, or merely link (or bind by name) to the interfaces of, the Work
 and Derivative Works thereof.
 
-      
+
 
       "Contribution" shall mean any work
 of authorship, including the original version of the Work and any modifications
@@ -2585,9 +2577,9 @@ behalf of, the Licensor for the purpose of discussing and improving the Work, bu
 excluding communication that is conspicuously marked or otherwise designated in
 writing by the copyright owner as "Not a Contribution."
 
-      
 
-     
+
+
 "Contributor" shall mean Licensor and any individual or Legal Entity on behalf of
 whom a Contribution has been received by Licensor and subsequently incorporated
 within the Work.
@@ -2658,7 +2650,7 @@ License, without any additional terms or conditions. Notwithstanding the above,
 nothing herein shall supersede or modify the terms of any separate license
 agreement you may have executed with Licensor regarding such Contributions.
 
-  
+
 6. Trademarks. This License does not grant permission to use the trade names,
 trademarks, service marks, or product names of the Licensor, except as required
 for reasonable and customary use in describing the origin of the Work and
@@ -2732,12 +2724,10 @@ See the License for the specific language
 governing permissions and
 
 limitations under the License.
-
 -------------------------------------------------------------------------------
 License: Apache License 2.0 (Apache-2.0)
 Used by:
 - unicode-bom 2.0.3 (https://gitlab.com/philbooth/unicode-bom)
-
 Full license text:
 
 Apache License
@@ -2964,7 +2954,6 @@ Used by:
 - wasmtime-math 29.0.1 (https://github.com/bytecodealliance/wasmtime)
 - wasmtime-slab 29.0.1 (https://github.com/bytecodealliance/wasmtime)
 - wasmtime-versioned-export-macros 29.0.1 (https://github.com/bytecodealliance/wasmtime)
-
 Full license text:
 
 Apache License
@@ -3045,7 +3034,6 @@ limitations under the License.
 License: BSD 2-Clause "Simplified" License (BSD-2-Clause)
 Used by:
 - check_elevation 0.2.7 (https://github.com/h4rldev/check_elevation)
-
 Full license text:
 
 BSD 2-Clause License
@@ -3077,7 +3065,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 License: BSD 2-Clause "Simplified" License (BSD-2-Clause)
 Used by:
 - arrayref 0.3.9 (https://github.com/droundy/arrayref)
-
 Full license text:
 
 Copyright (c) 2015 David Roundy <roundyd@physics.oregonstate.edu>
@@ -3111,10 +3098,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 License: BSD 2-Clause "Simplified" License (BSD-2-Clause)
 Used by:
 - libwayshot-xcap 0.3.3 (https://github.com/nashaofu/wayshot)
-
 Full license text:
 
-Copyright (c) <year> <owner> 
+Copyright (c) <year> <owner>
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
@@ -3128,7 +3114,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
 - opusic-sys 0.7.5 (https://github.com/DoumanAsh/opusic-sys)
-
 Full license text:
 
 /***********************************************************************
@@ -3175,7 +3160,6 @@ POSSIBILITY OF SUCH DAMAGE.
 License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
 - bindgen 0.72.1 (https://github.com/rust-lang/rust-bindgen)
-
 Full license text:
 
 BSD 3-Clause License
@@ -3214,7 +3198,6 @@ Used by:
 - zstd-safe 8.0.0 (https://github.com/gyscos/zstd-rs)
 - zstd-sys 2.1.0+zstd.1.5.7 (https://github.com/gyscos/zstd-rs)
 - zstd 0.14.0 (https://github.com/gyscos/zstd-rs)
-
 Full license text:
 
 BSD 3-Clause License
@@ -3251,7 +3234,6 @@ License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
 - tiny-skia-path 0.12.0 (https://github.com/linebender/tiny-skia/tree/master/path)
 - tiny-skia 0.12.0 (https://github.com/linebender/tiny-skia)
-
 Full license text:
 
 Copyright (c) 2011 Google Inc. All rights reserved.
@@ -3288,8 +3270,50 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -------------------------------------------------------------------------------
 License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
-- alloc-no-stdlib 2.0.4 (https://github.com/dropbox/rust-alloc-no-stdlib)
+- sonora-agc2 0.2.0 (https://github.com/dignifiedquire/sonora)
+- sonora-common-audio 0.2.0 (https://github.com/dignifiedquire/sonora)
+- sonora-fft 0.2.0 (https://github.com/dignifiedquire/sonora)
+- sonora-ns 0.2.0 (https://github.com/dignifiedquire/sonora)
+- sonora-simd 0.2.0 (https://github.com/dignifiedquire/sonora)
+- sonora 0.2.0 (https://github.com/dignifiedquire/sonora)
+Full license text:
 
+Copyright (c) 2011, The WebRTC Project Authors. All rights reserved.
+Copyright (c) 2016, Arun Raghavan and contributors. All rights reserved.
+Copyright (c) 2026, dignifiedquire. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+
+  * Neither the name of Google nor the names of its contributors may
+    be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
+Used by:
+- alloc-no-stdlib 2.0.4 (https://github.com/dropbox/rust-alloc-no-stdlib)
 Full license text:
 
 Copyright (c) 2016 Dropbox, Inc.
@@ -3309,7 +3333,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
 - subtle 2.6.1 (https://github.com/dalek-cryptography/subtle)
-
 Full license text:
 
 Copyright (c) 2016-2017 Isis Agora Lovecruft, Henry de Valence. All rights reserved.
@@ -3346,7 +3369,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
 - x25519-dalek 2.0.1 (https://github.com/dalek-cryptography/curve25519-dalek/tree/main/x25519-dalek)
-
 Full license text:
 
 Copyright (c) 2017-2021 isis agora lovecruft. All rights reserved.
@@ -3382,12 +3404,48 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -------------------------------------------------------------------------------
 License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
-- alloc-stdlib 0.2.4 (https://github.com/dropbox/rust-alloc-no-stdlib)
-- curve25519-dalek 4.1.3 (https://github.com/dalek-cryptography/curve25519-dalek/tree/main/curve25519-dalek)
-
+- sonora-aec3 0.2.0 (https://github.com/dignifiedquire/sonora)
 Full license text:
 
-Copyright (c) <year> <owner>. 
+Copyright (c) 2011, The WebRTC Project Authors. All rights reserved.
+Copyright (c) 2016, Arun Raghavan and contributors. All rights reserved.
+Copyright (c) 2026, dignifiedquire. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+  * Neither the name of Google nor the names of its contributors may
+    be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
+Used by:
+- alloc-stdlib 0.2.4 (https://github.com/dropbox/rust-alloc-no-stdlib)
+- curve25519-dalek 4.1.3 (https://github.com/dalek-cryptography/curve25519-dalek/tree/main/curve25519-dalek)
+Full license text:
+
+Copyright (c) <year> <owner>.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
@@ -3403,7 +3461,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 License: BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 Used by:
 - encoding_rs 0.8.42 (https://github.com/hsivonen/encoding_rs)
-
 Full license text:
 
 Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
@@ -3438,7 +3495,6 @@ License: Boost Software License 1.0 (BSL-1.0)
 Used by:
 - error-code 3.4.0 (https://github.com/DoumanAsh/error-code)
 - xxhash-rust 0.8.18 (https://github.com/DoumanAsh/xxhash-rust)
-
 Full license text:
 
 Boost Software License - Version 1.0 - August 17th, 2003
@@ -3469,7 +3525,6 @@ DEALINGS IN THE SOFTWARE.
 License: Boost Software License 1.0 (BSL-1.0)
 Used by:
 - clipboard-win 5.4.1 (https://github.com/DoumanAsh/clipboard-win)
-
 Full license text:
 
 Boost Software License - Version 1.0 - August 17th, 2003
@@ -3484,7 +3539,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: Creative Commons Zero v1.0 Universal (CC0-1.0)
 Used by:
 - notify 8.2.0 (https://github.com/notify-rs/notify.git)
-
 Full license text:
 
 Creative Commons CC0 1.0 Universal
@@ -3528,12 +3582,10 @@ For these and/or other purposes and motivations, and without any expectation of 
      c. Affirmer disclaims responsibility for clearing rights of other persons that may apply to the Work or any use thereof, including without limitation any person's Copyright and Related Rights in the Work. Further, Affirmer disclaims responsibility for obtaining any necessary consents, permissions or other rights required for any use of the Work.
 
      d. Affirmer understands and acknowledges that Creative Commons is not a party to this document and has no duty or obligation with respect to this CC0 or use of the Work.
-
 -------------------------------------------------------------------------------
 License: Creative Commons Zero v1.0 Universal (CC0-1.0)
 Used by:
-- tiny-keccak 2.0.2
-
+- tiny-keccak 2.0.2 (https://crates.io/crates/tiny-keccak)
 Full license text:
 
 Creative Commons Legal Code
@@ -3662,7 +3714,6 @@ express Statement of Purpose.
 License: Common Development and Distribution License 1.0 (CDDL-1.0)
 Used by:
 - inferno 0.12.8 (https://github.com/jonhoo/inferno.git)
-
 Full license text:
 
 Unless otherwise noted, all files in this distribution are released
@@ -4054,7 +4105,6 @@ venue lying in Santa Clara County, California.
 License: ISC License (ISC)
 Used by:
 - untrusted 0.9.0 (https://github.com/briansmith/untrusted)
-
 Full license text:
 
 // Copyright 2015-2016 Brian Smith.
@@ -4075,7 +4125,6 @@ Full license text:
 License: ISC License (ISC)
 Used by:
 - inotify-sys 0.1.8 (https://github.com/hannobraun/inotify-sys)
-
 Full license text:
 
 Copyright (c) Hanno Braun and contributors
@@ -4091,12 +4140,10 @@ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
 OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
 TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: ISC License (ISC)
 Used by:
 - inotify 0.11.5 (https://github.com/hannobraun/inotify-rs)
-
 Full license text:
 
 Copyright (c) Hanno Braun and contributors
@@ -4117,7 +4164,6 @@ THIS SOFTWARE.
 License: ISC License (ISC)
 Used by:
 - ring 0.17.14 (https://github.com/briansmith/ring)
-
 Full license text:
 
 Copyright 2015-2025 Brian Smith.
@@ -4139,7 +4185,6 @@ License: ISC License (ISC)
 Used by:
 - libloading 0.8.9 (https://github.com/nagisa/rust_libloading/)
 - libloading 0.9.0 (https://github.com/nagisa/rust_libloading/)
-
 Full license text:
 
 Copyright © 2015, Simonas Kazlauskas
@@ -4159,7 +4204,6 @@ THIS SOFTWARE.
 License: ISC License (ISC)
 Used by:
 - rustls-webpki 0.103.15 (https://github.com/rustls/webpki)
-
 Full license text:
 
 Except as otherwise noted, this project is licensed under the following
@@ -4186,7 +4230,6 @@ third-party/chromium/LICENSE.
 License: MIT License (MIT)
 Used by:
 - uds_windows 1.2.1 (https://github.com/haraldh/rust_uds_windows)
-
 Full license text:
 
     MIT License
@@ -4215,7 +4258,6 @@ Full license text:
 License: MIT License (MIT)
 Used by:
 - onig_sys 69.9.3 (https://github.com/rust-onig/rust-onig)
-
 Full license text:
 
 # Rust-Onig is Open Source!
@@ -4227,20 +4269,20 @@ under the original license, see [COPYING](oniguruma/COPYING) for more
 information.
 
 > The MIT License (MIT)
-> 
+>
 > Copyright (c) 2015 Will Speak <will@willspeak.me>, Ivan Ivashchenko
 > <defuz@me.com>, and contributors.
-> 
+>
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal
 > in the Software without restriction, including without limitation the rights
 > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 > copies of the Software, and to permit persons to whom the Software is
 > furnished to do so, subject to the following conditions:
-> 
+>
 > The above copyright notice and this permission notice shall be included in all
 > copies or substantial portions of the Software.
-> 
+>
 > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -4253,7 +4295,6 @@ information.
 License: MIT License (MIT)
 Used by:
 - onig 6.5.3 (https://github.com/iwillspeak/rust-onig)
-
 Full license text:
 
 # Rust-Onig is Open Source!
@@ -4264,20 +4305,20 @@ remains the property of the original authors and is re-distributed
 under the original license.
 
 > The MIT License (MIT)
-> 
+>
 > Copyright (c) 2015 Will Speak <will@willspeak.me>, Ivan Ivashchenko
 > <defuz@me.com>, and contributors.
-> 
+>
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal
 > in the Software without restriction, including without limitation the rights
 > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 > copies of the Software, and to permit persons to whom the Software is
 > furnished to do so, subject to the following conditions:
-> 
+>
 > The above copyright notice and this permission notice shall be included in all
 > copies or substantial portions of the Software.
-> 
+>
 > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -4290,7 +4331,6 @@ under the original license.
 License: MIT License (MIT)
 Used by:
 - cexpr 0.6.0 (https://github.com/jethrogb/rust-cexpr)
-
 Full license text:
 
 (C) Copyright 2016 Jethro G. Beekman
@@ -4325,7 +4365,6 @@ Used by:
 - peg-macros 0.8.6 (https://github.com/kevinmehall/rust-peg)
 - peg-runtime 0.8.6 (https://github.com/kevinmehall/rust-peg)
 - peg 0.8.6 (https://github.com/kevinmehall/rust-peg)
-
 Full license text:
 
 Copyright (C) 2013 Kevin Mehall
@@ -4358,7 +4397,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - sha3 0.10.9 (https://github.com/RustCrypto/hashes)
-
 Full license text:
 
 Copyright (c) 2006-2009 Graydon Hoare
@@ -4396,7 +4434,6 @@ Used by:
 - md-5 0.10.6 (https://github.com/RustCrypto/hashes)
 - sha1 0.10.7 (https://github.com/RustCrypto/hashes)
 - sha2 0.10.9 (https://github.com/RustCrypto/hashes)
-
 Full license text:
 
 Copyright (c) 2006-2009 Graydon Hoare
@@ -4433,7 +4470,6 @@ Used by:
 - lazy_static 1.5.0 (https://github.com/rust-lang-nursery/lazy-static.rs)
 - rayon-core 1.13.0 (https://github.com/rayon-rs/rayon)
 - rayon 1.12.0 (https://github.com/rayon-rs/rayon)
-
 Full license text:
 
 Copyright (c) 2010 The Rust Project Developers
@@ -4471,7 +4507,6 @@ Used by:
 - core-graphics 0.25.0 (https://github.com/servo/core-foundation-rs)
 - string_cache 0.11.0 (https://github.com/servo/string-cache)
 - string_cache_codegen 0.11.2 (https://github.com/servo/string-cache)
-
 Full license text:
 
 Copyright (c) 2012-2013 Mozilla Foundation
@@ -4504,7 +4539,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - xcb 1.7.1 (https://github.com/rust-x-bindings/rust-xcb)
-
 Full license text:
 
 Copyright (c) 2013 James Miller <james@aatch.net>
@@ -4538,7 +4572,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - hex 0.4.3 (https://github.com/KokaKiwi/rust-hex)
-
 Full license text:
 
 Copyright (c) 2013-2014 The Rust Project Developers.
@@ -4566,7 +4599,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - form_urlencoded 1.2.2 (https://github.com/servo/rust-url)
-
 Full license text:
 
 Copyright (c) 2013-2016 The rust-url developers
@@ -4602,7 +4634,6 @@ Used by:
 - idna 1.1.0 (https://github.com/servo/rust-url/)
 - percent-encoding 2.3.2 (https://github.com/servo/rust-url/)
 - url 2.5.8 (https://github.com/servo/rust-url)
-
 Full license text:
 
 Copyright (c) 2013-2025 The rust-url developers
@@ -4650,7 +4681,6 @@ Used by:
 - wasm-bindgen-shared 0.2.129 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
 - wasm-bindgen 0.2.129 (https://github.com/wasm-bindgen/wasm-bindgen)
 - web-sys 0.3.106 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys)
-
 Full license text:
 
 Copyright (c) 2014 Alex Crichton
@@ -4683,7 +4713,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - mio 1.2.3 (https://github.com/tokio-rs/mio)
-
 Full license text:
 
 Copyright (c) 2014 Carl Lerche and other MIO contributors
@@ -4710,7 +4739,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - errno 0.3.14 (https://github.com/lambda-fairy/rust-errno)
-
 Full license text:
 
 Copyright (c) 2014 Chris Wong
@@ -4743,7 +4771,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - base64ct 1.8.3 (https://github.com/RustCrypto/formats)
-
 Full license text:
 
 Copyright (c) 2014 Steve "Sc00bz" Thomas (steve at tobtu dot com)
@@ -4777,7 +4804,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - base16ct 0.2.0 (https://github.com/RustCrypto/formats/tree/master/base16ct)
-
 Full license text:
 
 Copyright (c) 2014 Steve "Sc00bz" Thomas (steve at tobtu dot com)
@@ -4823,7 +4849,6 @@ Used by:
 - regex-bites 0.1.6 (https://github.com/rust-lang/regex/tree/master/regex-bites)
 - regex-syntax 0.8.11 (https://github.com/rust-lang/regex)
 - regex 1.13.1 (https://github.com/rust-lang/regex)
-
 Full license text:
 
 Copyright (c) 2014 The Rust Project Developers
@@ -4856,7 +4881,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - uuid 1.26.1 (https://github.com/uuid-rs/uuid)
-
 Full license text:
 
 Copyright (c) 2014 The Rust Project Developers
@@ -4892,7 +4916,6 @@ Used by:
 - html5ever 0.40.1 (https://github.com/servo/html5ever)
 - markup5ever 0.40.0 (https://github.com/servo/html5ever)
 - web_atoms 0.3.0 (https://github.com/servo/html5ever)
-
 Full license text:
 
 Copyright (c) 2014 The html5ever Project Developers
@@ -4926,7 +4949,6 @@ License: MIT License (MIT)
 Used by:
 - nom 7.1.3 (https://github.com/Geal/nom)
 - nom 8.0.0 (https://github.com/rust-bakery/nom)
-
 Full license text:
 
 Copyright (c) 2014-2019 Geoffroy Couprie
@@ -4954,7 +4976,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - float-cmp 0.9.0 (https://github.com/mikedilger/float-cmp)
-
 Full license text:
 
 Copyright (c) 2014-2020 Optimal Computing (NZ) Ltd
@@ -4981,7 +5002,6 @@ IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - flate2 1.1.10 (https://github.com/rust-lang/flate2-rs)
-
 Full license text:
 
 Copyright (c) 2014-2026 Alex Crichton
@@ -5014,7 +5034,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - unicase 2.9.0 (https://github.com/seanmonstar/unicase)
-
 Full license text:
 
 Copyright (c) 2014-2026 Sean McArthur
@@ -5037,6 +5056,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
@@ -5047,7 +5067,6 @@ Used by:
 - itertools 0.15.0 (https://github.com/rust-itertools/itertools)
 - maplit 1.0.2 (https://github.com/bluss/maplit)
 - petgraph 0.8.3 (https://github.com/petgraph/petgraph)
-
 Full license text:
 
 Copyright (c) 2015
@@ -5086,7 +5105,6 @@ Used by:
 - wayland-scanner 0.31.11 (https://github.com/smithay/wayland-rs)
 - wayland-server 0.31.14 (https://github.com/smithay/wayland-rs)
 - wayland-sys 0.31.11 (https://github.com/smithay/wayland-rs)
-
 Full license text:
 
 Copyright (c) 2015 Elinor Berger
@@ -5114,7 +5132,6 @@ License: MIT License (MIT)
 Used by:
 - winreg 0.10.1 (https://github.com/gentoo90/winreg-rs)
 - winreg 0.56.0 (https://github.com/gentoo90/winreg-rs)
-
 Full license text:
 
 Copyright (c) 2015 Igor Shaula
@@ -5142,7 +5159,6 @@ License: MIT License (MIT)
 Used by:
 - new_debug_unreachable 1.0.6 (https://github.com/mbrubeck/rust-debug-unreachable)
 - ordered-float 5.4.0 (https://github.com/reem/rust-ordered-float)
-
 Full license text:
 
 Copyright (c) 2015 Jonathan Reem
@@ -5175,7 +5191,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tendril 0.5.1 (https://github.com/servo/html5ever)
-
 Full license text:
 
 Copyright (c) 2015 Keegan McAllister
@@ -5210,7 +5225,6 @@ Used by:
 - str_stack 0.1.1 (https://github.com/Stebalien/str_stack)
 - tempfile 3.27.0 (https://github.com/Stebalien/tempfile)
 - xattr 1.6.1 (https://github.com/Stebalien/xattr)
-
 Full license text:
 
 Copyright (c) 2015 Steven Allen
@@ -5244,7 +5258,6 @@ License: MIT License (MIT)
 Used by:
 - object 0.36.7 (https://github.com/gimli-rs/object)
 - object 0.39.1 (https://github.com/gimli-rs/object)
-
 Full license text:
 
 Copyright (c) 2015 The Gimli Developers
@@ -5286,7 +5299,7 @@ Used by:
 - unicode-segmentation 1.13.3 (https://github.com/unicode-rs/unicode-segmentation)
 - unicode-width 0.1.14 (https://github.com/unicode-rs/unicode-width)
 - unicode-width 0.2.2 (https://github.com/unicode-rs/unicode-width)
-
+- unicode-xid 0.2.6 (https://github.com/unicode-rs/unicode-xid)
 Full license text:
 
 Copyright (c) 2015 The Rust Project Developers
@@ -5319,7 +5332,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - cobs 0.3.0 (https://github.com/jamesmunns/cobs.rs)
-
 Full license text:
 
 Copyright (c) 2015 The cobs.rs Developers
@@ -5347,7 +5359,6 @@ License: MIT License (MIT)
 Used by:
 - procfs-core 0.18.0 (https://github.com/eminence/procfs)
 - procfs 0.18.0 (https://github.com/eminence/procfs)
-
 Full license text:
 
 Copyright (c) 2015 The procfs Developers
@@ -5374,7 +5385,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - quick-error 2.0.1 (http://github.com/tailhook/quick-error)
-
 Full license text:
 
 Copyright (c) 2015 The quick-error Developers
@@ -5401,7 +5411,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - terminal_size 0.4.4 (https://github.com/eminence/terminal-size)
-
 Full license text:
 
 Copyright (c) 2015 The terminal-size Developers
@@ -5428,7 +5437,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - enum-as-inner 0.6.1 (https://github.com/bluejekyll/enum-as-inner)
-
 Full license text:
 
 Copyright (c) 2015 The trust-dns Developers
@@ -5456,7 +5464,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - dlib 0.5.3 (https://github.com/elinorbgr/dlib)
-
 Full license text:
 
 Copyright (c) 2015 Victor Berger
@@ -5478,12 +5485,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - png 0.18.1 (https://github.com/image-rs/image-png)
-
 Full license text:
 
 Copyright (c) 2015 nwin
@@ -5516,7 +5521,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - blake2 0.10.6 (https://github.com/RustCrypto/hashes)
-
 Full license text:
 
 Copyright (c) 2015-2016 The blake2-rfc Developers, Cesar Barros
@@ -5550,7 +5554,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - fixedbitset 0.5.7 (https://github.com/petgraph/fixedbitset)
-
 Full license text:
 
 Copyright (c) 2015-2017
@@ -5583,7 +5586,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - winapi 0.3.9 (https://github.com/retep998/winapi-rs)
-
 Full license text:
 
 Copyright (c) 2015-2018 The winapi-rs Developers
@@ -5610,7 +5612,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - hkdf 0.12.4 (https://github.com/RustCrypto/KDFs/)
-
 Full license text:
 
 Copyright (c) 2015-2018 Vlad Filippov
@@ -5644,7 +5645,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - poly1305 0.8.0 (https://github.com/RustCrypto/universal-hashes)
-
 Full license text:
 
 Copyright (c) 2015-2019 RustCrypto Developers
@@ -5677,7 +5677,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - num_cpus 1.17.0 (https://github.com/seanmonstar/num_cpus)
-
 Full license text:
 
 Copyright (c) 2015-2025 Sean McArthur
@@ -5700,6 +5699,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
@@ -5712,7 +5712,6 @@ Used by:
 - futures-task 0.3.34 (https://github.com/rust-lang/futures-rs)
 - futures-util 0.3.34 (https://github.com/rust-lang/futures-rs)
 - futures 0.3.34 (https://github.com/rust-lang/futures-rs)
-
 Full license text:
 
 Copyright (c) 2016 Alex Crichton
@@ -5751,7 +5750,6 @@ Used by:
 - hashbrown 0.15.5 (https://github.com/rust-lang/hashbrown)
 - hashbrown 0.16.1 (https://github.com/rust-lang/hashbrown)
 - hashbrown 0.17.1 (https://github.com/rust-lang/hashbrown)
-
 Full license text:
 
 Copyright (c) 2016 Amanieu d'Antras
@@ -5784,7 +5782,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - utf8parse 0.2.2 (https://github.com/alacritty/vte)
-
 Full license text:
 
 Copyright (c) 2016 Joe Wilm
@@ -5817,7 +5814,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rustls 0.23.45 (https://github.com/rustls/rustls)
-
 Full license text:
 
 Copyright (c) 2016 Joseph Birr-Pixton <jpixton@gmail.com>
@@ -5850,7 +5846,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - xkbcommon 0.9.0 (https://github.com/rust-x-bindings/xkbcommon-rs)
-
 Full license text:
 
 Copyright (c) 2016 Remi Thebault <remi.thebault@gmail.com>
@@ -5883,7 +5878,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - streaming-iterator 0.1.9 (https://github.com/sfackler/streaming-iterator)
-
 Full license text:
 
 Copyright (c) 2016 Steven Fackler
@@ -5910,7 +5904,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - opus 0.4.0 (https://github.com/SpaceManiac/opus-rs)
-
 Full license text:
 
 Copyright (c) 2016 Tad Hardesty
@@ -5940,7 +5933,6 @@ Used by:
 - parking_lot 0.12.5 (https://github.com/Amanieu/parking_lot)
 - parking_lot_core 0.9.12 (https://github.com/Amanieu/parking_lot)
 - rustc_version 0.4.1 (https://github.com/djc/rustc-version-rs)
-
 Full license text:
 
 Copyright (c) 2016 The Rust Project Developers
@@ -5973,7 +5965,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - shell-words 1.1.1 (https://github.com/tmiasko/shell-words)
-
 Full license text:
 
 Copyright (c) 2016 Tomasz Miąsko
@@ -6007,7 +5998,6 @@ License: MIT License (MIT)
 Used by:
 - kqueue-sys 1.1.2 (https://gitlab.com/rust-kqueue/rust-kqueue-sys)
 - kqueue 1.2.1 (https://gitlab.com/rust-kqueue/rust-kqueue)
-
 Full license text:
 
 Copyright (c) 2016 William Orr <will@worrbase.com>
@@ -6034,7 +6024,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - md4 0.10.2 (https://github.com/RustCrypto/hashes)
-
 Full license text:
 
 Copyright (c) 2016 bacher09, Artyom Pavlov
@@ -6067,7 +6056,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - indexmap 2.14.2 (https://github.com/indexmap-rs/indexmap)
-
 Full license text:
 
 Copyright (c) 2016--2017
@@ -6100,7 +6088,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - equivalent 1.0.2 (https://github.com/indexmap-rs/equivalent)
-
 Full license text:
 
 Copyright (c) 2016--2023
@@ -6133,7 +6120,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - scopeguard 1.2.0 (https://github.com/bluss/scopeguard)
-
 Full license text:
 
 Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
@@ -6166,7 +6152,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - cipher 0.4.4 (https://github.com/RustCrypto/traits)
-
 Full license text:
 
 Copyright (c) 2016-2020 RustCrypto Developers
@@ -6199,7 +6184,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - cipher 0.5.2 (https://github.com/RustCrypto/traits)
-
 Full license text:
 
 Copyright (c) 2016-2025 RustCrypto Developers
@@ -6233,7 +6217,6 @@ License: MIT License (MIT)
 Used by:
 - md-5 0.11.0 (https://github.com/RustCrypto/hashes)
 - sha2 0.11.0 (https://github.com/RustCrypto/hashes)
-
 Full license text:
 
 Copyright (c) 2016-2026 The RustCrypto Project Developers
@@ -6270,7 +6253,6 @@ License: MIT License (MIT)
 Used by:
 - digest 0.10.7 (https://github.com/RustCrypto/traits)
 - hmac 0.12.1 (https://github.com/RustCrypto/MACs)
-
 Full license text:
 
 Copyright (c) 2017 Artyom Pavlov
@@ -6303,7 +6285,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - fnv 1.0.7 (https://github.com/servo/rust-fnv)
-
 Full license text:
 
 Copyright (c) 2017 Contributors
@@ -6337,7 +6318,6 @@ License: MIT License (MIT)
 Used by:
 - memoffset 0.7.1 (https://github.com/Gilnaa/memoffset)
 - memoffset 0.9.1 (https://github.com/Gilnaa/memoffset)
-
 Full license text:
 
 Copyright (c) 2017 Gilad Naaman
@@ -6359,13 +6339,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - heapless 0.8.0 (https://github.com/rust-embedded/heapless)
 - heapless 0.9.3 (https://github.com/rust-embedded/heapless)
-
 Full license text:
 
 Copyright (c) 2017 Jorge Aparicio
@@ -6398,7 +6376,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - enumflags2_derive 0.7.12 (https://github.com/meithecatte/enumflags2)
-
 Full license text:
 
 Copyright (c) 2017 Maik Klein
@@ -6431,7 +6408,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - by_address 1.2.1 (https://github.com/mbrubeck/by_address)
-
 Full license text:
 
 Copyright (c) 2017 Matt Brubeck
@@ -6469,7 +6445,6 @@ Used by:
 - oid-registry 0.7.1 (https://github.com/rusticata/oid-registry.git)
 - rusticata-macros 4.1.0 (https://github.com/rusticata/rusticata-macros.git)
 - x509-parser 0.16.0 (https://github.com/rusticata/x509-parser.git)
-
 Full license text:
 
 Copyright (c) 2017 Pierre Chifflier
@@ -6502,7 +6477,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - shared_library 0.1.9 (https://github.com/tomaka/shared_library/)
-
 Full license text:
 
 Copyright (c) 2017 Pierre Krieger
@@ -6530,12 +6504,10 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - redox_syscall 0.5.18 (https://gitlab.redox-os.org/redox-os/syscall)
-
 Full license text:
 
 Copyright (c) 2017 Redox OS Developers
@@ -6565,7 +6537,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - stable_deref_trait 1.2.1 (https://github.com/storyyeller/stable_deref_trait)
-
 Full license text:
 
 Copyright (c) 2017 Robert Grosse
@@ -6593,12 +6564,10 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - bytecount 0.6.9 (https://github.com/llogiq/bytecount)
-
 Full license text:
 
 Copyright (c) 2017 The bytecount Developers
@@ -6627,7 +6596,6 @@ Used by:
 - foreign-types-macros 0.2.4 (https://github.com/sfackler/foreign-types)
 - foreign-types-shared 0.3.1 (https://github.com/sfackler/foreign-types)
 - foreign-types 0.5.0 (https://github.com/sfackler/foreign-types)
-
 Full license text:
 
 Copyright (c) 2017 The foreign-types Developers
@@ -6654,7 +6622,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - stringprep 0.1.5 (https://github.com/sfackler/rust-stringprep)
-
 Full license text:
 
 Copyright (c) 2017 The rust-stringprep Developers
@@ -6681,7 +6648,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - version-compare 0.2.1 (https://gitlab.com/timvisee/version-compare)
-
 Full license text:
 
 Copyright (c) 2017 Tim Visée
@@ -6704,11 +6670,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - arc-swap 1.9.2 (https://github.com/vorner/arc-swap)
-
 Full license text:
 
 Copyright (c) 2017 arc-swap developers
@@ -6741,7 +6707,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - signal-hook-registry 1.4.8 (https://github.com/vorner/signal-hook)
-
 Full license text:
 
 Copyright (c) 2017 tokio-jsonrpc developers
@@ -6774,7 +6739,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - core_detect 1.0.0 (https://github.com/thomcc/core_detect)
-
 Full license text:
 
 Copyright (c) 2017-2020 The Rust Project Developers
@@ -6807,7 +6771,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - enumflags2 0.7.12 (https://github.com/meithecatte/enumflags2)
-
 Full license text:
 
 Copyright (c) 2017-2023 Maik Klein, Maja Kądziołka
@@ -6840,7 +6803,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - digest 0.11.3 (https://github.com/RustCrypto/traits)
-
 Full license text:
 
 Copyright (c) 2017-2025 RustCrypto Developers
@@ -6874,7 +6836,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - aes 0.8.4 (https://github.com/RustCrypto/block-ciphers)
-
 Full license text:
 
 Copyright (c) 2018 Artyom Pavlov
@@ -6907,7 +6868,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - bytes 1.12.1 (https://github.com/tokio-rs/bytes)
-
 Full license text:
 
 Copyright (c) 2018 Carl Lerche
@@ -6940,7 +6900,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rand_xoshiro 0.8.1 (https://github.com/rust-random/rngs)
-
 Full license text:
 
 Copyright (c) 2018 Developers of the Rand project
@@ -6973,7 +6932,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - hash32 0.3.1 (https://github.com/japaric/hash32)
-
 Full license text:
 
 Copyright (c) 2018 Jorge Aparicio
@@ -7006,7 +6964,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - autocfg 1.5.1 (https://github.com/cuviper/autocfg)
-
 Full license text:
 
 Copyright (c) 2018 Josh Stone
@@ -7041,7 +6998,6 @@ Used by:
 - logos-codegen 0.15.1 (https://github.com/maciejhirsz/logos)
 - logos-derive 0.15.1 (https://github.com/maciejhirsz/logos)
 - logos 0.15.1 (https://github.com/maciejhirsz/logos)
-
 Full license text:
 
 Copyright (c) 2018 Maciej Hirsz <maciej.hirsz@gmail.com>
@@ -7071,7 +7027,6 @@ License: MIT License (MIT)
 Used by:
 - kurbo 0.13.1 (https://github.com/linebender/kurbo)
 - polycool 0.4.0 (https://github.com/linebender/kurbo)
-
 Full license text:
 
 Copyright (c) 2018 Raph Levien
@@ -7104,7 +7059,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - smallvec 1.16.2 (https://github.com/servo/rust-smallvec)
-
 Full license text:
 
 Copyright (c) 2018 The Servo Project Developers
@@ -7137,7 +7091,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - pin-utils 0.1.0 (https://github.com/rust-lang-nursery/pin-utils)
-
 Full license text:
 
 Copyright (c) 2018 The pin-utils authors
@@ -7170,7 +7123,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ahash 0.8.12 (https://github.com/tkaitchuck/ahash)
-
 Full license text:
 
 Copyright (c) 2018 Tom Kaitchuck
@@ -7204,7 +7156,6 @@ License: MIT License (MIT)
 Used by:
 - svgtypes 0.16.1 (https://github.com/linebender/svgtypes)
 - ttf-parser 0.25.1 (https://github.com/harfbuzz/ttf-parser)
-
 Full license text:
 
 Copyright (c) 2018 Yevhenii Reizner
@@ -7227,12 +7178,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - block-buffer 0.10.4 (https://github.com/RustCrypto/utils)
 - block-padding 0.3.3 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2018-2019 The RustCrypto Project Developers
@@ -7267,7 +7218,6 @@ Used by:
 - ecdsa 0.16.9 (https://github.com/RustCrypto/signatures/tree/master/ecdsa)
 - keccak 0.1.6 (https://github.com/RustCrypto/sponges/tree/master/keccak)
 - rfc6979 0.4.0 (https://github.com/RustCrypto/signatures/tree/master/rfc6979)
-
 Full license text:
 
 Copyright (c) 2018-2022 RustCrypto Developers
@@ -7302,7 +7252,6 @@ Used by:
 - cbc 0.1.2 (https://github.com/RustCrypto/block-modes)
 - cbc 0.2.1 (https://github.com/RustCrypto/block-modes)
 - ctr 0.9.2 (https://github.com/RustCrypto/block-modes)
-
 Full license text:
 
 Copyright (c) 2018-2022 RustCrypto Developers
@@ -7336,7 +7285,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - signature 2.2.0 (https://github.com/RustCrypto/traits/tree/master/signature)
-
 Full license text:
 
 Copyright (c) 2018-2023 RustCrypto Developers
@@ -7369,7 +7317,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - opaque-debug 0.3.1 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2018-2024 The RustCrypto Project Developers
@@ -7402,7 +7349,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - aes 0.9.2 (https://github.com/RustCrypto/block-ciphers)
-
 Full license text:
 
 Copyright (c) 2018-2024 The RustCrypto Project Developers
@@ -7436,7 +7382,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - getrandom 0.2.17 (https://github.com/rust-random/getrandom)
-
 Full license text:
 
 Copyright (c) 2018-2024 The rust-random Project Developers
@@ -7471,7 +7416,6 @@ License: MIT License (MIT)
 Used by:
 - block-buffer 0.12.1 (https://github.com/RustCrypto/utils)
 - block-padding 0.4.2 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2018-2025 The RustCrypto Project Developers
@@ -7504,7 +7448,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - getrandom 0.3.4 (https://github.com/rust-random/getrandom)
-
 Full license text:
 
 Copyright (c) 2018-2025 The rust-random Project Developers
@@ -7538,7 +7481,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rand_core 0.10.1 (https://github.com/rust-random/rand_core)
-
 Full license text:
 
 Copyright (c) 2018-2026 The Rand Project Developers
@@ -7571,7 +7513,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - zeroize 1.9.0 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2018-2026 The RustCrypto Project Developers
@@ -7604,7 +7545,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - getrandom 0.4.3 (https://github.com/rust-random/getrandom)
-
 Full license text:
 
 Copyright (c) 2018-2026 The rust-random Project Developers
@@ -7638,7 +7578,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - nonempty 0.12.0 (https://github.com/cloudhead/nonempty)
-
 Full license text:
 
 Copyright (c) 2019 Alexis Sellier
@@ -7665,7 +7604,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - postcard 1.1.3 (https://github.com/jamesmunns/postcard)
-
 Full license text:
 
 Copyright (c) 2019 Anthony James Munns
@@ -7698,7 +7636,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - slab 0.4.12 (https://github.com/tokio-rs/slab)
-
 Full license text:
 
 Copyright (c) 2019 Carl Lerche
@@ -7731,7 +7668,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - cfg-expr 0.20.9 (https://github.com/EmbarkStudios/cfg-expr)
-
 Full license text:
 
 Copyright (c) 2019 Embark Studios
@@ -7766,7 +7702,6 @@ Used by:
 - font-types 0.12.5 (https://github.com/googlefonts/fontations)
 - read-fonts 0.41.0 (https://github.com/googlefonts/fontations)
 - skrifa 0.44.0 (https://github.com/googlefonts/fontations)
-
 Full license text:
 
 Copyright (c) 2019 Fontations Developers
@@ -7799,7 +7734,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - wl-clipboard-rs 0.9.3 (https://github.com/YaLTeR/wl-clipboard-rs)
-
 Full license text:
 
 Copyright (c) 2019 Ivan Molodetskikh
@@ -7832,7 +7766,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - bumpalo 3.20.3 (https://github.com/fitzgen/bumpalo)
-
 Full license text:
 
 Copyright (c) 2019 Nick Fitzgerald
@@ -7865,7 +7798,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - mach2 0.4.3 (https://github.com/JohnTitor/mach2)
-
 Full license text:
 
 Copyright (c) 2019 Nick Fitzgerald, 2021 Yuki Okushi
@@ -7898,7 +7830,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ghash 0.5.1 (https://github.com/RustCrypto/universal-hashes)
-
 Full license text:
 
 Copyright (c) 2019 RustCrypto Developers
@@ -7931,7 +7862,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ppv-lite86 0.2.21 (https://github.com/cryptocorrosion/cryptocorrosion)
-
 Full license text:
 
 Copyright (c) 2019 The CryptoCorrosion Contributors
@@ -7965,7 +7895,6 @@ License: MIT License (MIT)
 Used by:
 - aes-gcm 0.10.3 (https://github.com/RustCrypto/AEADs)
 - chacha20poly1305 0.10.1 (https://github.com/RustCrypto/AEADs/tree/master/chacha20poly1305)
-
 Full license text:
 
 Copyright (c) 2019 The RustCrypto Project Developers
@@ -7998,7 +7927,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - aead 0.5.2 (https://github.com/RustCrypto/traits)
-
 Full license text:
 
 Copyright (c) 2019 The RustCrypto Project Developers
@@ -8034,7 +7962,6 @@ Used by:
 - tracing-attributes 0.1.31 (https://github.com/tokio-rs/tracing)
 - tracing-core 0.1.36 (https://github.com/tokio-rs/tracing)
 - tracing 0.1.44 (https://github.com/tokio-rs/tracing)
-
 Full license text:
 
 Copyright (c) 2019 Tokio Contributors
@@ -8067,7 +7994,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - pico-args 0.5.0 (https://github.com/RazrFalcon/pico-args)
-
 Full license text:
 
 Copyright (c) 2019 Yevhenii Reizner
@@ -8090,11 +8016,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - universal-hash 0.5.1 (https://github.com/RustCrypto/traits)
-
 Full license text:
 
 Copyright (c) 2019-2020 RustCrypto Developers
@@ -8127,7 +8053,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - polyval 0.6.2 (https://github.com/RustCrypto/universal-hashes)
-
 Full license text:
 
 Copyright (c) 2019-2023 RustCrypto Developers
@@ -8160,7 +8085,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - chacha20 0.9.1 (https://github.com/RustCrypto/stream-ciphers)
-
 Full license text:
 
 Copyright (c) 2019-2023 The RustCrypto Project Developers
@@ -8194,7 +8118,6 @@ License: MIT License (MIT)
 Used by:
 - chacha20 0.10.2 (https://github.com/RustCrypto/stream-ciphers)
 - zeroize_derive 1.5.0 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2019-2026 The RustCrypto Project Developers
@@ -8228,7 +8151,6 @@ License: MIT License (MIT)
 Used by:
 - iana-time-zone-haiku 0.1.2 (https://github.com/strawlab/iana-time-zone)
 - iana-time-zone 0.1.65 (https://github.com/strawlab/iana-time-zone)
-
 Full license text:
 
 Copyright (c) 2020 Andrew D. Straw
@@ -8261,7 +8183,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - downcast-rs 1.2.1 (https://github.com/marcianx/downcast-rs)
-
 Full license text:
 
 Copyright (c) 2020 Ashish Myles and contributors
@@ -8294,7 +8215,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - maybe-async 0.2.11 (https://github.com/fMeow/maybe-async-rs)
-
 Full license text:
 
 Copyright (c) 2020 Guoli Lyu
@@ -8321,7 +8241,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - beef 0.5.2 (https://github.com/maciejhirsz/beef)
-
 Full license text:
 
 Copyright (c) 2020 Maciej Hirsz <hello@maciej.codes>
@@ -8350,7 +8269,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ccm 0.5.0 (https://github.com/RustCrypto/AEADs/tree/master/ccm)
-
 Full license text:
 
 Copyright (c) 2020 The RustCrypto Project Developers
@@ -8383,7 +8301,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - memmap2 0.9.11 (https://github.com/RazrFalcon/memmap2-rs)
-
 Full license text:
 
 Copyright (c) 2020 Yevhenii Reizner
@@ -8417,7 +8334,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - clru 0.6.3 (https://github.com/marmeladema/clru-rs)
-
 Full license text:
 
 Copyright (c) 2020 Élie ROUDNINSKI (marmeladema) <xademax@gmail.com>
@@ -8444,7 +8360,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - pollster 1.0.1 (https://github.com/zesterer/pollster)
-
 Full license text:
 
 Copyright (c) 2020-2021 Joshua Barretto
@@ -8477,7 +8392,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - p384 0.13.1 (https://github.com/RustCrypto/elliptic-curves/tree/master/p384)
-
 Full license text:
 
 Copyright (c) 2020-2021 RustCrypto Developers
@@ -8510,7 +8424,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - elliptic-curve 0.13.8 (https://github.com/RustCrypto/traits/tree/master/elliptic-curve)
-
 Full license text:
 
 Copyright (c) 2020-2022 RustCrypto Developers
@@ -8543,7 +8456,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - const-oid 0.9.6 (https://github.com/RustCrypto/formats/tree/master/const-oid)
-
 Full license text:
 
 Copyright (c) 2020-2022 The RustCrypto Project Developers
@@ -8577,7 +8489,6 @@ License: MIT License (MIT)
 Used by:
 - p256 0.13.2 (https://github.com/RustCrypto/elliptic-curves/tree/master/p256)
 - primeorder 0.13.6 (https://github.com/RustCrypto/elliptic-curves/tree/master/primeorder)
-
 Full license text:
 
 Copyright (c) 2020-2023 RustCrypto Developers
@@ -8611,7 +8522,6 @@ License: MIT License (MIT)
 Used by:
 - der 0.7.10 (https://github.com/RustCrypto/formats/tree/master/der)
 - pkcs8 0.10.2 (https://github.com/RustCrypto/formats/tree/master/pkcs8)
-
 Full license text:
 
 Copyright (c) 2020-2023 The RustCrypto Project Developers
@@ -8644,7 +8554,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - cpufeatures 0.2.17 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2020-2025 The RustCrypto Project Developers
@@ -8678,7 +8587,6 @@ License: MIT License (MIT)
 Used by:
 - const-oid 0.10.2 (https://github.com/RustCrypto/formats)
 - cpufeatures 0.3.1 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2020-2026 The RustCrypto Project Developers
@@ -8711,7 +8619,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - os_display 0.1.4 (https://github.com/blyxxyz/os_display)
-
 Full license text:
 
 Copyright (c) 2021 Jan Verbeek
@@ -8738,7 +8645,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - crypto-common 0.1.7 (https://github.com/RustCrypto/traits)
-
 Full license text:
 
 Copyright (c) 2021 RustCrypto Developers
@@ -8772,7 +8678,6 @@ License: MIT License (MIT)
 Used by:
 - crypto-bigint 0.5.5 (https://github.com/RustCrypto/crypto-bigint)
 - pem-rfc7468 0.7.0 (https://github.com/RustCrypto/formats/tree/master/pem-rfc7468)
-
 Full license text:
 
 Copyright (c) 2021 The RustCrypto Project Developers
@@ -8805,7 +8710,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - sec1 0.7.3 (https://github.com/RustCrypto/formats/tree/master/sec1)
-
 Full license text:
 
 Copyright (c) 2021-2022 The RustCrypto Project Developers
@@ -8838,7 +8742,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - spki 0.7.3 (https://github.com/RustCrypto/formats/tree/master/spki)
-
 Full license text:
 
 Copyright (c) 2021-2023 The RustCrypto Project Developers
@@ -8871,7 +8774,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - crypto-common 0.2.2 (https://github.com/RustCrypto/traits)
-
 Full license text:
 
 Copyright (c) 2021-2026 RustCrypto Developers
@@ -8904,7 +8806,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - sm3 0.5.0 (https://github.com/RustCrypto/hashes)
-
 Full license text:
 
 Copyright (c) 2021-2026 The RustCrypto Project Developers
@@ -8940,7 +8841,6 @@ Used by:
 - atspi-connection 0.14.0 (https://github.com/odilia-app/atspi/)
 - atspi-proxies 0.14.0 (https://github.com/odilia-app/atspi)
 - atspi 0.30.0 (https://github.com/odilia-app/atspi)
-
 Full license text:
 
 Copyright (c) 2022 Tait Hoyem <tait@tait.tech>
@@ -8967,7 +8867,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - inout 0.1.4 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2022 The RustCrypto Project Developers
@@ -9001,7 +8900,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - strict-num 0.1.1 (https://github.com/RazrFalcon/strict-num)
-
 Full license text:
 
 Copyright (c) 2022 Yevhenii Reizner
@@ -9028,7 +8926,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - xkeysym 0.2.1 (https://github.com/notgull/xkeysym)
-
 Full license text:
 
 Copyright (c) 2022-2023 John Nunley
@@ -9055,7 +8952,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - inout 0.2.2 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2022-2025 The RustCrypto Project Developers
@@ -9089,7 +8985,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - hybrid-array 0.4.15 (https://github.com/RustCrypto/hybrid-array)
-
 Full license text:
 
 Copyright (c) 2022-2026 The RustCrypto Project Developers
@@ -9122,7 +9017,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rustls-pki-types 1.15.1 (https://github.com/rustls/pki-types)
-
 Full license text:
 
 Copyright (c) 2023 Dirkjan Ochtman <dirkjan@ochtman.nl>
@@ -9155,7 +9049,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - powerfmt 0.2.0 (https://github.com/jhpratt/powerfmt)
-
 Full license text:
 
 Copyright (c) 2023 Jacob Pratt et al.
@@ -9182,7 +9075,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - notify-types 2.1.0 (https://github.com/notify-rs/notify.git)
-
 Full license text:
 
 Copyright (c) 2023 Notify Contributors
@@ -9215,7 +9107,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - bigdecimal 0.4.10 (https://github.com/akubera/bigdecimal-rs)
-
 Full license text:
 
 Copyright (c) 2023 The BigDecimal-rs Contributors
@@ -9244,12 +9135,12 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - bit-set 0.8.0 (https://github.com/contain-rs/bit-set)
 - bit-vec 0.8.0 (https://github.com/contain-rs/bit-vec)
-
 Full license text:
 
 Copyright (c) 2023 The Rust Project Developers
@@ -9282,7 +9173,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - cpubits 0.1.1 (https://github.com/RustCrypto/utils)
-
 Full license text:
 
 Copyright (c) 2023-2026 The RustCrypto Project Developers
@@ -9315,7 +9205,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - deranged 0.5.8 (https://github.com/jhpratt/deranged)
-
 Full license text:
 
 Copyright (c) 2024 Jacob Pratt et al.
@@ -9342,7 +9231,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - sha1-checked 0.10.0 (https://github.com/RustCrypto/hashes)
-
 Full license text:
 
 Copyright (c) 2024 The RustCrypto Project Developers
@@ -9380,7 +9268,6 @@ Used by:
 - zbus_xml 5.2.1 (https://github.com/z-galaxy/zbus/)
 - zvariant 5.15.0 (https://github.com/z-galaxy/zbus/)
 - zvariant_derive 5.15.0 (https://github.com/z-galaxy/zbus/)
-
 Full license text:
 
 Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
@@ -9413,7 +9300,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tree-sitter-yaml 0.7.2 (https://github.com/tree-sitter-grammars/tree-sitter-yaml)
-
 Full license text:
 
 Copyright (c) 2024 tree-sitter-grammars contributors
@@ -9441,7 +9327,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ecb 0.2.1 (https://github.com/RustCrypto/block-modes)
-
 Full license text:
 
 Copyright (c) 2026 RustCrypto Developers
@@ -9474,7 +9359,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - zcheapstr 1.1.0 (https://github.com/z-galaxy/zcheapstr/)
-
 Full license text:
 
 Copyright (c) 2026 Zeeshan Ali Khan & zcheapstr contributors
@@ -9528,7 +9412,6 @@ Used by:
 - toml_edit 0.25.15+spec-1.1.0 (https://github.com/toml-rs/toml)
 - toml_parser 1.1.3+spec-1.1.0 (https://github.com/toml-rs/toml)
 - toml_writer 1.1.2+spec-1.1.0 (https://github.com/toml-rs/toml)
-
 Full license text:
 
 Copyright (c) Individual contributors
@@ -9555,7 +9438,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - num-conv 0.2.2 (https://github.com/jhpratt/num-conv)
-
 Full license text:
 
 Copyright (c) Jacob Pratt
@@ -9584,7 +9466,6 @@ Used by:
 - time-core 0.1.9 (https://github.com/time-rs/time)
 - time-macros 0.2.32 (https://github.com/time-rs/time)
 - time 0.3.55 (https://github.com/time-rs/time)
-
 Full license text:
 
 Copyright (c) Jacob Pratt et al.
@@ -9611,7 +9492,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - platform-info 2.2.0 (https://github.com/uutils/platform-info)
-
 Full license text:
 
 Copyright (c) Jordi Boggiano
@@ -9640,7 +9520,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - libc 0.2.189 (https://github.com/rust-lang/libc)
-
 Full license text:
 
 Copyright (c) The Rust Project Developers
@@ -9673,7 +9552,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - idna_adapter 1.2.2 (https://github.com/hsivonen/idna_adapter)
-
 Full license text:
 
 Copyright (c) The rust-url developers
@@ -9706,7 +9584,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - arrayvec 0.7.8 (https://github.com/bluss/arrayvec)
-
 Full license text:
 
 Copyright (c) Ulrik Sverdrup "bluss" 2015-2023
@@ -9740,7 +9617,6 @@ License: MIT License (MIT)
 Used by:
 - uucore 0.8.0 (https://github.com/uutils/coreutils/tree/main/src/uucore)
 - uucore_procs 0.8.0 (https://github.com/uutils/coreutils/tree/main/src/uucore_procs)
-
 Full license text:
 
 Copyright (c) uutils developers
@@ -9767,7 +9643,6 @@ License: MIT License (MIT)
 Used by:
 - synstructure 0.13.2 (https://github.com/mystor/synstructure)
 - synstructure 0.14.0 (https://github.com/mystor/synstructure)
-
 Full license text:
 
 Copyright 2016 Nika Layzell
@@ -9782,7 +9657,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: MIT License (MIT)
 Used by:
 - ipnet 2.12.2 (https://github.com/krisprice/ipnet)
-
 Full license text:
 
 Copyright 2017 Juniper Networks, Inc.
@@ -9800,7 +9674,6 @@ Used by:
 - fluent-syntax 0.12.0 (https://github.com/projectfluent/fluent-rs)
 - fluent 0.17.0 (https://github.com/projectfluent/fluent-rs)
 - intl-memoizer 0.5.3 (https://github.com/projectfluent/fluent-rs)
-
 Full license text:
 
 Copyright 2017 Mozilla
@@ -9828,7 +9701,6 @@ License: MIT License (MIT)
 Used by:
 - resvg 0.48.1 (https://github.com/linebender/resvg)
 - usvg 0.48.1 (https://github.com/linebender/resvg)
-
 Full license text:
 
 Copyright 2017 the Resvg Authors
@@ -9861,7 +9733,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rand_distr 0.5.1 (https://github.com/rust-random/rand_distr)
-
 Full license text:
 
 Copyright 2018 Developers of the Rand project
@@ -9900,7 +9771,6 @@ Used by:
 - rand_chacha 0.9.0 (https://github.com/rust-random/rand)
 - rand_core 0.6.4 (https://github.com/rust-random/rand)
 - rand_core 0.9.5 (https://github.com/rust-random/rand)
-
 Full license text:
 
 Copyright 2018 Developers of the Rand project
@@ -9934,7 +9804,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - wild 2.2.1 (https://gitlab.com/kornelski/wild)
-
 Full license text:
 
 Copyright 2018 Kornel Lesiński
@@ -9949,7 +9818,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: MIT License (MIT)
 Used by:
 - nohash-hasher 0.2.0 (https://github.com/paritytech/nohash-hasher)
-
 Full license text:
 
 Copyright 2018 Parity Technologies (UK) Ltd.
@@ -9975,7 +9843,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rangemap 1.8.0 (https://github.com/jeffparsons/rangemap)
-
 Full license text:
 
 Copyright 2019 Jeffrey Parsons
@@ -9991,7 +9858,6 @@ License: MIT License (MIT)
 Used by:
 - x11rb-protocol 0.13.2 (https://github.com/psychon/x11rb)
 - x11rb 0.13.2 (https://github.com/psychon/x11rb)
-
 Full license text:
 
 Copyright 2019 x11rb Contributers
@@ -10024,7 +9890,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - bytecheck_derive 0.8.3 (https://github.com/rkyv/bytecheck)
-
 Full license text:
 
 Copyright 2020 David Koloski
@@ -10043,7 +9908,6 @@ Used by:
 - rend 0.5.4 (https://github.com/djkoloski/rend)
 - rkyv 0.8.18 (https://github.com/rkyv/rkyv)
 - rkyv_derive 0.8.18 (https://github.com/rkyv/rkyv)
-
 Full license text:
 
 Copyright 2021 David Koloski
@@ -10059,7 +9923,6 @@ License: MIT License (MIT)
 Used by:
 - bytecheck 0.8.3 (https://github.com/rkyv/bytecheck)
 - rancor 0.1.3 (https://github.com/rkyv/rancor)
-
 Full license text:
 
 Copyright 2023 David Koloski
@@ -10075,7 +9938,6 @@ License: MIT License (MIT)
 Used by:
 - zerocopy-derive 0.8.59 (https://github.com/google/zerocopy)
 - zerocopy 0.8.59 (https://github.com/google/zerocopy)
-
 Full license text:
 
 Copyright 2023 The Fuchsia Authors
@@ -10104,12 +9966,12 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - munge 0.4.7 (https://github.com/djkoloski/munge)
 - munge_macro 0.4.7 (https://github.com/djkoloski/munge)
-
 Full license text:
 
 Copyright 2024 David Koloski
@@ -10124,7 +9986,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: MIT License (MIT)
 Used by:
 - crc-fast 1.8.2 (https://github.com/awesomized/crc-fast-rust)
-
 Full license text:
 
 Copyright 2025 Don MacAskill
@@ -10150,7 +10011,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - memfd 0.6.6 (https://github.com/lucab/memfd-rs)
-
 Full license text:
 
 Copyright <YEAR> <COPYRIGHT HOLDER>
@@ -10178,7 +10038,6 @@ Used by:
 - utf16_iter 1.0.5 (https://github.com/hsivonen/utf16_iter)
 - utf8_iter 1.0.4 (https://github.com/hsivonen/utf8_iter)
 - write16 1.0.0 (https://github.com/hsivonen/write16)
-
 Full license text:
 
 Copyright Mozilla Foundation
@@ -10214,7 +10073,6 @@ Used by:
 - libspa 0.9.2 (https://gitlab.freedesktop.org/pipewire/pipewire-rs)
 - pipewire-sys 0.9.2 (https://gitlab.freedesktop.org/pipewire/pipewire-rs)
 - pipewire 0.9.2 (https://gitlab.freedesktop.org/pipewire/pipewire-rs)
-
 Full license text:
 
 Copyright The pipewire-rs Contributors.
@@ -10242,7 +10100,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - dns-lookup 3.0.1 (https://github.com/keeperofdakeys/dns-lookup/)
-
 Full license text:
 
 Copyright for portions of the project dns-lookup are held by The Rust Project Developers
@@ -10274,7 +10131,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - psm 0.1.32 (https://github.com/rust-lang/stacker/)
-
 Full license text:
 
 Copyright © 2018, Simonas Kazlauskas
@@ -10298,7 +10154,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 License: MIT License (MIT)
 Used by:
 - fax 0.2.7 (https://github.com/pdf-rs/fax)
-
 Full license text:
 
 Copyright © 2021 The pdf-rs contributers.
@@ -10313,7 +10168,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 License: MIT License (MIT)
 Used by:
 - lopdf 0.45.0 (https://github.com/J-F-Liu/lopdf.git)
-
 Full license text:
 
 MIT License
@@ -10342,7 +10196,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - hostname 0.4.2 (https://github.com/djc/hostname)
-
 Full license text:
 
 MIT License
@@ -10372,7 +10225,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tree_magic_mini 3.2.2 (https://github.com/mbrubeck/tree_magic/)
-
 Full license text:
 
 MIT License
@@ -10401,7 +10253,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tap 1.0.1 (https://github.com/myrrlyn/tap)
-
 Full license text:
 
 MIT License
@@ -10430,7 +10281,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - precomputed-hash 0.1.1 (https://github.com/emilio/precomputed-hash)
-
 Full license text:
 
 MIT License
@@ -10461,7 +10311,6 @@ Used by:
 - cached 0.59.0 (https://github.com/jaemk/cached)
 - cached_proc_macro 0.27.0 (https://github.com/jaemk/cached)
 - cached_proc_macro_types 0.1.1 (https://github.com/jaemk/cached)
-
 Full license text:
 
 MIT License
@@ -10490,7 +10339,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - imagesize 0.15.0 (https://github.com/Roughsketch/imagesize)
-
 Full license text:
 
 MIT License
@@ -10519,7 +10367,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - static_assertions 1.1.0 (https://github.com/nvzqz/static-assertions-rs)
-
 Full license text:
 
 MIT License
@@ -10553,7 +10400,6 @@ Used by:
 - darling_core 0.24.1 (https://github.com/TedDriggs/darling)
 - darling_macro 0.20.11 (https://github.com/TedDriggs/darling)
 - darling_macro 0.24.1 (https://github.com/TedDriggs/darling)
-
 Full license text:
 
 MIT License
@@ -10582,7 +10428,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - syntect 5.3.0 (https://github.com/trishume/syntect)
-
 Full license text:
 
 MIT License
@@ -10611,7 +10456,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - gbm 0.18.0 (https://github.com/Smithay/gbm.rs)
-
 Full license text:
 
 MIT License
@@ -10640,7 +10484,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - crc 3.4.0 (https://github.com/mrhooray/crc-rs.git)
-
 Full license text:
 
 MIT License
@@ -10669,7 +10512,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - enigo 0.6.1 (https://github.com/enigo-rs/enigo)
-
 Full license text:
 
 MIT License
@@ -10698,7 +10540,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - uutils_term_grid 0.8.0 (https://github.com/uutils/uutils-term-grid)
-
 Full license text:
 
 MIT License
@@ -10727,7 +10568,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - num-format 0.4.4 (https://github.com/bcmyers/num-format)
-
 Full license text:
 
 MIT License
@@ -10756,7 +10596,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - faster-hex 0.10.1 (https://github.com/NervosFoundation/faster-hex)
-
 Full license text:
 
 MIT License
@@ -10785,7 +10624,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tiff 0.11.3 (https://github.com/image-rs/image-tiff)
-
 Full license text:
 
 MIT License
@@ -10814,7 +10652,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - crc32fast 1.5.2 (https://github.com/srijs/rust-crc32fast)
-
 Full license text:
 
 MIT License
@@ -10843,7 +10680,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - typed-arena 2.0.2 (https://github.com/SimonSapin/rust-typed-arena)
-
 Full license text:
 
 MIT License
@@ -10873,7 +10709,6 @@ License: MIT License (MIT)
 Used by:
 - filedescriptor 0.8.3 (https://github.com/wezterm/wezterm)
 - portable-pty 0.9.0 (https://github.com/wezterm/wezterm)
-
 Full license text:
 
 MIT License
@@ -10903,7 +10738,6 @@ License: MIT License (MIT)
 Used by:
 - bitvec 1.1.1 (https://github.com/bitvecto-rs/bitvec)
 - wyz 0.5.1 (https://github.com/myrrlyn/wyz)
-
 Full license text:
 
 MIT License
@@ -10932,7 +10766,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - dashmap 6.2.1 (https://github.com/xacrimon/dashmap)
-
 Full license text:
 
 MIT License
@@ -10961,7 +10794,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - crc-catalog 2.5.0 (https://github.com/akhilles/crc-catalog.git)
-
 Full license text:
 
 MIT License
@@ -10990,7 +10822,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - uzers 0.12.2 (https://github.com/rustadopt/uzers-rs)
-
 Full license text:
 
 MIT License
@@ -11021,7 +10852,6 @@ License: MIT License (MIT)
 Used by:
 - bytemuck 1.25.2 (https://github.com/Lokathor/bytemuck)
 - bytemuck_derive 1.12.1 (https://github.com/Lokathor/bytemuck)
-
 Full license text:
 
 MIT License
@@ -11038,7 +10868,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: MIT License (MIT)
 Used by:
 - fontdue 0.9.4 (https://github.com/mooman219/fontdue)
-
 Full license text:
 
 MIT License
@@ -11067,7 +10896,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rgb 0.8.53 (https://github.com/kornelski/rust-rgb)
-
 Full license text:
 
 MIT License
@@ -11098,7 +10926,6 @@ Used by:
 - arbitrary 1.4.2 (https://github.com/rust-fuzz/arbitrary/)
 - derive_arbitrary 1.4.2 (https://github.com/rust-fuzz/arbitrary)
 - triomphe 0.1.16 (https://github.com/Manishearth/triomphe)
-
 Full license text:
 
 MIT License
@@ -11134,7 +10961,6 @@ License: MIT License (MIT)
 Used by:
 - strum 0.28.0 (https://github.com/Peternator7/strum)
 - strum_macros 0.28.0 (https://github.com/Peternator7/strum)
-
 Full license text:
 
 MIT License
@@ -11163,7 +10989,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tokio-macros 2.7.2 (https://github.com/tokio-rs/tokio)
-
 Full license text:
 
 MIT License
@@ -11193,7 +11018,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - radium 0.7.0 (https://github.com/bitvecto-rs/radium)
-
 Full license text:
 
 MIT License
@@ -11222,7 +11046,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ashpd 0.11.1 (https://github.com/bilelmoussaoui/ashpd)
-
 Full license text:
 
 MIT License
@@ -11251,7 +11074,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - wide 1.7.1 (https://github.com/Lokathor/wide)
-
 Full license text:
 
 MIT License
@@ -11281,7 +11103,6 @@ License: MIT License (MIT)
 Used by:
 - cfg_aliases 0.1.1 (https://github.com/katharostech/cfg_aliases)
 - cfg_aliases 0.2.2 (https://github.com/katharostech/cfg_aliases)
-
 Full license text:
 
 MIT License
@@ -11298,7 +11119,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: MIT License (MIT)
 Used by:
 - z85 3.0.7 (https://github.com/decafbad/z85)
-
 Full license text:
 
 MIT License
@@ -11328,7 +11148,6 @@ License: MIT License (MIT)
 Used by:
 - html-escape 0.2.15 (https://github.com/magiclen/html-escape)
 - html-escape 0.3.0 (https://github.com/magiclen/html-escape)
-
 Full license text:
 
 MIT License
@@ -11357,7 +11176,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - funty 2.0.0 (https://github.com/myrrlyn/funty)
-
 Full license text:
 
 MIT License
@@ -11386,7 +11204,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - substring 1.4.5 (https://github.com/Anders429/substring)
-
 Full license text:
 
 MIT License
@@ -11415,7 +11232,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - astral-tl 0.8.0 (https://github.com/astral-sh/astral-tl)
-
 Full license text:
 
 MIT License
@@ -11457,7 +11273,6 @@ Used by:
 - webrtc-sctp 0.17.2 (https://github.com/webrtc-rs/webrtc/tree/master/sctp)
 - webrtc-srtp 0.17.2 (https://github.com/webrtc-rs/webrtc/tree/master/srtp)
 - webrtc-util 0.17.2 (https://github.com/webrtc-rs/webrtc/tree/master/util)
-
 Full license text:
 
 MIT License
@@ -11493,7 +11308,6 @@ Used by:
 - gemm-f64 0.19.0 (https://github.com/sarah-ek/gemm/)
 - gemm 0.19.0 (https://github.com/sarah-ek/gemm/)
 - pulp 0.22.3 (https://github.com/sarah-quinones/pulp/)
-
 Full license text:
 
 MIT License
@@ -11522,7 +11336,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - outref 0.5.2 (https://github.com/Nugine/outref)
-
 Full license text:
 
 MIT License
@@ -11546,12 +11359,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - arboard 3.6.1 (https://github.com/1Password/arboard)
-
 Full license text:
 
 MIT License
@@ -11581,7 +11392,6 @@ License: MIT License (MIT)
 Used by:
 - dyn-stack 0.13.2 (https://codeberg.org/sarah-quinones/dyn-stack)
 - reborrow 0.5.5 (https://github.com/sarah-ek/reborrow/)
-
 Full license text:
 
 MIT License
@@ -11610,7 +11420,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - libredox 0.1.25 (https://gitlab.redox-os.org/redox-os/libredox.git)
-
 Full license text:
 
 MIT License
@@ -11639,7 +11448,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - safe_arch 1.2.0 (https://github.com/Lokathor/safe_arch)
-
 Full license text:
 
 MIT License
@@ -11656,7 +11464,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: MIT License (MIT)
 Used by:
 - parse_datetime 0.16.0 (https://github.com/uutils/parse_datetime)
-
 Full license text:
 
 MIT License
@@ -11685,7 +11492,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - web-time 1.1.0 (https://github.com/daxpedda/web-time)
-
 Full license text:
 
 MIT License
@@ -11713,8 +11519,7 @@ SOFTWARE.
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
-- ansi-width 0.1.0
-
+- ansi-width 0.1.0 (https://crates.io/crates/ansi-width)
 Full license text:
 
 MIT License
@@ -11743,7 +11548,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - unit-prefix 0.5.2 (https://codeberg.org/commons-rs/unit-prefix)
-
 Full license text:
 
 MIT License
@@ -11772,7 +11576,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - float8 0.6.1 (https://github.com/EricLBuehler/float8)
-
 Full license text:
 
 MIT License
@@ -11796,12 +11599,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - codesnake 0.3.0 (https://github.com/01mf02/codesnake)
-
 Full license text:
 
 MIT License
@@ -11830,7 +11631,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - core_maths 0.1.1 (https://github.com/robertbastian/core_maths)
-
 Full license text:
 
 MIT License
@@ -11854,12 +11654,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - brush-parser 0.4.0 (https://github.com/reubeno/brush)
-
 Full license text:
 
 MIT License
@@ -11889,7 +11687,6 @@ License: MIT License (MIT)
 Used by:
 - archery 1.2.3 (https://github.com/orium/archery)
 - rpds 1.2.1 (https://github.com/orium/rpds)
-
 Full license text:
 
 MIT License
@@ -11918,7 +11715,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - icy_sixel 0.7.0 (https://github.com/mkrueger/icy_sixel)
-
 Full license text:
 
 MIT License
@@ -11953,7 +11749,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - rlimit 0.11.0 (https://github.com/Nugine/rlimit/)
-
 Full license text:
 
 MIT License
@@ -11983,7 +11778,6 @@ License: MIT License (MIT)
 Used by:
 - convert_case 0.12.0 (https://github.com/rutrum/convert-case)
 - convert_case 0.8.0 (https://github.com/rutrum/convert-case)
-
 Full license text:
 
 MIT License
@@ -12007,12 +11801,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - dyn-stack-macros 0.1.3 (https://github.com/kitegi/dynstack/)
-
 Full license text:
 
 MIT License
@@ -12040,8 +11832,42 @@ SOFTWARE.
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
-- xutf 1.5.0 (https://github.com/can1357/xutf)
+- pi-ast 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-builtins 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-iso 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-natives 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-shell 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-voice 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-walker 18.13.3 (https://github.com/can1357/oh-my-pi)
+Full license text:
 
+MIT License
+
+Copyright (c) 2025-2026 Can Bölük
+Copyright (c) 2026 Stencil Labs, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+License: MIT License (MIT)
+Used by:
+- xutf 1.5.0 (https://github.com/can1357/xutf)
 Full license text:
 
 MIT License
@@ -12070,7 +11896,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - pdf-inspector 1.25.0 (https://github.com/firecrawl/pdf-inspector)
-
 Full license text:
 
 MIT License
@@ -12098,6 +11923,11 @@ SOFTWARE.
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
+- pi-diff 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-edit 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-predict 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-vcs 18.13.3 (https://github.com/can1357/oh-my-pi)
+- pi-vfs 18.13.3 (https://github.com/can1357/oh-my-pi)
 - brush-core 0.5.0 (https://github.com/reubeno/brush)
 - napi 3.14.2 (https://github.com/napi-rs/napi-rs)
 - asn1-rs-impl 0.2.0 (https://github.com/rusticata/asn1-rs.git)
@@ -12232,7 +12062,6 @@ Used by:
 - windows_x86_64_msvc 0.52.6 (https://github.com/microsoft/windows-rs)
 - windows_x86_64_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
 - yasna 0.5.2 (https://github.com/qnighy/yasna.rs)
-
 Full license text:
 
 MIT License
@@ -12260,7 +12089,6 @@ Used by:
 - tokio-stream 0.1.19 (https://github.com/tokio-rs/tokio)
 - tokio-util 0.7.19 (https://github.com/tokio-rs/tokio)
 - tokio 1.53.1 (https://github.com/tokio-rs/tokio)
-
 Full license text:
 
 MIT License
@@ -12289,7 +12117,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - simd-adler32 0.3.10 (https://github.com/mcountryman/simd-adler32)
-
 Full license text:
 
 MIT License
@@ -12319,7 +12146,6 @@ License: MIT License (MIT)
 Used by:
 - zune-core 0.5.3 (https://github.com/etemesi254/zune-image)
 - zune-jpeg 0.5.15 (https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg)
-
 Full license text:
 
 MIT License
@@ -12349,7 +12175,6 @@ License: MIT License (MIT)
 Used by:
 - miniz_oxide 0.8.9 (https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide)
 - miniz_oxide 0.9.1 (https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide)
-
 Full license text:
 
 MIT License
@@ -12384,7 +12209,6 @@ Used by:
 - image-webp 0.2.4 (https://github.com/image-rs/image-webp)
 - image 0.25.10 (https://github.com/image-rs/image)
 - io-close 0.3.7 (https://gitlab.com/wufz/io-close)
-
 Full license text:
 
 MIT License
@@ -12417,7 +12241,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - simdutf8 0.1.5 (https://github.com/rusticstuff/simdutf8)
-
 Full license text:
 
 MIT License
@@ -12439,14 +12262,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - half 2.7.1 (https://github.com/VoidStarKat/half-rs)
 - ident_case 1.0.1 (https://github.com/TedDriggs/ident_case)
 - widestring 1.2.1 (https://github.com/VoidStarKat/widestring-rs)
-
 Full license text:
 
 MIT License
@@ -12473,7 +12294,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - unicode-script 0.5.8 (https://github.com/unicode-rs/unicode-script)
-
 Full license text:
 
 MIT License
@@ -12508,7 +12328,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - fontconfig-parser 0.5.8 (https://github.com/Riey/fontconfig-parser)
-
 Full license text:
 
 MIT License
@@ -12539,7 +12358,6 @@ Used by:
 - async-recursion 1.1.1 (https://github.com/dcchut/async-recursion)
 - flume 0.12.0 (https://github.com/zesterer/flume)
 - rustc-hash 2.1.3 (https://github.com/rust-lang/rustc-hash)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any
@@ -12565,7 +12383,6 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
@@ -12658,7 +12475,6 @@ Used by:
 - zbus-lockstep 0.5.2 (https://github.com/luukvanderduim/zbus-lockstep)
 - zmij 1.0.23 (https://github.com/dtolnay/zmij)
 - zvariant_utils 4.2.0 (https://github.com/z-galaxy/zbus/)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any
@@ -12690,7 +12506,6 @@ License: MIT License (MIT)
 Used by:
 - allocator-api2 0.2.21 (https://github.com/zakarumych/allocator-api2)
 - binary-heap-plus 0.5.0 (https://github.com/sekineh/binary-heap-plus-rs)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any
@@ -12721,7 +12536,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - winnow 1.0.4 (https://github.com/winnow-rs/winnow)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -12747,7 +12561,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - encode_unicode 1.0.0 (https://github.com/tormol/encode_unicode)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -12823,7 +12636,6 @@ Used by:
 - gix 0.85.0 (https://github.com/GitoxideLabs/gitoxide)
 - lscolors 0.21.0 (https://github.com/sharkdp/lscolors)
 - siphasher 1.0.4 (https://github.com/jedisct1/rust-siphash)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -12848,7 +12660,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ctor 1.0.13 (https://github.com/mmastrac/linktime)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -12856,12 +12667,10 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - tinyvec 1.13.3 (https://github.com/Lokathor/tinyvec)
-
 Full license text:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -12874,7 +12683,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 License: MIT License (MIT)
 Used by:
 - fancy-regex 0.17.0 (https://github.com/fancy-regex/fancy-regex)
-
 Full license text:
 
 The MIT License
@@ -12903,7 +12711,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - android_system_properties 0.1.6 (https://github.com/nical/android_system_properties)
-
 Full license text:
 
 The MIT License (MIT)
@@ -12932,7 +12739,6 @@ License: MIT License (MIT)
 Used by:
 - spin 0.10.1 (https://github.com/mvdnes/spin-rs.git)
 - spin 0.9.9 (https://github.com/mvdnes/spin-rs.git)
-
 Full license text:
 
 The MIT License (MIT)
@@ -12956,12 +12762,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - zip 7.2.0 (https://github.com/zip-rs/zip2.git)
-
 Full license text:
 
 The MIT License (MIT)
@@ -12988,7 +12792,6 @@ SOFTWARE.
 
 Some files in the "tests/data" subdirectory of this repository are under other
 licences; see files named LICENSE.*.txt for details.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
@@ -12996,7 +12799,6 @@ Used by:
 - tree-sitter-c 0.24.2 (https://github.com/tree-sitter/tree-sitter-c)
 - tree-sitter-javascript 0.25.0 (https://github.com/tree-sitter/tree-sitter-javascript)
 - tree-sitter-regex 0.25.0 (https://github.com/tree-sitter/tree-sitter-regex)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13025,7 +12827,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - typenum 1.20.1 (https://github.com/paholg/typenum)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13054,7 +12855,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - xml-rs 0.8.29 (https://github.com/kornelski/xml-rs)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13091,7 +12891,6 @@ Used by:
 - phf_macros 0.14.0 (https://github.com/rust-phf/rust-phf)
 - phf_shared 0.11.3 (https://github.com/rust-phf/rust-phf)
 - phf_shared 0.14.0 (https://github.com/rust-phf/rust-phf)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13119,7 +12918,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - base64 0.22.1 (https://github.com/marshallpierce/rust-base64)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13147,6 +12945,7 @@ THE SOFTWARE.
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
+- grep-searcher 0.1.17 (https://github.com/BurntSushi/ripgrep/tree/master/crates/searcher)
 - aho-corasick 1.1.5 (https://github.com/BurntSushi/aho-corasick)
 - byteorder-lite 0.1.0 (https://github.com/image-rs/byteorder-lite)
 - byteorder 1.5.0 (https://github.com/BurntSushi/byteorder)
@@ -13157,7 +12956,6 @@ Used by:
 - grep-pcre2 0.1.10 (https://github.com/BurntSushi/ripgrep/tree/master/crates/pcre2)
 - grep-printer 0.3.1 (https://github.com/BurntSushi/ripgrep/tree/master/crates/printer)
 - grep-regex 0.1.14 (https://github.com/BurntSushi/ripgrep/tree/master/crates/regex)
-- grep-searcher 0.1.17 (https://github.com/BurntSushi/ripgrep/tree/master/crates/searcher)
 - ignore 0.4.33 (https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore)
 - jiff-core 0.1.1 (https://github.com/BurntSushi/jiff)
 - jiff-icu 0.2.2 (https://github.com/BurntSushi/jiff)
@@ -13168,7 +12966,6 @@ Used by:
 - termcolor 1.4.1 (https://github.com/BurntSushi/termcolor)
 - ucd-trie 0.1.7 (https://github.com/BurntSushi/ucd-generate)
 - walkdir 2.5.0 (https://github.com/BurntSushi/walkdir)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13200,7 +12997,6 @@ Used by:
 - nix 0.28.0 (https://github.com/nix-rust/nix)
 - nix 0.30.1 (https://github.com/nix-rust/nix)
 - nix 0.31.3 (https://github.com/nix-rust/nix)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13229,7 +13025,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - yaml-rust 0.4.5 (https://github.com/chyh1990/yaml-rust)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13258,7 +13053,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - strsim 0.11.1 (https://github.com/rapidfuzz/strsim-rs)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13290,7 +13084,6 @@ License: MIT License (MIT)
 Used by:
 - palette 0.7.7 (https://github.com/Ogeon/palette)
 - palette_derive 0.7.7 (https://github.com/Ogeon/palette)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13315,11 +13108,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - raw-cpuid 11.6.0 (https://github.com/gz/rust-cpuid)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13343,12 +13136,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - twox-hash 2.1.5 (https://github.com/shepmaster/twox-hash)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13378,7 +13169,6 @@ License: MIT License (MIT)
 Used by:
 - shlex 1.3.0 (https://github.com/comex/rust-shlex)
 - shlex 2.0.1 (https://github.com/comex/rust-shlex)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13407,7 +13197,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - fsevent-sys 4.1.0 (https://github.com/octplane/fsevent-rust/tree/master/fsevent-sys)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13432,11 +13221,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - gif 0.14.2 (https://github.com/image-rs/image-gif)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13467,7 +13256,6 @@ Used by:
 - data-encoding-macro-internal 0.1.19 (https://github.com/ia0/data-encoding)
 - data-encoding-macro 0.1.21 (https://github.com/ia0/data-encoding)
 - data-encoding 2.11.1 (https://github.com/ia0/data-encoding)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13497,7 +13285,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - fiat-crypto 0.2.9 (https://github.com/mit-plv/fiat-crypto)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13525,8 +13312,36 @@ SOFTWARE.
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
-- pem 3.0.6 (https://github.com/jcreekmore/pem-rs.git)
+- derive_more-impl 2.1.1 (https://github.com/JelteF/derive_more)
+- derive_more 2.1.1 (https://github.com/JelteF/derive_more)
+Full license text:
 
+The MIT License (MIT)
+
+Copyright (c) 2016 Jelte Fennema
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+License: MIT License (MIT)
+Used by:
+- pem 3.0.6 (https://github.com/jcreekmore/pem-rs.git)
 Full license text:
 
 The MIT License (MIT)
@@ -13555,7 +13370,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tree-sitter-python 0.25.0 (https://github.com/tree-sitter/tree-sitter-python)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13584,7 +13398,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - color_quant 1.1.0 (https://github.com/image-rs/color_quant.git)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13616,7 +13429,6 @@ Used by:
 - pcre2 0.2.11 (https://github.com/BurntSushi/rust-pcre2)
 - same-file 1.0.6 (https://github.com/BurntSushi/same-file)
 - winapi-util 0.1.11 (https://github.com/BurntSushi/winapi-util)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13646,7 +13458,6 @@ License: MIT License (MIT)
 Used by:
 - console 0.16.6 (https://github.com/console-rs/console)
 - indicatif 0.18.6 (https://github.com/console-rs/indicatif)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13671,11 +13482,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - sysctl 0.6.0 (https://github.com/johalun/sysctl-rs)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13699,12 +13510,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - tree-sitter-bash 0.25.1 (https://github.com/tree-sitter/tree-sitter-bash)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13733,7 +13542,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - tree-sitter-rust 0.24.2 (https://github.com/tree-sitter/tree-sitter-rust)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13762,7 +13570,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - ff 0.13.1 (https://github.com/zkcrypto/ff)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13792,7 +13599,6 @@ License: MIT License (MIT)
 Used by:
 - tree-sitter-css 0.25.0 (https://github.com/tree-sitter/tree-sitter-css)
 - tree-sitter-language 0.1.7 (https://github.com/tree-sitter/tree-sitter)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13822,7 +13628,6 @@ License: MIT License (MIT)
 Used by:
 - simplecss 0.2.2 (https://github.com/linebender/simplecss)
 - unicode-vo 0.1.0 (https://github.com/RazrFalcon/unicode-vo)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13852,7 +13657,6 @@ License: MIT License (MIT)
 Used by:
 - roxmltree 0.20.0 (https://github.com/RazrFalcon/roxmltree)
 - roxmltree 0.21.1 (https://github.com/RazrFalcon/roxmltree)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13881,7 +13685,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - bstr 1.13.1 (https://github.com/BurntSushi/bstr)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13910,7 +13713,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - xmlwriter 0.1.0 (https://github.com/RazrFalcon/xmlwriter)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13942,7 +13744,6 @@ Used by:
 - crossbeam-deque 0.8.8 (https://github.com/crossbeam-rs/crossbeam)
 - crossbeam-epoch 0.9.21 (https://github.com/crossbeam-rs/crossbeam)
 - crossbeam-utils 0.8.23 (https://github.com/crossbeam-rs/crossbeam)
-
 Full license text:
 
 The MIT License (MIT)
@@ -13977,7 +13778,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - lz4_flex 0.14.0 (https://github.com/pseitz/lz4_flex)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14005,7 +13805,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - fontdb 0.24.0 (https://github.com/RazrFalcon/fontdb)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14034,7 +13833,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - async-broadcast 0.7.2 (https://github.com/smol-rs/async-broadcast)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14063,7 +13861,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - interim 0.2.1 (https://github.com/conradludgate/interim)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14093,7 +13890,6 @@ License: MIT License (MIT)
 Used by:
 - bon-macros 3.10.1 (https://github.com/elastio/bon)
 - bon 3.10.1 (https://github.com/elastio/bon)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14128,7 +13924,6 @@ DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - base64 0.23.1 (https://github.com/marshallpierce/rust-base64)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14157,7 +13952,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - harfrust 0.12.0 (https://github.com/harfbuzz/harfrust)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14188,7 +13982,6 @@ License: MIT License (MIT)
 Used by:
 - weezl 0.1.12 (https://github.com/image-rs/weezl)
 - weezl 0.2.1 (https://github.com/image-rs/weezl)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14213,11 +14006,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - crunchy 0.2.4 (https://github.com/eira-fransham/crunchy)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14246,7 +14039,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - os_pipe 1.2.3 (https://github.com/oconnor663/os_pipe.rs)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14273,7 +14065,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - prodash 31.0.0 (https://github.com/GitoxideLabs/prodash)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14306,7 +14097,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - yansi 1.0.1 (https://github.com/SergioBenitez/yansi)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14333,7 +14123,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - version_check 0.9.5 (https://github.com/SergioBenitez/version_check)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14360,7 +14149,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - nu-ansi-term 0.50.3 (https://github.com/nushell/nu-ansi-term)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14390,7 +14178,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - bincode 1.3.3 (https://github.com/servo/bincode)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14419,7 +14206,6 @@ SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - generic-array 0.14.7 (https://github.com/fizyk20/generic-array.git)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14443,12 +14229,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 -------------------------------------------------------------------------------
 License: MIT License (MIT)
 Used by:
 - quick-xml 0.41.0 (https://github.com/tafia/quick-xml)
-
 Full license text:
 
 The MIT License (MIT)
@@ -14479,7 +14263,6 @@ THE SOFTWARE.
 License: MIT License (MIT)
 Used by:
 - urlencoding 2.1.3 (https://github.com/kornelski/rust_urlencoding)
-
 Full license text:
 
 © 2016 Bertram Truong
@@ -14507,7 +14290,6 @@ THE SOFTWARE.
 License: Mozilla Public License 2.0 (MPL-2.0)
 Used by:
 - uluru 3.1.0 (https://github.com/servo/uluru)
-
 Full license text:
 
  Mozilla Public License Version 2.0
@@ -14888,7 +14670,6 @@ defined by the Mozilla Public License, v. 2.0.
 License: Unicode License v3 (Unicode-3.0)
 Used by:
 - unicode-ident 1.0.26 (https://github.com/dtolnay/unicode-ident)
-
 Full license text:
 
 UNICODE LICENSE V3
@@ -14970,7 +14751,6 @@ Used by:
 - zerotrie 0.2.5 (https://github.com/unicode-org/icu4x)
 - zerovec-derive 0.11.6 (https://github.com/unicode-org/icu4x)
 - zerovec 0.11.8 (https://github.com/unicode-org/icu4x)
-
 Full license text:
 
 UNICODE LICENSE V3
@@ -15024,7 +14804,6 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 License: Do What The F*ck You Want To Public License (WTFPL)
 Used by:
 - terminfo 0.9.0 (https://github.com/meh/rust-terminfo)
-
 Full license text:
 
         DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
@@ -15045,10 +14824,9 @@ Full license text:
 License: zlib License (Zlib)
 Used by:
 - zlib-rs 0.6.8 (https://github.com/trifectatechfoundation/zlib-rs)
-
 Full license text:
 
-(C) 2024 Trifecta Tech Foundation 
+(C) 2024 Trifecta Tech Foundation
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -15072,7 +14850,6 @@ freely, subject to the following restrictions:
 License: zlib License (Zlib)
 Used by:
 - slotmap 1.1.1 (https://github.com/orlp/slotmap)
-
 Full license text:
 
 Copyright (c) 2021 Orson Peters <orsonpeters@gmail.com>
@@ -15100,7 +14877,6 @@ License: zlib License (Zlib)
 Used by:
 - foldhash 0.1.5 (https://github.com/orlp/foldhash)
 - foldhash 0.2.0 (https://github.com/orlp/foldhash)
-
 Full license text:
 
 Copyright (c) 2024 Orson Peters

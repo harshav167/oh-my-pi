@@ -1,0 +1,127 @@
+name: Live voice native release
+
+on:
+   push:
+      branches: [local/live-voice]
+   workflow_dispatch:
+
+permissions:
+   contents: read
+
+concurrency:
+   group: live-voice-native-${{ github.sha }}
+   cancel-in-progress: false
+
+jobs:
+   build:
+      if: github.repository == 'harshav167/oh-my-pi' && github.ref == 'refs/heads/local/live-voice'
+      name: Build ${{ matrix.target }}
+      runs-on: ubuntu-22.04
+      timeout-minutes: 180
+      strategy:
+         fail-fast: false
+         matrix:
+            target: [darwin-arm64, darwin-x64-baseline, linux-x64-baseline]
+      steps:
+         - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+         - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+           with:
+              bun-version: 1.4.4
+         - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+           with:
+              path: |
+                 .cache/live-voice-bazel
+                 ~/.cargo/registry
+              key: live-voice-${{ matrix.target }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'MODULE.bazel', 'MODULE.bazel.lock', '.bazelrc', '.bazelversion', 'bazel/**', 'crates/**', 'BUILD.bazel') }}
+              restore-keys: |
+                 live-voice-${{ matrix.target }}-
+         - name: Build release-grade native addon
+           run: >-
+              bun scripts/bazel-natives.ts '${{ matrix.target }}' --dest release-assets --
+              --config=ci --jobs=2
+              --repository_cache="$GITHUB_WORKSPACE/.cache/live-voice-bazel/repository"
+              --disk_cache="$GITHUB_WORKSPACE/.cache/live-voice-bazel/disk"
+         - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+           with:
+              name: live-voice-native-${{ matrix.target }}
+              path: release-assets/*.node
+              if-no-files-found: error
+              compression-level: 0
+
+   smoke:
+      needs: build
+      name: Node smoke ${{ matrix.target }}
+      runs-on: ${{ matrix.os }}
+      timeout-minutes: 10
+      strategy:
+         fail-fast: false
+         matrix:
+            include:
+               - { os: macos-15, target: darwin-arm64, asset: pi_natives.darwin-arm64.node }
+               - { os: macos-15-intel, target: darwin-x64-baseline, asset: pi_natives.darwin-x64-baseline.node }
+               - { os: ubuntu-22.04, target: linux-x64-baseline, asset: pi_natives.linux-x64-baseline.node }
+      steps:
+         - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+         - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+           with:
+              node-version: "26"
+         - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+           with:
+              name: live-voice-native-${{ matrix.target }}
+              path: release-assets
+         - name: Verify native ABI and non-device peer lifecycle
+           run: node scripts/install-tests/live-native.ts 'release-assets/${{ matrix.asset }}'
+         - name: Verify macOS signature
+           if: runner.os == 'macOS'
+           run: codesign --verify --strict 'release-assets/${{ matrix.asset }}'
+
+   release:
+      needs: [build, smoke]
+      if: github.repository == 'harshav167/oh-my-pi' && github.ref == 'refs/heads/local/live-voice'
+      name: Publish fork GitHub assets
+      runs-on: ubuntu-22.04
+      timeout-minutes: 10
+      permissions:
+         contents: write
+      steps:
+         - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+         - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+           with:
+              bun-version: 1.4.4
+         - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+           with:
+              pattern: live-voice-native-*
+              path: release-assets
+              merge-multiple: true
+         - name: Generate release asset checksums
+           run: >-
+              bun scripts/ci-release-checksums.ts SHA256SUMS.txt
+              release-assets/pi_natives.darwin-arm64.node
+              release-assets/pi_natives.darwin-x64-baseline.node
+              release-assets/pi_natives.linux-x64-baseline.node
+              LICENSE packages/natives/THIRD-PARTY-NOTICES.txt
+         - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+           with:
+              tag_name: live-voice-${{ github.sha }}
+              target_commitish: ${{ github.sha }}
+              name: Live voice native assets ${{ github.sha }}
+              prerelease: true
+              make_latest: "false"
+              overwrite_files: false
+              fail_on_unmatched_files: true
+              body: |
+                 Native assets built from `local/live-voice` at `${{ github.sha }}`.
+
+                 These are the existing monolithic pi_natives addons, not a standalone voice-only package.
+                 Each addon passed a plain-Node build-version and non-device LiveWebRtcPeer construct/close smoke check on its target platform.
+                 Microphone, speaker, WebRTC signaling and acoustic echo cancellation were not exercised by this workflow.
+
+                 Pin this tag and verify downloads against SHA256SUMS.txt. No npm packages are published.
+                 Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              files: |
+                 release-assets/pi_natives.darwin-arm64.node
+                 release-assets/pi_natives.darwin-x64-baseline.node
+                 release-assets/pi_natives.linux-x64-baseline.node
+                 LICENSE
+                 packages/natives/THIRD-PARTY-NOTICES.txt
+                 SHA256SUMS.txt
